@@ -262,7 +262,7 @@
 
       <!-- App grid -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;" x-show="$store.os">
-        <template x-for="app in Object.values($store.os.apps).filter(a => !searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()))" :key="app.appId">
+        <template x-for="app in ($store.os ? Object.values($store.os.apps).filter(a => !searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase())) : [])" :key="app.appId">
           <button
             class="os-app-tile"
             @click="$store.os.launch(app.appId); launcherOpen = false; searchQuery = '';"

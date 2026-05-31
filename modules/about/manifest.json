@@ -1,0 +1,11 @@
+{
+  "appId": "about",
+  "tag": "app-about",
+  "entry": "/modules/about/index.js",
+  "title": "About",
+  "icon": "🏔️",
+  "defaultSize": { "w": 420, "h": 320 },
+  "singleton": true,
+  "resizable": false,
+  "minSize": { "w": 320, "h": 240 }
+}

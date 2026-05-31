@@ -1,0 +1,128 @@
+.files-root {
+  background: #ffffff;
+  color: #111827;
+  overflow: hidden;
+}
+.dark .files-root {
+  background: #1e2433;
+  color: #e5e7eb;
+}
+
+.files-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+.dark .files-toolbar {
+  background: #161d2e;
+  border-bottom-color: rgba(255,255,255,0.07);
+}
+
+.files-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  border-bottom: 1px solid #f3f4f6;
+  flex-shrink: 0;
+}
+.dark .files-breadcrumb {
+  border-bottom-color: rgba(255,255,255,0.05);
+}
+
+.files-breadcrumb-item {
+  padding: 2px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: background 150ms;
+}
+.files-breadcrumb-item:hover { background: #f3f4f6; }
+.dark .files-breadcrumb-item:hover { background: rgba(255,255,255,0.06); }
+.files-breadcrumb-item.active { color: #3b82f6; font-weight: 500; }
+
+.files-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.file-row {
+  width: 100%;
+}
+
+.file-row-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  padding-right: 12px;
+  cursor: pointer;
+  border-radius: 0;
+  transition: background 100ms;
+  min-height: 28px;
+}
+.file-row-inner:hover {
+  background: #f3f4f6;
+}
+.dark .file-row-inner:hover {
+  background: rgba(255,255,255,0.05);
+}
+.file-row-inner.selected {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.dark .file-row-inner.selected {
+  background: rgba(59,130,246,0.15);
+  color: #93c5fd;
+}
+
+.file-arrow {
+  font-size: 0.55rem;
+  color: #9ca3af;
+  width: 12px;
+  flex-shrink: 0;
+  transition: transform 150ms;
+  user-select: none;
+}
+.file-arrow-file {
+  color: transparent;
+}
+
+.file-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.file-name {
+  flex: 1;
+  font-size: 0.875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-size {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.file-children {
+  width: 100%;
+}
+
+.file-empty {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  padding: 4px 0;
+  font-style: italic;
+}

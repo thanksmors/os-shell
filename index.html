@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alpine OS Shell</title>
+  <link rel="stylesheet" href="/shell/tailwind.build.css" />
+
+  <!-- Alpine Plugins (must load before Alpine core) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/focus@3/dist/cdn.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/anchor@3/dist/cdn.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3/dist/cdn.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/persist@3/dist/cdn.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/sort@3/dist/cdn.min.js"></script>
+  <!-- Alpine Core -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+
+  <script type="module">
+    import { initStore } from '/shell/store.js';
+    import { initShortcuts } from '/shell/shortcuts.js';
+    document.addEventListener('alpine:init', () => { initStore(); });
+    document.addEventListener('alpine:initialized', () => { initShortcuts(); });
+  </script>
+
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    }
+  </style>
+</head>
+<body
+  x-data="{ launcherOpen: false, searchQuery: '' }"
+  x-cloak
+  :class="$store.os && $store.os.theme === 'dark' ? 'dark' : ''"
+  @os:launcher-toggle.window="launcherOpen = !launcherOpen; if(launcherOpen) $nextTick(() => $refs.launcherSearch && $refs.launcherSearch.focus())"
+  @click.window="$store.os && $store.os.hideContextMenu()"
+  @keydown.escape.window="launcherOpen = false"
+>
+
+  <!-- ===== DESKTOP LAYER ===== -->
+  <div
+    class="os-desktop"
+    @contextmenu.prevent="
+      $store.os.showContextMenu($event.clientX, $event.clientY, [
+        { label: '🗂 New Notepad', icon: '📝', action: () => { $store.os.launch('notepad'); } },
+        { label: '📁 Open Files', icon: '📁', action: () => { $store.os.launch('files'); } },
+        { separator: true },
+        { label: '🎨 Change Theme', icon: '🎨', action: () => { $store.os.toggleTheme(); } },
+        { label: '🏔️ About Alpine Shell', icon: '🏔️', action: () => { $store.os.launch('about'); } },
+      ])
+    "
+  >
+    <!-- Wallpaper gradient overlay -->
+    <div style="position:absolute;inset:0;background:linear-gradient(135deg,#0f0c29 0%,#302b63 50%,#24243e 100%);pointer-events:none;"></div>
+    <!-- Subtle texture -->
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 20% 30%,rgba(96,165,250,0.08) 0%,transparent 60%),radial-gradient(ellipse at 80% 70%,rgba(139,92,246,0.08) 0%,transparent 60%);pointer-events:none;"></div>
+
+    <!-- Desktop Icons -->
+    <div style="position:absolute;top:16px;left:16px;display:flex;flex-direction:column;gap:8px;z-index:1;">
+      <template x-if="$store.os">
+        <template x-for="(app, appId) in $store.os.apps" :key="appId">
+          <button
+            class="os-desktop-icon"
+            @dblclick="$store.os.launch(app.appId)"
+            @click.stop
+          >
+            <span class="os-desktop-icon-emoji" x-text="app.icon"></span>
+            <span class="os-desktop-icon-label" x-text="app.title"></span>
+          </button>
+        </template>
+      </template>
+    </div>
+  </div>
+
+  <!-- ===== WINDOWS LAYER ===== -->
+  <template x-if="$store.os">
+    <template x-for="win in $store.os.windows" :key="win.id">
+      <div
+        x-show="win.state !== 'minimized'"
+        class="os-window animate-window-open"
+        :class="{
+          'focused': win.focused,
+          'maximized': win.state === 'maximized'
+        }"
+        :style="win.state === 'maximized'
+          ? 'position:fixed;left:0;top:0;right:0;bottom:48px;width:auto;height:auto;border-radius:0;z-index:' + win.z
+          : 'left:' + win.x + 'px;top:' + win.y + 'px;width:' + win.w + 'px;height:' + win.h + 'px;z-index:' + win.z
+        "
+        @mousedown.stop="$store.os.focus(win.id)"
+      >
+        <!-- Titlebar -->
+        <div
+          class="os-titlebar"
+          @mousedown.prevent="
+            if ($store.os.isMobile || win.state === 'maximized') return;
+            $store.os.focus(win.id);
+            const startX = $event.clientX - win.x;
+            const startY = $event.clientY - win.y;
+            const onMove = e => {
+              win.x = Math.max(0, Math.min(window.innerWidth - win.w, e.clientX - startX));
+              win.y = Math.max(0, Math.min(window.innerHeight - 96, e.clientY - startY));
+            };
+            const onUp = () => {
+              window.removeEventListener('mousemove', onMove);
+              window.removeEventListener('mouseup', onUp);
+            };
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+          "
+          @dblclick="$store.os.toggleMaximize(win.id)"
+        >
+          <!-- Traffic lights -->
+          <button
+            class="os-btn-close"
+            title="Close"
+            @click.stop="$store.os.close(win.id)"
+          ></button>
+          <button
+            class="os-btn-minimize"
+            title="Minimize"
+            @click.stop="$store.os.minimize(win.id)"
+          ></button>
+          <button
+            class="os-btn-maximize"
+            title="Maximize"
+            @click.stop="$store.os.toggleMaximize(win.id)"
+          ></button>
+
+          <!-- Icon + Title -->
+          <span style="margin-left:10px;margin-right:6px;font-size:0.9rem;line-height:1;" x-text="win.icon"></span>
+          <span class="os-titlebar-title" x-text="win.title"></span>
+        </div>
+
+        <!-- Content Host -->
+        <div
+          class="os-window-content"
+          :data-win-host="win.id"
+        ></div>
+
+        <!-- Resize Handle -->
+        <div
+          x-show="win.resizable && win.state !== 'maximized'"
+          class="os-resize-handle"
+          @mousedown.prevent.stop="
+            const startW = win.w;
+            const startH = win.h;
+            const startX = $event.clientX;
+            const startY = $event.clientY;
+            const onMove = e => {
+              win.w = Math.max(win.minSize.w, startW + (e.clientX - startX));
+              win.h = Math.max(win.minSize.h, startH + (e.clientY - startY));
+            };
+            const onUp = () => {
+              window.removeEventListener('mousemove', onMove);
+              window.removeEventListener('mouseup', onUp);
+            };
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+          "
+        ></div>
+      </div>
+    </template>
+  </template>
+
+  <!-- ===== TASKBAR ===== -->
+  <div class="os-taskbar">
+    <!-- Start / Launcher Button -->
+    <button
+      class="os-start-btn"
+      :class="{ active: launcherOpen }"
+      @click.stop="
+        launcherOpen = !launcherOpen;
+        if (launcherOpen) $nextTick(() => $refs.launcherSearch && $refs.launcherSearch.focus());
+      "
+      title="Launcher (⌘K)"
+    >🏔️</button>
+
+    <!-- Window Buttons -->
+    <div style="flex:1;display:flex;align-items:center;gap:3px;overflow:hidden;" x-show="$store.os">
+      <template x-for="win in ($store.os ? $store.os.windows : [])" :key="win.id">
+        <button
+          class="os-taskbar-btn"
+          :class="{ active: win.focused && win.state !== 'minimized' }"
+          @click.stop="$store.os.taskbarClick(win.id)"
+        >
+          <span x-text="win.icon"></span>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px;" x-text="win.title"></span>
+        </button>
+      </template>
+    </div>
+
+    <!-- Right side controls -->
+    <div style="display:flex;align-items:center;gap:4px;margin-left:auto;flex-shrink:0;">
+      <!-- Theme Toggle -->
+      <button
+        class="os-theme-btn"
+        @click.stop="$store.os && $store.os.toggleTheme()"
+        :title="($store.os && $store.os.theme === 'dark') ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+        x-text="($store.os && $store.os.theme === 'dark') ? '☀️' : '🌙'"
+      ></button>
+
+      <!-- Clock -->
+      <div
+        class="os-clock"
+        x-data="{ time: '' }"
+        x-init="
+          const update = () => {
+            const now = new Date();
+            time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          };
+          update();
+          setInterval(update, 1000);
+        "
+        x-text="time"
+      ></div>
+    </div>
+  </div>
+
+  <!-- ===== LAUNCHER ===== -->
+  <div
+    class="os-launcher"
+    x-show="launcherOpen"
+    @click.self="launcherOpen = false"
+    x-transition:enter="transition duration-150 ease-out"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition duration-100 ease-in"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+  >
+    <div
+      class="os-launcher-panel"
+      x-transition:enter="transition duration-200 ease-out"
+      x-transition:enter-start="opacity-0 scale-95"
+      x-transition:enter-end="opacity-100 scale-100"
+      x-transition:leave="transition duration-150 ease-in"
+      x-transition:leave-start="opacity-100 scale-100"
+      x-transition:leave-end="opacity-0 scale-95"
+    >
+      <!-- Search -->
+      <input
+        x-ref="launcherSearch"
+        class="os-launcher-search"
+        type="text"
+        placeholder="Search apps..."
+        x-model="searchQuery"
+        @keydown.escape="launcherOpen = false"
+        @keydown.enter="
+          const apps = Object.values($store.os.apps).filter(a =>
+            !searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase())
+          );
+          if (apps.length > 0) {
+            $store.os.launch(apps[0].appId);
+            launcherOpen = false;
+            searchQuery = '';
+          }
+        "
+      />
+
+      <!-- App grid -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;" x-show="$store.os">
+        <template x-for="app in Object.values($store.os.apps).filter(a => !searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()))" :key="app.appId">
+          <button
+            class="os-app-tile"
+            @click="$store.os.launch(app.appId); launcherOpen = false; searchQuery = '';"
+          >
+            <span class="os-app-tile-icon" x-text="app.icon"></span>
+            <span class="os-app-tile-label" x-text="app.title"></span>
+          </button>
+        </template>
+        <div
+          x-show="$store.os && Object.values($store.os.apps).filter(a => !searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase())).length === 0"
+          style="grid-column:1/-1;text-align:center;padding:24px;color:#9ca3af;font-size:0.875rem;"
+        >No apps found</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CONTEXT MENU ===== -->
+  <div
+    class="os-context-menu"
+    x-show="$store.os && $store.os.contextMenu.visible"
+    :style="'left:' + ($store.os ? $store.os.contextMenu.x : 0) + 'px;top:' + ($store.os ? $store.os.contextMenu.y : 0) + 'px'"
+    @click.stop
+    x-transition:enter="transition duration-100 ease-out"
+    x-transition:enter-start="opacity-0 scale-95"
+    x-transition:enter-end="opacity-100 scale-100"
+    x-transition:leave="transition duration-75 ease-in"
+    x-transition:leave-start="opacity-100 scale-100"
+    x-transition:leave-end="opacity-0 scale-95"
+  >
+    <template x-if="$store.os && $store.os.contextMenu.visible">
+      <template x-for="(item, idx) in $store.os.contextMenu.items" :key="idx">
+        <div>
+          <div x-show="item.separator" class="os-context-separator"></div>
+          <button
+            x-show="!item.separator"
+            class="os-context-item"
+            @click="item.action && item.action(); $store.os.hideContextMenu();"
+            x-text="item.label"
+          ></button>
+        </div>
+      </template>
+    </template>
+  </div>
+
+  <!-- ===== TOAST STACK ===== -->
+  <div class="os-toast-stack" x-show="$store.os">
+    <template x-for="toast in ($store.os ? $store.os.toasts : [])" :key="toast.id">
+      <div
+        class="os-toast"
+        :class="toast.type || 'info'"
+        x-text="toast.msg"
+      ></div>
+    </template>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "appId": "files",
+  "tag": "app-files",
+  "entry": "/modules/files/index.js",
+  "title": "Files",
+  "icon": "📁",
+  "defaultSize": { "w": 640, "h": 480 },
+  "singleton": false,
+  "resizable": true,
+  "minSize": { "w": 320, "h": 240 }
+}

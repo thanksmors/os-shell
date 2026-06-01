@@ -71,4 +71,24 @@ app.put('/desktop-layout', async (req, res) => {
   res.json(record);
 });
 
+// ─── Generic collection store ─────────────────────────────────────────────
+// Backs every other collection the shell uses (gantt, meta/instances, and any
+// future modules). The frontend calls GET/PUT /:collection/:id.
+
+app.get('/:collection/:id', async (req, res) => {
+  const { collection, id } = req.params;
+  const db = await datastore.open();
+  const data = await db.getOne(collection, { appId: id }).catch(() => null);
+  if (!data) { res.json(null); return; }
+  res.json(data);
+});
+
+app.put('/:collection/:id', async (req, res) => {
+  const { collection, id } = req.params;
+  const db = await datastore.open();
+  const record = { ...req.body, appId: id };
+  await db.upsertOne(collection, { appId: id }, record);
+  res.json(record);
+});
+
 export default app.init();

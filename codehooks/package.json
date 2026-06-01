@@ -1,0 +1,10 @@
+{
+  "name": "os-shell-backend",
+  "version": "1.0.0",
+  "description": "Alpine OS Shell — Codehooks backend",
+  "type": "module",
+  "main": "index.js",
+  "dependencies": {
+    "codehooks-js": "^1.0.0"
+  }
+}

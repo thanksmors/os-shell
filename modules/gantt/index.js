@@ -138,8 +138,9 @@ class AppGantt extends HTMLElement {
         </div>`;
     }).join('');
 
-    const leftRows = projects.map(p => `
-      <div class="project-row" data-action="edit-project" data-id="${p.id}">
+    const leftRows = projects.map((p, idx) => `
+      <div class="project-row" data-action="edit-project" data-id="${p.id}" draggable="true" data-idx="${idx}">
+        <span class="project-row-drag" title="Drag to reorder">⠿</span>
         <span class="project-row-dot" style="background:${p.color};"></span>
         <span class="project-row-name">${this._esc(p.name)}</span>
         <button class="project-row-del" data-action="del-project" data-id="${p.id}" title="Delete">✕</button>
@@ -354,6 +355,46 @@ class AppGantt extends HTMLElement {
 
     // focus name in edit modal
     w.querySelector('#edit-name')?.focus();
+
+    // drag-to-reorder project rows
+    this._bindRowDrag(w);
+  }
+
+  _bindRowDrag(w) {
+    const rows = w.querySelectorAll('.project-row[draggable]');
+    let dragIdx = null;
+
+    rows.forEach(row => {
+      row.addEventListener('dragstart', e => {
+        dragIdx = parseInt(row.dataset.idx, 10);
+        e.dataTransfer.effectAllowed = 'move';
+        row.classList.add('dragging');
+      });
+
+      row.addEventListener('dragend', () => {
+        row.classList.remove('dragging');
+        w.querySelectorAll('.project-row').forEach(r => r.classList.remove('drag-over'));
+        dragIdx = null;
+      });
+
+      row.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        w.querySelectorAll('.project-row').forEach(r => r.classList.remove('drag-over'));
+        row.classList.add('drag-over');
+      });
+
+      row.addEventListener('drop', async e => {
+        e.preventDefault();
+        const dropIdx = parseInt(row.dataset.idx, 10);
+        if (dragIdx === null || dragIdx === dropIdx) return;
+        const projects = this._state.projects;
+        const [moved] = projects.splice(dragIdx, 1);
+        projects.splice(dropIdx, 0, moved);
+        await this._save();
+        this._render();
+      });
+    });
   }
 }
 

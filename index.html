@@ -132,26 +132,28 @@
           "
           @dblclick="$store.os.toggleMaximize(win.id)"
         >
-          <!-- Traffic lights -->
-          <button
-            class="os-btn-close"
-            title="Close"
-            @click.stop="$store.os.close(win.id)"
-          ></button>
-          <button
-            class="os-btn-minimize"
-            title="Minimize"
-            @click.stop="$store.os.minimize(win.id)"
-          ></button>
-          <button
-            class="os-btn-maximize"
-            title="Maximize"
-            @click.stop="$store.os.toggleMaximize(win.id)"
-          ></button>
-
           <!-- Icon + Title -->
-          <span style="margin-left:10px;margin-right:6px;font-size:0.9rem;line-height:1;" x-text="win.icon"></span>
+          <span style="margin-right:6px;font-size:0.9rem;line-height:1;" x-text="win.icon"></span>
           <span class="os-titlebar-title" x-text="win.title"></span>
+
+          <!-- Window controls (upper right, order: minimize → maximize → close) -->
+          <div class="os-win-controls">
+            <button
+              class="os-btn-minimize"
+              title="Minimize"
+              @click.stop="$store.os.minimize(win.id)"
+            ></button>
+            <button
+              class="os-btn-maximize"
+              title="Maximize"
+              @click.stop="$store.os.toggleMaximize(win.id)"
+            ></button>
+            <button
+              class="os-btn-close"
+              title="Close"
+              @click.stop="$store.os.close(win.id)"
+            ></button>
+          </div>
         </div>
 
         <!-- Content Host -->

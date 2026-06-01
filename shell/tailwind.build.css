@@ -847,6 +847,15 @@ input, button, textarea, select { font: inherit; }
 }
 .dark .os-titlebar-title { color: #e5e7eb; }
 
+/* Window control group (upper right) */
+.os-win-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
 /* Traffic light buttons */
 .os-btn-close, .os-btn-minimize, .os-btn-maximize {
   width: 12px;
@@ -858,8 +867,8 @@ input, button, textarea, select { font: inherit; }
   transition: filter 150ms;
   position: relative;
 }
-.os-btn-close { background: #ff5f57; margin-right: 6px; }
-.os-btn-minimize { background: #ffbd2e; margin-right: 6px; }
+.os-btn-close { background: #ff5f57; }
+.os-btn-minimize { background: #ffbd2e; }
 .os-btn-maximize { background: #28c840; }
 .os-btn-close:hover { filter: brightness(1.15); }
 .os-btn-minimize:hover { filter: brightness(1.15); }

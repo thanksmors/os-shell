@@ -38,7 +38,7 @@ export function initStore() {
     },
 
     registerApp(manifest) {
-      this.apps[manifest.appId] = manifest;
+      this.apps = { ...this.apps, [manifest.appId]: manifest };
     },
 
     async launch(appId) {

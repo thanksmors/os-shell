@@ -67,3 +67,14 @@ export async function getBoard(appId) {
 export async function saveBoard(appId, board) {
   return setData('boards', appId, board);
 }
+
+// ─── Instance registry ─────────────────────────────────────────────────────
+
+export async function getInstances() {
+  const data = await getData('meta', 'instances');
+  return data?.list || [];
+}
+
+export async function saveInstances(list) {
+  return setData('meta', 'instances', { list });
+}

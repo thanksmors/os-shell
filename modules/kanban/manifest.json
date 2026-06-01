@@ -6,6 +6,7 @@
   "icon": "🗂️",
   "defaultSize": { "w": 780, "h": 520 },
   "singleton": false,
+  "generator": true,
   "resizable": true,
   "minSize": { "w": 480, "h": 360 }
 }

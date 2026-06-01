@@ -1,4 +1,5 @@
 import { iconUrl } from './icon.js';
+import { getData, setData, getInstances, saveInstances } from './api.js';
 
 export function initStore() {
   Alpine.store('os', {
@@ -9,6 +10,7 @@ export function initStore() {
     isMobile: window.matchMedia('(max-width: 767px)').matches,
     toasts: [],
     contextMenu: { visible: false, x: 0, y: 0, items: [] },
+    instances: [],
 
     init() {
       // apply saved theme
@@ -19,6 +21,7 @@ export function initStore() {
       });
       // load manifests
       this._loadManifests();
+      this._loadInstances();
     },
 
     async _loadManifests() {
@@ -156,20 +159,126 @@ export function initStore() {
       this.contextMenu.visible = false;
     },
 
+    async _loadInstances() {
+      this.instances = await getInstances();
+    },
+
+    async createInstance(appId, config = {}) {
+      const instanceId = 'inst-' + Date.now();
+      const app = this.apps[appId];
+      const instance = {
+        instanceId,
+        appId,
+        name: config.name || app?.title || appId,
+        icon: config.icon || app?.icon || '📄',
+      };
+      this.instances = [...this.instances, instance];
+      await saveInstances(this.instances);
+      await this._launchInstance(instance);
+    },
+
+    async _launchInstance(instance) {
+      // If already open, just focus it
+      const existing = this.windows.find(w => w._instanceId === instance.instanceId);
+      if (existing) { this.focus(existing.id); return; }
+
+      const app = this.apps[instance.appId];
+      if (!app) return;
+      const id = `win-${Date.now()}`;
+      const isMobile = this.isMobile;
+      const win = {
+        id,
+        appId: instance.appId,
+        _instanceId: instance.instanceId,
+        title: instance.name,
+        icon: instance.icon,
+        x: isMobile ? 0 : 80 + Math.random() * 120,
+        y: isMobile ? 0 : 60 + Math.random() * 80,
+        w: isMobile ? window.innerWidth : (app.defaultSize?.w || 560),
+        h: isMobile ? window.innerHeight - 48 : (app.defaultSize?.h || 380),
+        z: ++this.topZ,
+        state: isMobile ? 'maximized' : 'normal',
+        prev: null,
+        focused: false,
+        resizable: app.resizable !== false,
+        minSize: app.minSize || { w: 240, h: 180 },
+      };
+      this.windows.forEach(w => w.focused = false);
+      win.focused = true;
+      this.windows.push(win);
+      await Alpine.nextTick();
+      this._mountInstance(win, instance);
+    },
+
+    async _mountInstance(win, instance) {
+      const hostEl = document.querySelector(`[data-win-host="${win.id}"]`);
+      if (!hostEl) return;
+      const app = this.apps[instance.appId];
+      if (!app) return;
+      if (!customElements.get(app.tag)) {
+        try { await import(app.entry); } catch(e) { console.error(e); return; }
+      }
+      const self = this;
+      const el = document.createElement(app.tag);
+      el.api = {
+        windowId: win.id,
+        instanceId: instance.instanceId,
+        config: {},
+        get mode() { return win.state === 'maximized' ? 'fullscreen' : 'windowed'; },
+        get isDark() { return document.documentElement.classList.contains('dark'); },
+        setTitle: (t) => { win.title = t; },
+        notify: (msg, type) => Alpine.store('os').notify(msg, type),
+        requestClose: () => Alpine.store('os').close(win.id),
+        updateInstance: async (name, icon) => {
+          const inst = self.instances.find(i => i.instanceId === instance.instanceId);
+          if (inst) {
+            inst.name = name;
+            inst.icon = icon;
+            win.title = name;
+            win.icon = icon;
+            self.instances = [...self.instances];
+            await saveInstances(self.instances);
+          }
+        },
+        store: Alpine.store('os'),
+      };
+      hostEl.appendChild(el);
+    },
+
+    launchInstance(instanceId) {
+      const instance = this.instances.find(i => i.instanceId === instanceId);
+      if (instance) this._launchInstance(instance);
+    },
+
+    async removeInstance(instanceId) {
+      const win = this.windows.find(w => w._instanceId === instanceId);
+      if (win) this.close(win.id);
+      this.instances = this.instances.filter(i => i.instanceId !== instanceId);
+      await saveInstances(this.instances);
+      // clean up stored data
+      localStorage.removeItem(`os:lists:${instanceId}`);
+      localStorage.removeItem(`os:boards:${instanceId}`);
+    },
+
     buildDesktopContextMenu(x, y) {
       const items = [];
-      // Collect module contributions
       for (const app of Object.values(this.apps)) {
         if (app.contextMenu && app.contextMenu.length) {
           for (const entry of app.contextMenu) {
-            items.push({
-              label: entry.label,
-              action: () => this.launch(app.appId, entry.config || {}),
-            });
+            if (app.generator) {
+              items.push({
+                label: entry.label,
+                action: () => this.createInstance(app.appId, entry.config || {}),
+              });
+            } else {
+              items.push({
+                label: entry.label,
+                action: () => this.launch(app.appId, entry.config || {}),
+              });
+            }
           }
         }
       }
-      // System items always at bottom
       if (items.length) items.push({ separator: true });
       items.push({ label: '🎨 Change Theme', action: () => this.toggleTheme() });
       items.push({ label: '🏔️ About', action: () => this.launch('about') });

@@ -8,6 +8,7 @@ class AppKanban extends HTMLElement {
     this._appId = null;
     this._addingCardCol = null; // colId of column with open add-card form
     this._dragCard = null;      // { cardId, fromColId }
+    this._settingsOpen = false;
   }
 
   async connectedCallback() {
@@ -25,7 +26,7 @@ class AppKanban extends HTMLElement {
 
     await new Promise(r => setTimeout(r, 0));
 
-    this._appId = (this.api?.windowId) || ('kanban-' + Date.now());
+    this._appId = this.api?.instanceId || this.api?.windowId || ('kanban-' + Date.now());
     this._state = await getBoard(this._appId);
     this._applyTheme();
     this._render();
@@ -55,8 +56,25 @@ class AppKanban extends HTMLElement {
     this._wrapper.innerHTML = `
       <div class="header">
         <input class="board-title" value="${this._esc(name)}" placeholder="Board name…" />
-        <button class="header-btn" data-action="add-col">＋ Add column</button>
+        <button class="header-btn" data-action="toggle-settings" title="Settings">⚙️</button>
+        <button class="header-btn primary" data-action="add-col">＋ Add column</button>
       </div>
+      ${this._settingsOpen ? `
+        <div class="settings-panel">
+          <div class="settings-row">
+            <label class="settings-label">Name</label>
+            <input class="settings-input" id="settings-name" value="${this._esc(name)}" placeholder="Board name…" />
+          </div>
+          <div class="settings-row">
+            <label class="settings-label">Icon</label>
+            <input class="settings-input settings-icon" id="settings-icon" value="${this._esc(this.api?.store?.instances?.find(i => i.instanceId === this._appId)?.icon || '🗂️')}" placeholder="Emoji…" maxlength="4" />
+          </div>
+          <div class="settings-row" style="justify-content:flex-end;gap:8px;">
+            <button class="settings-cancel" data-action="toggle-settings">Cancel</button>
+            <button class="settings-save" data-action="save-settings">Save</button>
+          </div>
+        </div>
+      ` : ''}
       <div class="board">
         ${columns.map(col => {
           const colCards = cards.filter(c => c.colId === col.id);
@@ -128,6 +146,24 @@ class AppKanban extends HTMLElement {
         e.stopPropagation();
         const action = el.dataset.action;
 
+        if (action === 'toggle-settings') {
+          this._settingsOpen = !this._settingsOpen;
+          this._render();
+          return;
+        }
+        if (action === 'save-settings') {
+          const nameEl = this._wrapper.querySelector('#settings-name');
+          const iconEl = this._wrapper.querySelector('#settings-icon');
+          const newName = nameEl?.value.trim() || this._state.name;
+          const newIcon = iconEl?.value.trim() || '🗂️';
+          this._state.name = newName;
+          await this._save();
+          if (this.api?.updateInstance) await this.api.updateInstance(newName, newIcon);
+          else if (this.api?.setTitle) this.api.setTitle(newName);
+          this._settingsOpen = false;
+          this._render();
+          return;
+        }
         if (action === 'add-col') {
           this._state.columns.push({ id: 'col-' + Date.now(), name: 'New Column' });
           this._save();

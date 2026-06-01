@@ -65,14 +65,30 @@
 
     <!-- Desktop Icons -->
     <div style="position:absolute;top:16px;left:16px;display:flex;flex-direction:column;gap:8px;z-index:1;">
+      <!-- Regular (non-generator) apps -->
       <template x-if="$store.os">
-        <template x-for="(app, appId) in $store.os.apps" :key="appId">
+        <template x-for="app in Object.values($store.os.apps).filter(a => !a.generator)" :key="app.appId">
           <button
             class="os-desktop-icon"
             @click.stop="$store.os.launch(app.appId)"
           >
             <span class="os-desktop-icon-emoji" x-text="app.icon"></span>
             <span class="os-desktop-icon-label" x-text="app.title"></span>
+          </button>
+        </template>
+      </template>
+      <!-- Generator instances -->
+      <template x-if="$store.os">
+        <template x-for="inst in $store.os.instances" :key="inst.instanceId">
+          <button
+            class="os-desktop-icon"
+            @click.stop="$store.os.launchInstance(inst.instanceId)"
+            @contextmenu.prevent.stop="$store.os.showContextMenu($event.clientX, $event.clientY, [
+              { label: '🗑 Delete', action: () => $store.os.removeInstance(inst.instanceId) }
+            ])"
+          >
+            <span class="os-desktop-icon-emoji" x-text="inst.icon"></span>
+            <span class="os-desktop-icon-label" x-text="inst.name"></span>
           </button>
         </template>
       </template>
@@ -266,7 +282,7 @@
 
       <!-- App grid -->
       <div class="os-launcher-grid">
-        <template x-for="app in ($store.os ? Object.values($store.os.apps).filter(a => !searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase())) : [])" :key="app.appId">
+        <template x-for="app in ($store.os ? Object.values($store.os.apps).filter(a => !a.generator && (!searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()))) : [])" :key="app.appId">
           <button
             class="os-app-tile"
             @click="$store.os.launch(app.appId); launcherOpen = false; searchQuery = '';"

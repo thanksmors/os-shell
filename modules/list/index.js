@@ -6,6 +6,7 @@ class AppList extends HTMLElement {
     super();
     this._state = null;
     this._appId = null;
+    this._settingsOpen = false;
   }
 
   async connectedCallback() {
@@ -24,7 +25,7 @@ class AppList extends HTMLElement {
     // wait one tick for el.api to be set by shell
     await new Promise(r => setTimeout(r, 0));
 
-    this._appId = (this.api?.windowId) || ('list-' + Date.now());
+    this._appId = this.api?.instanceId || this.api?.windowId || ('list-' + Date.now());
     // If launched with a config name (first launch), use it as the list name
     const cfg = this.api?.config || {};
     this._state = await getList(this._appId);
@@ -66,8 +67,25 @@ class AppList extends HTMLElement {
     this._wrapper.innerHTML = `
       <div class="header">
         <input class="list-title" value="${this._esc(name)}" placeholder="List name…" title="Click to rename" />
+        <button class="header-btn" data-action="toggle-settings" title="Settings">⚙️</button>
         <button class="header-btn" data-action="clear-done" title="Clear completed">🗑</button>
       </div>
+      ${this._settingsOpen ? `
+        <div class="settings-panel">
+          <div class="settings-row">
+            <label class="settings-label">Name</label>
+            <input class="settings-input" id="settings-name" value="${this._esc(name)}" placeholder="List name…" />
+          </div>
+          <div class="settings-row">
+            <label class="settings-label">Icon</label>
+            <input class="settings-input settings-icon" id="settings-icon" value="${this._esc(this.api?.store?.instances?.find(i => i.instanceId === this._appId)?.icon || '✅')}" placeholder="Emoji…" maxlength="4" />
+          </div>
+          <div class="settings-row" style="justify-content:flex-end;gap:8px;">
+            <button class="settings-cancel" data-action="toggle-settings">Cancel</button>
+            <button class="settings-save" data-action="save-settings">Save</button>
+          </div>
+        </div>
+      ` : ''}
       <div class="add-row">
         <input class="add-input" placeholder="Add an item…" />
         <button class="add-btn">Add</button>
@@ -133,6 +151,22 @@ class AppList extends HTMLElement {
           this._state.items = this._state.items.filter(i => i.id !== id);
           this._save();
           this._render();
+        } else if (action === 'toggle-settings') {
+          this._settingsOpen = !this._settingsOpen;
+          this._render();
+          return;
+        } else if (action === 'save-settings') {
+          const nameEl = this.shadowRoot.querySelector('#settings-name');
+          const iconEl = this.shadowRoot.querySelector('#settings-icon');
+          const newName = nameEl?.value.trim() || this._state.name;
+          const newIcon = iconEl?.value.trim() || '✅';
+          this._state.name = newName;
+          await this._save();
+          if (this.api?.updateInstance) await this.api.updateInstance(newName, newIcon);
+          else if (this.api?.setTitle) this.api.setTitle(newName);
+          this._settingsOpen = false;
+          this._render();
+          return;
         } else if (action === 'clear-done') {
           this._state.items = this._state.items.filter(i => !i.checked);
           this._save();

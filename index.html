@@ -6,6 +6,26 @@
   <title>Alpine OS Shell</title>
   <link rel="stylesheet" href="/shell/tailwind.build.css" />
 
+  <!--
+    IMPORTANT: this listener-registration module MUST run before Alpine core.
+    Deferred + module scripts execute in document order, and Alpine core
+    dispatches `alpine:init` synchronously when it runs. If this block came
+    after Alpine core, the listener would attach too late and the store would
+    never be created (empty launcher / no app icons).
+  -->
+  <script type="module">
+    import { initStore } from '/shell/store.js';
+    import { initShortcuts } from '/shell/shortcuts.js';
+    if (window.Alpine) {
+      // Alpine already started (e.g. cached): register immediately.
+      initStore();
+      initShortcuts();
+    } else {
+      document.addEventListener('alpine:init', () => { initStore(); });
+      document.addEventListener('alpine:initialized', () => { initShortcuts(); });
+    }
+  </script>
+
   <!-- Alpine Plugins (must load before Alpine core) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/focus@3/dist/cdn.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/anchor@3/dist/cdn.min.js"></script>
@@ -14,13 +34,6 @@
   <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/sort@3/dist/cdn.min.js"></script>
   <!-- Alpine Core -->
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
-
-  <script type="module">
-    import { initStore } from '/shell/store.js';
-    import { initShortcuts } from '/shell/shortcuts.js';
-    document.addEventListener('alpine:init', () => { initStore(); });
-    document.addEventListener('alpine:initialized', () => { initShortcuts(); });
-  </script>
 
   <style>
     html, body {

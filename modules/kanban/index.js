@@ -1,0 +1,216 @@
+import { adoptTailwind } from '/shell/shadow-tailwind.js';
+import { getBoard, saveBoard } from '/shell/api.js';
+
+class AppKanban extends HTMLElement {
+  constructor() {
+    super();
+    this._state = null;
+    this._appId = null;
+    this._addingCardCol = null; // colId of column with open add-card form
+    this._dragCard = null;      // { cardId, fromColId }
+  }
+
+  async connectedCallback() {
+    const shadow = this.attachShadow({ mode: 'open' });
+
+    const styleEl = document.createElement('style');
+    const css = await fetch('/modules/kanban/styles.css').then(r => r.text());
+    styleEl.textContent = css;
+
+    this._wrapper = document.createElement('div');
+    this._wrapper.className = 'wrapper';
+    shadow.appendChild(styleEl);
+    shadow.appendChild(this._wrapper);
+    await adoptTailwind(shadow, this._wrapper);
+
+    await new Promise(r => setTimeout(r, 0));
+
+    this._appId = (this.api?.windowId) || ('kanban-' + Date.now());
+    this._state = await getBoard(this._appId);
+    this._applyTheme();
+    this._render();
+
+    this._themeObserver = new MutationObserver(() => this._applyTheme());
+    this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    if (this.api) this.api.setTitle(this._state.name);
+  }
+
+  disconnectedCallback() {
+    this._themeObserver?.disconnect();
+  }
+
+  _applyTheme() {
+    this._wrapper?.classList.toggle('dark', document.documentElement.classList.contains('dark'));
+  }
+
+  async _save() {
+    await saveBoard(this._appId, this._state);
+  }
+
+  _render() {
+    const { name, columns, cards } = this._state;
+    const addingCol = this._addingCardCol;
+
+    this._wrapper.innerHTML = `
+      <div class="header">
+        <input class="board-title" value="${this._esc(name)}" placeholder="Board name…" />
+        <button class="header-btn" data-action="add-col">＋ Add column</button>
+      </div>
+      <div class="board">
+        ${columns.map(col => {
+          const colCards = cards.filter(c => c.colId === col.id);
+          return `
+            <div class="column" data-col-id="${col.id}">
+              <div class="col-header">
+                <input class="col-title" value="${this._esc(col.name)}" data-col-id="${col.id}" />
+                <span class="col-count">${colCards.length}</span>
+                <button class="col-del" data-action="del-col" data-col-id="${col.id}" title="Delete column">✕</button>
+              </div>
+              <div class="cards" data-col-id="${col.id}">
+                ${colCards.map(card => `
+                  <div class="card" draggable="true" data-card-id="${card.id}" data-col-id="${col.id}">
+                    <div class="card-title">${this._esc(card.title)}</div>
+                    ${card.note ? `<div class="card-note">${this._esc(card.note)}</div>` : ''}
+                    <button class="card-del" data-action="del-card" data-card-id="${card.id}" title="Delete">✕</button>
+                  </div>
+                `).join('')}
+              </div>
+              ${addingCol === col.id ? `
+                <div class="add-card-form" data-col-id="${col.id}">
+                  <textarea class="add-card-input" placeholder="Card title…" rows="2" autofocus></textarea>
+                  <textarea class="add-card-input" placeholder="Note (optional)" rows="1" data-note></textarea>
+                  <div class="add-card-actions">
+                    <button class="btn-save-card" data-action="save-card" data-col-id="${col.id}">Add</button>
+                    <button class="btn-cancel-card" data-action="cancel-card">Cancel</button>
+                  </div>
+                </div>
+              ` : `
+                <button class="add-card-btn" data-action="open-add-card" data-col-id="${col.id}">＋ Add card</button>
+              `}
+            </div>
+          `;
+        }).join('')}
+        <button class="add-col-btn" data-action="add-col">＋ Add column</button>
+      </div>
+    `;
+
+    this._bindEvents();
+
+    // focus the card input if we just opened the form
+    if (addingCol) {
+      const form = this._wrapper.querySelector(`.add-card-form[data-col-id="${addingCol}"]`);
+      form?.querySelector('textarea')?.focus();
+    }
+  }
+
+  _bindEvents() {
+    const w = this._wrapper;
+
+    // board title rename
+    w.querySelector('.board-title').addEventListener('input', e => {
+      this._state.name = e.target.value;
+      if (this.api) this.api.setTitle(this._state.name || 'Kanban');
+      this._save();
+    });
+
+    // column title rename
+    w.querySelectorAll('.col-title').forEach(input => {
+      input.addEventListener('input', e => {
+        const col = this._state.columns.find(c => c.id === e.target.dataset.colId);
+        if (col) { col.name = e.target.value; this._save(); }
+      });
+    });
+
+    // all data-action buttons/elements
+    w.querySelectorAll('[data-action]').forEach(el => {
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        const action = el.dataset.action;
+
+        if (action === 'add-col') {
+          this._state.columns.push({ id: 'col-' + Date.now(), name: 'New Column' });
+          this._save();
+          this._addingCardCol = null;
+          this._render();
+
+        } else if (action === 'del-col') {
+          const colId = el.dataset.colId;
+          this._state.columns = this._state.columns.filter(c => c.id !== colId);
+          this._state.cards = this._state.cards.filter(c => c.colId !== colId);
+          this._save();
+          this._render();
+
+        } else if (action === 'open-add-card') {
+          this._addingCardCol = el.dataset.colId;
+          this._render();
+
+        } else if (action === 'cancel-card') {
+          this._addingCardCol = null;
+          this._render();
+
+        } else if (action === 'save-card') {
+          const form = el.closest('.add-card-form');
+          const inputs = form.querySelectorAll('textarea');
+          const title = inputs[0].value.trim();
+          const note = inputs[1].value.trim();
+          if (!title) return;
+          this._state.cards.push({ id: 'card-' + Date.now(), colId: el.dataset.colId, title, note });
+          this._addingCardCol = null;
+          this._save();
+          this._render();
+
+        } else if (action === 'del-card') {
+          this._state.cards = this._state.cards.filter(c => c.id !== el.dataset.cardId);
+          this._save();
+          this._render();
+        }
+      });
+    });
+
+    // Drag-and-drop between columns (native HTML5 drag API)
+    w.querySelectorAll('.card').forEach(card => {
+      card.addEventListener('dragstart', e => {
+        this._dragCard = { cardId: card.dataset.cardId, fromColId: card.dataset.colId };
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      card.addEventListener('dragend', () => {
+        card.classList.remove('dragging');
+        w.querySelectorAll('.column').forEach(c => c.classList.remove('drag-over'));
+      });
+    });
+
+    w.querySelectorAll('.column').forEach(col => {
+      const colId = col.dataset.colId;
+
+      col.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        col.classList.add('drag-over');
+      });
+      col.addEventListener('dragleave', e => {
+        if (!col.contains(e.relatedTarget)) col.classList.remove('drag-over');
+      });
+      col.addEventListener('drop', e => {
+        e.preventDefault();
+        col.classList.remove('drag-over');
+        if (!this._dragCard) return;
+        const { cardId } = this._dragCard;
+        const card = this._state.cards.find(c => c.id === cardId);
+        if (card) {
+          card.colId = colId;
+          this._save();
+          this._render();
+        }
+        this._dragCard = null;
+      });
+    });
+  }
+
+  _esc(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+}
+
+customElements.define('app-kanban', AppKanban);

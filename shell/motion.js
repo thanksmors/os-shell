@@ -1,5 +1,15 @@
 // Motion language tokens — all animation goes through here
-import { animate } from 'https://cdn.jsdelivr.net/npm/motion@11/+esm';
+// Dynamically imports motion so a CDN failure degrades gracefully instead of breaking boot.
+
+let _animate = null;
+(async () => {
+  try {
+    const mod = await import('https://cdn.jsdelivr.net/npm/motion@11/+esm');
+    _animate = mod.animate;
+  } catch(e) {
+    console.warn('Motion library failed to load; animations disabled.', e);
+  }
+})();
 
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -10,11 +20,10 @@ export const spring = {
 };
 
 export function motion(el, keyframes, options = {}) {
-  if (reduced) {
-    // snap to end state
-    const last = Array.isArray(keyframes) ? keyframes[keyframes.length - 1] : keyframes;
+  const last = Array.isArray(keyframes) ? keyframes[keyframes.length - 1] : keyframes;
+  if (reduced || !_animate) {
     Object.assign(el.style, last);
     return { finished: Promise.resolve() };
   }
-  return animate(el, keyframes, options);
+  return _animate(el, keyframes, options);
 }

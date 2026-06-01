@@ -1,6 +1,4 @@
-import { motion, spring } from './motion.js';
 import { iconUrl } from './icon.js';
-import { adoptTailwind } from './shadow-tailwind.js';
 
 export function initStore() {
   Alpine.store('os', {

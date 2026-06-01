@@ -10,9 +10,6 @@
   "resizable": true,
   "minSize": { "w": 260, "h": 300 },
   "contextMenu": [
-    { "label": "✅ New Todo List",     "config": { "name": "Todo",      "icon": "✅" } },
-    { "label": "🐛 New Issues List",   "config": { "name": "Issues",    "icon": "🐛" } },
-    { "label": "📰 New Headlines",     "config": { "name": "Headlines", "icon": "📰" } },
-    { "label": "📋 New List",          "config": { "name": "List",      "icon": "📋" } }
+    { "label": "📋 New List", "config": { "name": "New List", "icon": "📋" } }
   ]
 }

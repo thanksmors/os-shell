@@ -142,7 +142,7 @@ class AppKanban extends HTMLElement {
 
     // all data-action buttons/elements
     w.querySelectorAll('[data-action]').forEach(el => {
-      el.addEventListener('click', e => {
+      el.addEventListener('click', async e => {
         e.stopPropagation();
         const action = el.dataset.action;
 

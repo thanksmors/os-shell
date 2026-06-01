@@ -141,7 +141,7 @@ class AppList extends HTMLElement {
 
     // toggle / delete
     shadow.querySelectorAll('[data-action]').forEach(el => {
-      el.addEventListener('click', e => {
+      el.addEventListener('click', async e => {
         const action = el.dataset.action;
         const id = el.dataset.id;
         if (action === 'toggle') {

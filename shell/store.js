@@ -24,12 +24,16 @@ export function initStore() {
     },
 
     async _loadManifests() {
-      const ids = ['notepad', 'about', 'files', 'settings'];
-      for (const id of ids) {
-        try {
-          const r = await fetch(`/modules/${id}/manifest.json`);
-          if (r.ok) this.registerApp(await r.json());
-        } catch(e) {}
+      try {
+        const ids = await fetch('/registry.json').then(r => r.json());
+        for (const id of ids) {
+          try {
+            const r = await fetch(`/modules/${id}/manifest.json`);
+            if (r.ok) this.registerApp(await r.json());
+          } catch(e) {}
+        }
+      } catch(e) {
+        console.warn('Could not load registry.json', e);
       }
     },
 

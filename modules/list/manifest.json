@@ -1,0 +1,11 @@
+{
+  "appId": "list",
+  "tag": "app-list",
+  "entry": "/modules/list/index.js",
+  "title": "List",
+  "icon": "✅",
+  "defaultSize": { "w": 360, "h": 480 },
+  "singleton": false,
+  "resizable": true,
+  "minSize": { "w": 260, "h": 300 }
+}

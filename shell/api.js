@@ -1,0 +1,69 @@
+import { BACKEND_URL, API_KEY } from './config.js';
+
+const useBackend = () => Boolean(BACKEND_URL);
+
+function lsKey(collection, id) {
+  return `os:${collection}:${id}`;
+}
+
+function headers() {
+  return {
+    'Content-Type': 'application/json',
+    ...(API_KEY ? { 'x-apikey': API_KEY } : {}),
+  };
+}
+
+// ─── Generic CRUD ──────────────────────────────────────────────────────────
+
+export async function getData(collection, id) {
+  if (!useBackend()) {
+    const raw = localStorage.getItem(lsKey(collection, id));
+    return raw ? JSON.parse(raw) : null;
+  }
+  const r = await fetch(`${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`, { headers: headers() });
+  if (!r.ok) return null;
+  return r.json();
+}
+
+export async function setData(collection, id, data) {
+  if (!useBackend()) {
+    localStorage.setItem(lsKey(collection, id), JSON.stringify(data));
+    return data;
+  }
+  const r = await fetch(`${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: headers(),
+    body: JSON.stringify(data),
+  });
+  return r.json();
+}
+
+// ─── List helpers ──────────────────────────────────────────────────────────
+
+export async function getList(appId) {
+  const data = await getData('lists', appId);
+  return data || { name: 'My List', items: [] };
+}
+
+export async function saveList(appId, list) {
+  return setData('lists', appId, list);
+}
+
+// ─── Board helpers ─────────────────────────────────────────────────────────
+
+export async function getBoard(appId) {
+  const data = await getData('boards', appId);
+  return data || {
+    name: 'My Board',
+    columns: [
+      { id: 'col-1', name: 'To Do' },
+      { id: 'col-2', name: 'In Progress' },
+      { id: 'col-3', name: 'Done' },
+    ],
+    cards: [],
+  };
+}
+
+export async function saveBoard(appId, board) {
+  return setData('boards', appId, board);
+}

@@ -1,0 +1,11 @@
+{
+  "appId": "kanban",
+  "tag": "app-kanban",
+  "entry": "/modules/kanban/index.js",
+  "title": "Kanban",
+  "icon": "🗂️",
+  "defaultSize": { "w": 780, "h": 520 },
+  "singleton": false,
+  "resizable": true,
+  "minSize": { "w": 480, "h": 360 }
+}

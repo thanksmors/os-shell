@@ -1,0 +1,11 @@
+{
+  "appId": "boilerplate",
+  "tag": "app-boilerplate",
+  "entry": "/modules/boilerplate/index.js",
+  "title": "My App",
+  "icon": "🧩",
+  "defaultSize": { "w": 480, "h": 360 },
+  "singleton": false,
+  "resizable": true,
+  "minSize": { "w": 280, "h": 200 }
+}

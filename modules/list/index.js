@@ -25,7 +25,13 @@ class AppList extends HTMLElement {
     await new Promise(r => setTimeout(r, 0));
 
     this._appId = (this.api?.windowId) || ('list-' + Date.now());
+    // If launched with a config name (first launch), use it as the list name
+    const cfg = this.api?.config || {};
     this._state = await getList(this._appId);
+    if (cfg.name && this._state.items.length === 0 && this._state.name === 'My List') {
+      this._state.name = cfg.name;
+      await saveList(this._appId, this._state);
+    }
     this._applyTheme();
     this._render();
 

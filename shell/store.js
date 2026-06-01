@@ -39,7 +39,7 @@ export function initStore() {
       this.apps = { ...this.apps, [manifest.appId]: manifest };
     },
 
-    async launch(appId) {
+    async launch(appId, config = {}) {
       const app = this.apps[appId];
       if (!app) return;
       if (app.singleton) {
@@ -69,10 +69,10 @@ export function initStore() {
       this.windows.push(win);
       // mount module after DOM updates
       await Alpine.nextTick();
-      this._mount(win);
+      this._mount(win, config);
     },
 
-    async _mount(win) {
+    async _mount(win, config = {}) {
       const hostEl = document.querySelector(`[data-win-host="${win.id}"]`);
       if (!hostEl) return;
       const app = this.apps[win.appId];
@@ -86,6 +86,7 @@ export function initStore() {
       const el = document.createElement(app.tag);
       el.api = {
         windowId: win.id,
+        config,
         get mode() { return win.state === 'maximized' ? 'fullscreen' : 'windowed'; },
         get isDark() { return document.documentElement.classList.contains('dark'); },
         setTitle: (t) => { win.title = t; },
@@ -153,6 +154,26 @@ export function initStore() {
 
     hideContextMenu() {
       this.contextMenu.visible = false;
+    },
+
+    buildDesktopContextMenu(x, y) {
+      const items = [];
+      // Collect module contributions
+      for (const app of Object.values(this.apps)) {
+        if (app.contextMenu && app.contextMenu.length) {
+          for (const entry of app.contextMenu) {
+            items.push({
+              label: entry.label,
+              action: () => this.launch(app.appId, entry.config || {}),
+            });
+          }
+        }
+      }
+      // System items always at bottom
+      if (items.length) items.push({ separator: true });
+      items.push({ label: '🎨 Change Theme', action: () => this.toggleTheme() });
+      items.push({ label: '🏔️ About', action: () => this.launch('about') });
+      this.showContextMenu(x, y, items);
     },
 
     toggleTheme() {

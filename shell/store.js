@@ -258,6 +258,7 @@ export function initStore() {
       // clean up stored data
       localStorage.removeItem(`os:lists:${instanceId}`);
       localStorage.removeItem(`os:boards:${instanceId}`);
+      localStorage.removeItem(`os:gantt:${instanceId}`);
     },
 
     buildDesktopContextMenu(x, y) {

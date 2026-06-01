@@ -1,0 +1,15 @@
+{
+  "appId": "gantt",
+  "tag": "app-gantt",
+  "entry": "/modules/gantt/index.js",
+  "title": "Gantt",
+  "icon": "📊",
+  "defaultSize": { "w": 920, "h": 560 },
+  "singleton": false,
+  "generator": true,
+  "resizable": true,
+  "minSize": { "w": 560, "h": 360 },
+  "contextMenu": [
+    { "label": "📊 New Gantt", "config": { "name": "New Gantt", "icon": "📊" } }
+  ]
+}

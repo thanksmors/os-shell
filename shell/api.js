@@ -68,6 +68,17 @@ export async function saveBoard(appId, board) {
   return setData('boards', appId, board);
 }
 
+// ─── Gantt helpers ──────────────────────────────────────────────────────────
+
+export async function getGantt(appId) {
+  const data = await getData('gantt', appId);
+  return data || { name: 'My Projects', viewMonths: 12, projects: [] };
+}
+
+export async function saveGantt(appId, gantt) {
+  return setData('gantt', appId, gantt);
+}
+
 // ─── Instance registry ─────────────────────────────────────────────────────
 
 export async function getInstances() {

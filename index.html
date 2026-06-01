@@ -77,8 +77,7 @@
         <template x-for="(app, appId) in $store.os.apps" :key="appId">
           <button
             class="os-desktop-icon"
-            @dblclick="$store.os.launch(app.appId)"
-            @click.stop
+            @click.stop="$store.os.launch(app.appId)"
           >
             <span class="os-desktop-icon-emoji" x-text="app.icon"></span>
             <span class="os-desktop-icon-label" x-text="app.title"></span>
@@ -192,7 +191,7 @@
     >🏔️</button>
 
     <!-- Window Buttons -->
-    <div style="flex:1;display:flex;align-items:center;gap:3px;overflow:hidden;" x-show="$store.os">
+    <div class="os-taskbar-windows">
       <template x-for="win in ($store.os ? $store.os.windows : [])" :key="win.id">
         <button
           class="os-taskbar-btn"

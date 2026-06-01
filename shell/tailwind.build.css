@@ -762,6 +762,17 @@ input, button, textarea, select { font: inherit; }
   user-select: none;
 }
 
+/* Taskbar window buttons container — never use x-show+display:flex together */
+.os-taskbar-windows {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+  overflow: hidden;
+  min-width: 0;
+}
+
 /* Taskbar button */
 .os-taskbar-btn {
   display: flex;
@@ -1040,6 +1051,9 @@ input, button, textarea, select { font: inherit; }
   transition: background 150ms;
   width: 80px;
   text-decoration: none;
+  background: transparent;
+  border: none;
+  outline: none;
 }
 .os-desktop-icon:hover { background: rgba(255,255,255,0.15); }
 .os-desktop-icon:active { background: rgba(255,255,255,0.25); }

@@ -32,18 +32,12 @@ function lsSet(collection, id, data) {
 
 export async function getData(collection, id) {
   if (!useBackend()) return lsGet(collection, id);
-  // Return the local cache immediately (fast, never empty after first save).
-  // Then revalidate from the cloud in the background — this prevents a slow
-  // backend cold-start from blocking the UI or racing with user actions.
+  // If we have a local cache, trust it — do NOT background-overwrite it with
+  // the cloud copy, because the cloud may be older and would clobber newer
+  // local edits (the "disappears after a few refreshes" bug).
   const cached = lsGet(collection, id);
-  if (cached != null) {
-    fetch(`${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`, { headers: headers() })
-      .then(r => r.ok ? safeJson(r) : null)
-      .then(json => { if (json != null) lsSet(collection, id, json); })
-      .catch(() => {});
-    return cached;
-  }
-  // Nothing cached yet — must wait for the cloud (first load on a new device).
+  if (cached != null) return cached;
+  // No local cache (fresh device / incognito) — read from the cloud.
   try {
     const r = await fetch(`${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`, { headers: headers() });
     if (r.ok) {

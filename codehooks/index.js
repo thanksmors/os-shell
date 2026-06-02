@@ -1,6 +1,15 @@
 import { app, datastore } from 'codehooks-js';
 
-// ─── Lists ────────────────────────────────────────────────────────────────
+// ─── CORS ─────────────────────────────────────────────────────────────────
+
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, x-apikey, Authorization');
+  if (req.method === 'OPTIONS') { res.sendStatus(200); return; }
+  next();
+});
+
 
 app.get('/lists/:appId', async (req, res) => {
   const db = await datastore.open();

@@ -11,7 +11,7 @@ function headers() {
 }
 
 function url(collection, id) {
-  const base = url(collection, id);
+  const base = `${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`;
   return API_KEY ? `${base}?apikey=${API_KEY}` : base;
 }
 

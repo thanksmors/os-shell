@@ -12,7 +12,7 @@ function headers() {
 
 function url(collection, id) {
   const base = url(collection, id);
-  return API_KEY ? `${base}?x-apikey=${API_KEY}` : base;
+  return API_KEY ? `${base}?apikey=${API_KEY}` : base;
 }
 
 // ─── Generic CRUD ──────────────────────────────────────────────────────────

@@ -14,7 +14,8 @@ app.use((req, res, next) => {
 app.get('/lists/:appId', async (req, res) => {
   const db = await datastore.open();
   const data = await db.getOne('lists', { appId: req.params.appId }).catch(() => null);
-  res.json(data || { name: 'My List', items: [] });
+  if (!data) { res.status(404).json({}); return; }
+  res.json(data);
 });
 
 app.put('/lists/:appId', async (req, res) => {
@@ -34,15 +35,8 @@ app.put('/lists/:appId', async (req, res) => {
 app.get('/boards/:appId', async (req, res) => {
   const db = await datastore.open();
   const data = await db.getOne('boards', { appId: req.params.appId }).catch(() => null);
-  res.json(data || {
-    name: 'My Board',
-    columns: [
-      { id: 'col-1', name: 'To Do' },
-      { id: 'col-2', name: 'In Progress' },
-      { id: 'col-3', name: 'Done' },
-    ],
-    cards: [],
-  });
+  if (!data) { res.status(404).json({}); return; }
+  res.json(data);
 });
 
 app.put('/boards/:appId', async (req, res) => {
@@ -64,7 +58,7 @@ app.get('/:collection/:id', async (req, res) => {
   const { collection, id } = req.params;
   const db = await datastore.open();
   const data = await db.getOne(collection, { appId: id }).catch(() => null);
-  if (!data) { res.json(null); return; }
+  if (!data) { res.status(404).json({}); return; }
   res.json(data);
 });
 

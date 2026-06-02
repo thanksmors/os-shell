@@ -92,6 +92,23 @@ export async function saveGantt(appId, gantt) {
 // ─── Instance registry ─────────────────────────────────────────────────────
 
 export async function getInstances() {
+  if (useBackend()) {
+    let data = await getData('meta', 'instances');
+    // One-time migration: push localStorage instances to backend if backend is empty
+    if (!data?.list?.length) {
+      const raw = localStorage.getItem('os:meta:instances');
+      if (raw) {
+        try {
+          const local = JSON.parse(raw);
+          if (local?.list?.length) {
+            await setData('meta', 'instances', local);
+            return local.list;
+          }
+        } catch {}
+      }
+    }
+    return data?.list || [];
+  }
   const data = await getData('meta', 'instances');
   return data?.list || [];
 }

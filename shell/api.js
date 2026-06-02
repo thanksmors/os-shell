@@ -32,8 +32,18 @@ function lsSet(collection, id, data) {
 
 export async function getData(collection, id) {
   if (!useBackend()) return lsGet(collection, id);
-  // Cloud is source of truth, but fall back to the local cache if it is
-  // unreachable / slow / returns nothing — so the UI never loses data.
+  // Return the local cache immediately (fast, never empty after first save).
+  // Then revalidate from the cloud in the background — this prevents a slow
+  // backend cold-start from blocking the UI or racing with user actions.
+  const cached = lsGet(collection, id);
+  if (cached != null) {
+    fetch(`${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`, { headers: headers() })
+      .then(r => r.ok ? safeJson(r) : null)
+      .then(json => { if (json != null) lsSet(collection, id, json); })
+      .catch(() => {});
+    return cached;
+  }
+  // Nothing cached yet — must wait for the cloud (first load on a new device).
   try {
     const r = await fetch(`${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`, { headers: headers() });
     if (r.ok) {
@@ -41,7 +51,7 @@ export async function getData(collection, id) {
       if (json != null) { lsSet(collection, id, json); return json; }
     }
   } catch {}
-  return lsGet(collection, id);
+  return null;
 }
 
 export async function setData(collection, id, data) {

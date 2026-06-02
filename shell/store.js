@@ -160,7 +160,17 @@ export function initStore() {
     },
 
     async _loadInstances() {
-      this.instances = await getInstances();
+      const loaded = await getInstances();
+      // Merge: preserve any instances created while the async fetch was in flight.
+      // Without this, a slow backend cold-start overwrites instances the user
+      // just created, making desktop icons vanish mid-session.
+      if (this.instances.length === 0) {
+        this.instances = loaded;
+      } else {
+        const existingIds = new Set(this.instances.map(i => i.instanceId));
+        const merged = [...this.instances, ...loaded.filter(i => !existingIds.has(i.instanceId))];
+        this.instances = merged;
+      }
     },
 
     async createInstance(appId, config = {}) {

@@ -7,10 +7,12 @@ function lsKey(collection, id) {
 }
 
 function headers() {
-  return {
-    'Content-Type': 'application/json',
-    ...(API_KEY ? { 'x-apikey': API_KEY } : {}),
-  };
+  return { 'Content-Type': 'application/json' };
+}
+
+function url(collection, id) {
+  const base = url(collection, id);
+  return API_KEY ? `${base}?x-apikey=${API_KEY}` : base;
 }
 
 // ─── Generic CRUD ──────────────────────────────────────────────────────────
@@ -35,7 +37,7 @@ export async function getData(collection, id) {
   const cached = lsGet(collection, id);
   if (cached != null) return cached;
   try {
-    const r = await fetch(`${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`, { headers: headers() });
+    const r = await fetch(url(collection, id), { headers: headers() });
     if (r.ok) {
       const json = await safeJson(r);
       // Backend returns {} when nothing found — treat as null
@@ -53,7 +55,7 @@ export async function setData(collection, id, data) {
   lsSet(collection, id, data);
   if (!useBackend()) return data;
   try {
-    const r = await fetch(`${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`, {
+    const r = await fetch(url(collection, id), {
       method: 'PUT',
       headers: headers(),
       body: JSON.stringify(data),

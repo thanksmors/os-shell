@@ -1,72 +1,57 @@
 import { app, datastore } from 'codehooks-js';
 
-// NOTE: codehooks-js handles CORS natively (it returns the correct
-// Access-Control-* headers on its own). Do NOT add an Express-style CORS
-// middleware here — codehooks-js Response has no `.header()` / `.sendStatus()`
-// methods, so such middleware throws on every request and surfaces in the
-// browser as "CORS request did not succeed, status null".
+// codehooks-js handles CORS natively. Do not add Express-style middleware.
+// res.status() does NOT chain — call it separately before res.json().
 
-app.get('/lists/:appId', async (req, res) => {
+async function getOne(collection, appId) {
   const db = await datastore.open();
-  const data = await db.getOne('lists', { appId: req.params.appId }).catch(() => null);
-  if (!data) { res.status(404).json({}); return; }
-  res.json(data);
-});
+  return db.getOne(collection, { appId }).catch(() => null);
+}
 
-app.put('/lists/:appId', async (req, res) => {
+async function upsert(collection, appId, record) {
   const db = await datastore.open();
-  const record = { ...req.body, appId: req.params.appId };
-  const existing = await db.getOne('lists', { appId: req.params.appId }).catch(() => null);
+  const existing = await db.getOne(collection, { appId }).catch(() => null);
   if (existing) {
-    await db.updateOne('lists', { appId: req.params.appId }, record);
-  } else {
-    await db.insertOne('lists', record);
-  }
-  res.json(record);
-});
-
-// ─── Boards (Kanban) ──────────────────────────────────────────────────────
-
-app.get('/boards/:appId', async (req, res) => {
-  const db = await datastore.open();
-  const data = await db.getOne('boards', { appId: req.params.appId }).catch(() => null);
-  if (!data) { res.status(404).json({}); return; }
-  res.json(data);
-});
-
-app.put('/boards/:appId', async (req, res) => {
-  const db = await datastore.open();
-  const record = { ...req.body, appId: req.params.appId };
-  const existing = await db.getOne('boards', { appId: req.params.appId }).catch(() => null);
-  if (existing) {
-    await db.updateOne('boards', { appId: req.params.appId }, record);
-  } else {
-    await db.insertOne('boards', record);
-  }
-  res.json(record);
-});
-
-// ─── Generic collection store ─────────────────────────────────────────────
-// Backs gantt, meta/instances, and any future modules.
-
-app.get('/:collection/:id', async (req, res) => {
-  const { collection, id } = req.params;
-  const db = await datastore.open();
-  const data = await db.getOne(collection, { appId: id }).catch(() => null);
-  if (!data) { res.status(404).json({}); return; }
-  res.json(data);
-});
-
-app.put('/:collection/:id', async (req, res) => {
-  const { collection, id } = req.params;
-  const db = await datastore.open();
-  const record = { ...req.body, appId: id };
-  const existing = await db.getOne(collection, { appId: id }).catch(() => null);
-  if (existing) {
-    await db.updateOne(collection, { appId: id }, record);
+    await db.updateOne(collection, { appId }, record);
   } else {
     await db.insertOne(collection, record);
   }
+  return record;
+}
+
+// ─── Lists ────────────────────────────────────────────────────────────────
+
+app.get('/lists/:appId', async (req, res) => {
+  const data = await getOne('lists', req.params.appId);
+  res.json(data || {});
+});
+
+app.put('/lists/:appId', async (req, res) => {
+  const record = await upsert('lists', req.params.appId, { ...req.body, appId: req.params.appId });
+  res.json(record);
+});
+
+// ─── Boards ───────────────────────────────────────────────────────────────
+
+app.get('/boards/:appId', async (req, res) => {
+  const data = await getOne('boards', req.params.appId);
+  res.json(data || {});
+});
+
+app.put('/boards/:appId', async (req, res) => {
+  const record = await upsert('boards', req.params.appId, { ...req.body, appId: req.params.appId });
+  res.json(record);
+});
+
+// ─── Generic (gantt, meta/instances, future modules) ──────────────────────
+
+app.get('/:collection/:id', async (req, res) => {
+  const data = await getOne(req.params.collection, req.params.id);
+  res.json(data || {});
+});
+
+app.put('/:collection/:id', async (req, res) => {
+  const record = await upsert(req.params.collection, req.params.id, { ...req.body, appId: req.params.id });
   res.json(record);
 });
 

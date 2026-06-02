@@ -32,17 +32,17 @@ function lsSet(collection, id, data) {
 
 export async function getData(collection, id) {
   if (!useBackend()) return lsGet(collection, id);
-  // If we have a local cache, trust it — do NOT background-overwrite it with
-  // the cloud copy, because the cloud may be older and would clobber newer
-  // local edits (the "disappears after a few refreshes" bug).
   const cached = lsGet(collection, id);
   if (cached != null) return cached;
-  // No local cache (fresh device / incognito) — read from the cloud.
   try {
     const r = await fetch(`${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`, { headers: headers() });
     if (r.ok) {
       const json = await safeJson(r);
-      if (json != null) { lsSet(collection, id, json); return json; }
+      // Backend returns {} when nothing found — treat as null
+      if (json != null && Object.keys(json).length > 0) {
+        lsSet(collection, id, json);
+        return json;
+      }
     }
   } catch {}
   return null;

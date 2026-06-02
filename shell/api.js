@@ -15,14 +15,22 @@ function headers() {
 
 // ─── Generic CRUD ──────────────────────────────────────────────────────────
 
+async function safeJson(r) {
+  const text = await r.text();
+  if (!text || !text.trim()) return null;
+  try { return JSON.parse(text); } catch { return null; }
+}
+
 export async function getData(collection, id) {
   if (!useBackend()) {
     const raw = localStorage.getItem(lsKey(collection, id));
     return raw ? JSON.parse(raw) : null;
   }
-  const r = await fetch(`${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`, { headers: headers() });
-  if (!r.ok) return null;
-  return r.json();
+  try {
+    const r = await fetch(`${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`, { headers: headers() });
+    if (!r.ok) return null;
+    return safeJson(r);
+  } catch { return null; }
 }
 
 export async function setData(collection, id, data) {
@@ -30,12 +38,14 @@ export async function setData(collection, id, data) {
     localStorage.setItem(lsKey(collection, id), JSON.stringify(data));
     return data;
   }
-  const r = await fetch(`${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`, {
-    method: 'PUT',
-    headers: headers(),
-    body: JSON.stringify(data),
-  });
-  return r.json();
+  try {
+    const r = await fetch(`${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify(data),
+    });
+    return await safeJson(r) ?? data;
+  } catch { return data; }
 }
 
 // ─── List helpers ──────────────────────────────────────────────────────────

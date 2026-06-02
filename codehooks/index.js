@@ -64,14 +64,20 @@ app.get('/:collection/:id', async (req, res) => {
   const { collection, id } = req.params;
   const db = await datastore.open();
   const data = await db.getOne(collection, { appId: id }).catch(() => null);
-  res.json(data || null);
+  if (!data) { res.json(null); return; }
+  res.json(data);
 });
 
 app.put('/:collection/:id', async (req, res) => {
   const { collection, id } = req.params;
   const db = await datastore.open();
   const record = { ...req.body, appId: id };
-  await db.upsertOne(collection, { appId: id }, record);
+  const existing = await db.getOne(collection, { appId: id }).catch(() => null);
+  if (existing) {
+    await db.updateOne(collection, { appId: id }, record);
+  } else {
+    await db.insertOne(collection, record);
+  }
   res.json(record);
 });
 

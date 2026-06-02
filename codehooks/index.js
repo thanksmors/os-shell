@@ -1,11 +1,3 @@
-// Alpine OS Shell — Codehooks backend
-// Deploy: push this file to your Codehooks space
-// Docs: https://codehooks.io/docs
-//
-// Activate by setting BACKEND_URL in shell/config.js:
-//   export const BACKEND_URL = 'https://<your-space>.codehooks.io/dev';
-//   export const API_KEY = '<your-api-key>';
-
 import { app, datastore } from 'codehooks-js';
 
 // ─── Lists ────────────────────────────────────────────────────────────────
@@ -56,31 +48,14 @@ app.put('/boards/:appId', async (req, res) => {
   res.json(record);
 });
 
-// ─── Desktop layout ───────────────────────────────────────────────────────
-
-app.get('/desktop-layout', async (req, res) => {
-  const db = await datastore.open();
-  const data = await db.getOne('layouts', { _id: 'default' }).catch(() => null);
-  res.json(data || { windows: [] });
-});
-
-app.put('/desktop-layout', async (req, res) => {
-  const db = await datastore.open();
-  const record = { ...req.body, _id: 'default' };
-  await db.upsertOne('layouts', { _id: 'default' }, record);
-  res.json(record);
-});
-
 // ─── Generic collection store ─────────────────────────────────────────────
-// Backs every other collection the shell uses (gantt, meta/instances, and any
-// future modules). The frontend calls GET/PUT /:collection/:id.
+// Backs gantt, meta/instances, and any future modules.
 
 app.get('/:collection/:id', async (req, res) => {
   const { collection, id } = req.params;
   const db = await datastore.open();
   const data = await db.getOne(collection, { appId: id }).catch(() => null);
-  if (!data) { res.json(null); return; }
-  res.json(data);
+  res.json(data || null);
 });
 
 app.put('/:collection/:id', async (req, res) => {

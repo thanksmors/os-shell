@@ -21,23 +21,33 @@ async function safeJson(r) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
+function lsGet(collection, id) {
+  const raw = localStorage.getItem(lsKey(collection, id));
+  return raw ? JSON.parse(raw) : null;
+}
+
+function lsSet(collection, id, data) {
+  try { localStorage.setItem(lsKey(collection, id), JSON.stringify(data)); } catch {}
+}
+
 export async function getData(collection, id) {
-  if (!useBackend()) {
-    const raw = localStorage.getItem(lsKey(collection, id));
-    return raw ? JSON.parse(raw) : null;
-  }
+  if (!useBackend()) return lsGet(collection, id);
+  // Cloud is source of truth, but fall back to the local cache if it is
+  // unreachable / slow / returns nothing — so the UI never loses data.
   try {
     const r = await fetch(`${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`, { headers: headers() });
-    if (!r.ok) return null;
-    return safeJson(r);
-  } catch { return null; }
+    if (r.ok) {
+      const json = await safeJson(r);
+      if (json != null) { lsSet(collection, id, json); return json; }
+    }
+  } catch {}
+  return lsGet(collection, id);
 }
 
 export async function setData(collection, id, data) {
-  if (!useBackend()) {
-    localStorage.setItem(lsKey(collection, id), JSON.stringify(data));
-    return data;
-  }
+  // Always write the local cache first — instant + survives network failures.
+  lsSet(collection, id, data);
+  if (!useBackend()) return data;
   try {
     const r = await fetch(`${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`, {
       method: 'PUT',
@@ -52,7 +62,11 @@ export async function setData(collection, id, data) {
 
 export async function getList(appId) {
   const data = await getData('lists', appId);
-  return data || { name: 'My List', items: [] };
+  if (!data || typeof data !== 'object') return { name: 'My List', items: [], fields: [] };
+  if (!Array.isArray(data.items)) data.items = [];
+  if (!Array.isArray(data.fields)) data.fields = [];
+  if (typeof data.name !== 'string') data.name = 'My List';
+  return data;
 }
 
 export async function saveList(appId, list) {
@@ -62,8 +76,7 @@ export async function saveList(appId, list) {
 // ─── Board helpers ─────────────────────────────────────────────────────────
 
 export async function getBoard(appId) {
-  const data = await getData('boards', appId);
-  return data || {
+  const defaults = {
     name: 'My Board',
     columns: [
       { id: 'col-1', name: 'To Do' },
@@ -72,6 +85,12 @@ export async function getBoard(appId) {
     ],
     cards: [],
   };
+  const data = await getData('boards', appId);
+  if (!data || typeof data !== 'object') return defaults;
+  if (!Array.isArray(data.columns)) data.columns = defaults.columns;
+  if (!Array.isArray(data.cards)) data.cards = [];
+  if (typeof data.name !== 'string') data.name = 'My Board';
+  return data;
 }
 
 export async function saveBoard(appId, board) {
@@ -82,7 +101,11 @@ export async function saveBoard(appId, board) {
 
 export async function getGantt(appId) {
   const data = await getData('gantt', appId);
-  return data || { name: 'My Projects', viewMonths: 12, projects: [] };
+  if (!data || typeof data !== 'object') return { name: 'My Projects', viewMonths: 12, projects: [] };
+  if (!Array.isArray(data.projects)) data.projects = [];
+  if (typeof data.name !== 'string') data.name = 'My Projects';
+  if (typeof data.viewMonths !== 'number') data.viewMonths = 12;
+  return data;
 }
 
 export async function saveGantt(appId, gantt) {

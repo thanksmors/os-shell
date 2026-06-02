@@ -1,15 +1,10 @@
 import { app, datastore } from 'codehooks-js';
 
-// ─── CORS ─────────────────────────────────────────────────────────────────
-
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, x-apikey, Authorization');
-  if (req.method === 'OPTIONS') { res.sendStatus(200); return; }
-  next();
-});
-
+// NOTE: codehooks-js handles CORS natively (it returns the correct
+// Access-Control-* headers on its own). Do NOT add an Express-style CORS
+// middleware here — codehooks-js Response has no `.header()` / `.sendStatus()`
+// methods, so such middleware throws on every request and surfaces in the
+// browser as "CORS request did not succeed, status null".
 
 app.get('/lists/:appId', async (req, res) => {
   const db = await datastore.open();

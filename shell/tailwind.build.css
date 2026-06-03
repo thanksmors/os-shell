@@ -1321,3 +1321,26 @@ input, button, textarea, select { font: inherit; }
   height: 32px;
 }
 .os-user-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+/* Google sign-in button (server-side OAuth flow) */
+.os-google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 11px 20px;
+  width: 100%;
+  max-width: 280px;
+  background: #ffffff;
+  color: #3c4043;
+  border: 1px solid #dadce0;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 150ms, box-shadow 150ms;
+}
+.os-google-btn:hover { background: #f8faff; box-shadow: 0 1px 3px rgba(60,64,67,0.3); }
+.os-google-btn:active { background: #f1f3f4; }
+.os-google-btn svg { flex-shrink: 0; }

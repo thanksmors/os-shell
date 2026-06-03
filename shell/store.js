@@ -1,6 +1,6 @@
 import { iconUrl } from './icon.js';
 import { getData, setData, getInstances, saveInstances, subscribe, setSession, setWorkspace, resetPolling } from './api.js';
-import { getSavedSession, getSavedUser, clearSession, initGoogleSignIn, renderGoogleButton } from './auth.js';
+import { getSavedSession, getSavedUser, saveUser, clearSession, startGoogleLogin, consumeAuthRedirect, fetchMe } from './auth.js';
 import { fetchWorkspaces, acceptInvite } from './workspace.js';
 
 export function initStore() {
@@ -15,36 +15,43 @@ export function initStore() {
     error: null,
 
     async init() {
-      // Check for invite link
+      // Capture invite link (if any) before we scrub the query string.
       const params = new URLSearchParams(window.location.search);
       this.inviteId = params.get('invite') || null;
 
-      const session = getSavedSession();
-      const user = getSavedUser();
-      if (!session || !user) {
-        this.screen = 'login';
-        this._initGoogle();
-        return;
-      }
+      // Pull a freshly-minted session (or error) from the backend OAuth redirect.
+      const redirect = consumeAuthRedirect();
+      if (redirect.error) this.error = 'Sign-in failed. Please try again.';
 
-      // Validate session by fetching workspaces
+      const session = redirect.session || getSavedSession();
+      if (!session) { this.screen = 'login'; return; }
+
       try {
         setSession(session);
+
+        // Resolve the user profile (cached, then refreshed from /me).
+        this.user = getSavedUser();
+        const me = await fetchMe(session);
+        if (!me || me.error || !me.userId) throw new Error('invalid session');
+        this.user = { userId: me.userId, name: me.name, email: me.email, picture: me.picture };
+        saveUser(this.user);
+
         const workspaces = await fetchWorkspaces(session);
         if (!Array.isArray(workspaces) || workspaces.error) throw new Error('invalid session');
-        this.user = user;
         this.workspaces = workspaces;
 
-        // Accept pending invite before selecting workspace
+        // Accept a pending invite before selecting a workspace.
         if (this.inviteId) {
           try {
             const result = await acceptInvite(this.inviteId, session);
-            if (result?.workspaceId && !this.workspaces.find(w => w.workspaceId === result.workspaceId)) {
-              const fresh = await fetchWorkspaces(session);
-              this.workspaces = fresh;
+            if (result?.workspaceId) {
+              this.workspaces = await fetchWorkspaces(session);
             }
           } catch {}
-          history.replaceState({}, '', window.location.pathname);
+          const after = new URLSearchParams(window.location.search);
+          after.delete('invite');
+          const qs = after.toString();
+          history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : ''));
           this.inviteId = null;
         }
 
@@ -59,54 +66,15 @@ export function initStore() {
         }
       } catch {
         clearSession();
+        setSession(null);
         this.screen = 'login';
-        this._initGoogle();
       }
     },
 
-    _initGoogle() {
-      if (window.google?.accounts?.id) {
-        this._setupGoogle();
-      } else {
-        window.addEventListener('google-ready', () => this._setupGoogle(), { once: true });
-      }
-    },
-
-    _setupGoogle() {
-      initGoogleSignIn(async (err, data) => {
-        if (err) { this.error = 'Sign-in failed. Please try again.'; return; }
-        this.error = null;
-        this.user = { userId: data.userId, name: data.name, email: data.email, picture: data.picture };
-        setSession(data.sessionToken);
-        try {
-          const workspaces = await fetchWorkspaces(data.sessionToken);
-          this.workspaces = workspaces;
-
-          if (this.inviteId) {
-            try {
-              await acceptInvite(this.inviteId, data.sessionToken);
-              const fresh = await fetchWorkspaces(data.sessionToken);
-              this.workspaces = fresh;
-            } catch {}
-            history.replaceState({}, '', window.location.pathname);
-            this.inviteId = null;
-          }
-
-          if (this.workspaces.length === 1) {
-            await this._activateWorkspace(this.workspaces[0], data.sessionToken);
-          } else {
-            this.screen = 'workspace-select';
-          }
-        } catch { this.error = 'Failed to load workspaces.'; }
-      });
-      this._renderButton();
-    },
-
-    _renderButton() {
-      Alpine.nextTick(() => {
-        const el = document.getElementById('google-signin-btn');
-        if (el) renderGoogleButton(el);
-      });
+    // Kick off the server-driven Google sign-in (full-page redirect).
+    login() {
+      this.error = null;
+      startGoogleLogin();
     },
 
     async selectWorkspace(workspaceId) {
@@ -145,7 +113,6 @@ export function initStore() {
       this.screen = 'login';
       Alpine.store('os').windows = [];
       Alpine.store('os').instances = [];
-      this._initGoogle();
     },
   });
 

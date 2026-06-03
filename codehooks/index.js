@@ -1,6 +1,18 @@
 import { app, datastore } from 'codehooks-js';
 
 const GOOGLE_CLIENT_ID = '424699749757-82n32i85givjhrlnoqgisjc85sk530mk.apps.googleusercontent.com';
+// Secret lives in a codehooks environment variable, never in source. Set it with:
+//   coho set-env GOOGLE_CLIENT_SECRET '<your-secret>' --space dev
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+// This space's own public base URL. Google redirects here after sign-in, so it
+// must exactly match an Authorized redirect URI in the Google Cloud console:
+//   https://test-tp2u.api.codehooks.io/dev/auth/google/callback
+const SELF_URL = 'https://test-tp2u.api.codehooks.io/dev';
+
+// Google's OAuth endpoints are hit by the *browser* (the login redirect) and by
+// Google's servers (the callback), neither of which can carry the codehooks API
+// key. Whitelist them so they're reachable without a key.
+app.auth('/auth/google/*', (req, res, next) => next());
 
 // ─── Datastore helpers ────────────────────────────────────────────────────────
 
@@ -62,26 +74,14 @@ async function recordChange(workspaceId, collection, id) {
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-// POST /auth/me
-// Body: { idToken } — Google ID token from the browser's Google Identity Services
-// Returns: { sessionToken, userId, name, email, picture }
-app.post('/auth/me', async (req, res) => {
-  const { idToken } = req.body || {};
-  if (!idToken) { res.status(400); res.json({ error: 'Missing idToken' }); return; }
-
-  // Verify with Google tokeninfo endpoint
-  const gRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`);
-  const gData = await gRes.json().catch(() => null);
-  if (!gData || gData.error || gData.aud !== GOOGLE_CLIENT_ID) {
-    res.status(401); res.json({ error: 'Invalid token' }); return;
-  }
-
+// Given a verified Google profile (gData from tokeninfo), upsert the user, mint
+// a 30-day session, and auto-create a Personal workspace on first sign-in.
+// Returns the session payload the frontend needs.
+async function bootstrapSession(gData) {
   const { sub: userId, email, name, picture } = gData;
 
-  // Create/update user
   await dbUpsert('users', userId, { userId, email, name: name || email, picture: picture || '' });
 
-  // Create session (30 days)
   const sessionToken = genId('sess');
   await dbInsert('sessions', {
     appId: sessionToken,
@@ -91,7 +91,6 @@ app.post('/auth/me', async (req, res) => {
     expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
   });
 
-  // Auto-create Personal workspace if user has none
   const userWs = await dbGet('user_workspaces', userId) || { workspaceIds: [] };
   if (!userWs.workspaceIds?.length) {
     const workspaceId = genId('ws');
@@ -101,7 +100,93 @@ app.post('/auth/me', async (req, res) => {
     await dbUpsert('user_workspaces', userId, { userId, workspaceIds: [workspaceId] });
   }
 
-  res.json({ sessionToken, userId, name: name || email, email, picture: picture || '' });
+  return { sessionToken, userId, name: name || email, email, picture: picture || '' };
+}
+
+// Verify a Google ID token and confirm it was issued for our client.
+async function verifyGoogleIdToken(idToken) {
+  const gRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`);
+  const gData = await gRes.json().catch(() => null);
+  if (!gData || gData.error || gData.aud !== GOOGLE_CLIENT_ID) return null;
+  return gData;
+}
+
+// ─── Server-side OAuth 2.0 Authorization Code flow ─────────────────────────────
+// The browser is sent to /auth/google/login, which redirects to Google. Google
+// authenticates the user and redirects back to /auth/google/callback (a fixed,
+// pre-registered URL) with a code. We exchange the code for an id_token using the
+// client secret, mint a session, and redirect the browser back to the frontend
+// with ?session=<token>. The frontend origin is never validated by Google, so
+// this works on any port/domain without per-origin registration.
+
+const REDIRECT_URI = `${SELF_URL}/auth/google/callback`;
+
+// GET /auth/google/login?return=<frontend-url>
+app.get('/auth/google/login', async (req, res) => {
+  const ret = req.query?.return || SELF_URL;
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: REDIRECT_URI,
+    response_type: 'code',
+    scope: 'openid email profile',
+    access_type: 'online',
+    prompt: 'select_account',
+    state: ret,
+  });
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+});
+
+// GET /auth/google/callback?code=...&state=<frontend-url>
+app.get('/auth/google/callback', async (req, res) => {
+  const code = req.query?.code;
+  const ret = req.query?.state || SELF_URL;
+  const back = (err, session) => {
+    const sep = ret.includes('?') ? '&' : '?';
+    res.redirect(err ? `${ret}${sep}auth_error=${err}` : `${ret}${sep}session=${session}`);
+  };
+
+  if (!code) { back('nocode'); return; }
+
+  // Exchange the authorization code for tokens (needs the client secret).
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      redirect_uri: REDIRECT_URI,
+      grant_type: 'authorization_code',
+    }).toString(),
+  });
+  const tokens = await tokenRes.json().catch(() => null);
+  if (!tokens?.id_token) { back('exchange'); return; }
+
+  const gData = await verifyGoogleIdToken(tokens.id_token);
+  if (!gData) { back('verify'); return; }
+
+  const { sessionToken } = await bootstrapSession(gData);
+  back(null, sessionToken);
+});
+
+// GET /me — current user profile from session (used by the frontend after the
+// callback redirect, to populate name/email/avatar).
+app.get('/me', async (req, res) => {
+  const authUser = await getSessionUser(req);
+  if (!authUser) { sendUnauth(res); return; }
+  const user = await dbGet('users', authUser.userId);
+  res.json(user || {});
+});
+
+// POST /auth/me — legacy GSI token-exchange path (kept for compatibility).
+// Body: { idToken } — a Google ID token obtained client-side.
+app.post('/auth/me', async (req, res) => {
+  const { idToken } = req.body || {};
+  if (!idToken) { res.status(400); res.json({ error: 'Missing idToken' }); return; }
+  const gData = await verifyGoogleIdToken(idToken);
+  if (!gData) { res.status(401); res.json({ error: 'Invalid token' }); return; }
+  const payload = await bootstrapSession(gData);
+  res.json(payload);
 });
 
 // ─── Workspaces ───────────────────────────────────────────────────────────────

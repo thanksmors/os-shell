@@ -1,5 +1,5 @@
 import { adoptTailwind } from '/shell/shadow-tailwind.js';
-import { getList, saveList } from '/shell/api.js';
+import { getList, saveList, subscribe } from '/shell/api.js';
 
 class AppList extends HTMLElement {
   constructor() {
@@ -36,15 +36,22 @@ class AppList extends HTMLElement {
     this._applyTheme();
     this._render();
 
-    // watch theme changes
     this._themeObserver = new MutationObserver(() => this._applyTheme());
     this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
     if (this.api) this.api.setTitle(this._state.name);
+
+    // Cross-client sync: re-fetch and re-render when another client saves this list
+    this._unsub = subscribe('lists', this._appId, async () => {
+      this._state = await getList(this._appId);
+      this._render();
+      if (this.api) this.api.setTitle(this._state.name);
+    });
   }
 
   disconnectedCallback() {
     this._themeObserver?.disconnect();
+    this._unsub?.();
   }
 
   _applyTheme() {

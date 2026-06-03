@@ -1,5 +1,5 @@
 import { adoptTailwind } from '/shell/shadow-tailwind.js';
-import { getBoard, saveBoard } from '/shell/api.js';
+import { getBoard, saveBoard, subscribe } from '/shell/api.js';
 
 class AppKanban extends HTMLElement {
   constructor() {
@@ -35,10 +35,17 @@ class AppKanban extends HTMLElement {
     this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
     if (this.api) this.api.setTitle(this._state.name);
+
+    this._unsub = subscribe('boards', this._appId, async () => {
+      this._state = await getBoard(this._appId);
+      this._render();
+      if (this.api) this.api.setTitle(this._state.name);
+    });
   }
 
   disconnectedCallback() {
     this._themeObserver?.disconnect();
+    this._unsub?.();
   }
 
   _applyTheme() {

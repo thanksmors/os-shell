@@ -1,5 +1,5 @@
 import { adoptTailwind } from '/shell/shadow-tailwind.js';
-import { getGantt, saveGantt } from '/shell/api.js';
+import { getGantt, saveGantt, subscribe } from '/shell/api.js';
 
 const MONTH_W = 64;       // px per month column
 const ROW_H = 40;         // px per project row
@@ -45,9 +45,18 @@ class AppGantt extends HTMLElement {
 
     this._themeObserver = new MutationObserver(() => this._applyTheme());
     this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    this._unsub = subscribe('gantt', this._appId, async () => {
+      this._state = await getGantt(this._appId);
+      this._render();
+      if (this.api) this.api.setTitle(this._state.name);
+    });
   }
 
-  disconnectedCallback() { this._themeObserver?.disconnect(); }
+  disconnectedCallback() {
+    this._themeObserver?.disconnect();
+    this._unsub?.();
+  }
   _applyTheme() { this._wrapper?.classList.toggle('dark', document.documentElement.classList.contains('dark')); }
   async _save() { await saveGantt(this._appId, this._state); }
 

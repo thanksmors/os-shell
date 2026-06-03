@@ -1,5 +1,5 @@
 import { iconUrl } from './icon.js';
-import { getData, setData, getInstances, saveInstances } from './api.js';
+import { getData, setData, getInstances, saveInstances, subscribe } from './api.js';
 
 export function initStore() {
   Alpine.store('os', {
@@ -160,6 +160,10 @@ export function initStore() {
     },
 
     async _loadInstances() {
+      // Subscribe to cross-client instance changes (first call starts polling)
+      if (!this._instancesUnsub) {
+        this._instancesUnsub = subscribe('meta', 'instances', () => this._loadInstances());
+      }
       const loaded = await getInstances();
       // Merge: preserve any instances created while the async fetch was in flight.
       // Without this, a slow backend cold-start overwrites instances the user

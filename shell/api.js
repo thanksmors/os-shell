@@ -32,6 +32,10 @@ function lsSet(collection, id, data) {
   try { localStorage.setItem(lsKey(collection, id), JSON.stringify(data)); } catch {}
 }
 
+function lsDel(collection, id) {
+  try { localStorage.removeItem(lsKey(collection, id)); } catch {}
+}
+
 export async function getData(collection, id) {
   if (!useBackend()) return lsGet(collection, id);
   const cached = lsGet(collection, id);
@@ -40,7 +44,6 @@ export async function getData(collection, id) {
     const r = await fetch(url(collection, id), { headers: headers() });
     if (r.ok) {
       const json = await safeJson(r);
-      // Backend returns {} when nothing found — treat as null
       if (json != null && Object.keys(json).length > 0) {
         lsSet(collection, id, json);
         return json;
@@ -51,7 +54,6 @@ export async function getData(collection, id) {
 }
 
 export async function setData(collection, id, data) {
-  // Always write the local cache first — instant + survives network failures.
   lsSet(collection, id, data);
   if (!useBackend()) return data;
   try {
@@ -62,6 +64,63 @@ export async function setData(collection, id, data) {
     });
     return await safeJson(r) ?? data;
   } catch { return data; }
+}
+
+// ─── Cross-client sync (polling) ───────────────────────────────────────────
+// One GET /changes request every 5 minutes regardless of how many modules are
+// open. On a changed timestamp, invalidates the local cache for that key and
+// calls all registered subscriber callbacks so open modules re-fetch.
+
+const _subscribers = new Map(); // "collection:id" → Set<callback>
+let _lastSeen = {};             // "collection:id" → last known timestamp
+let _initialized = false;
+let _pollTimer = null;
+
+async function _poll() {
+  try {
+    const changesUrl = API_KEY
+      ? `${BACKEND_URL}/changes?apikey=${API_KEY}`
+      : `${BACKEND_URL}/changes`;
+    const r = await fetch(changesUrl);
+    if (!r.ok) return;
+    const changes = await safeJson(r);
+    if (!changes || typeof changes !== 'object') return;
+
+    if (!_initialized) {
+      // First poll: record current state so we don't fire stale callbacks.
+      _lastSeen = { ...changes };
+      _initialized = true;
+      return;
+    }
+
+    for (const [key, ts] of Object.entries(changes)) {
+      if (ts > (_lastSeen[key] || 0)) {
+        _lastSeen[key] = ts;
+        const colonIdx = key.indexOf(':');
+        const collection = key.slice(0, colonIdx);
+        const id = key.slice(colonIdx + 1);
+        lsDel(collection, id);
+        _subscribers.get(key)?.forEach(cb => cb());
+      }
+    }
+  } catch {}
+}
+
+function _startPolling() {
+  if (_pollTimer || !useBackend()) return;
+  _poll(); // immediate first poll to seed _lastSeen
+  _pollTimer = setInterval(_poll, 5 * 60 * 1000); // every 5 minutes
+}
+
+// Subscribe to changes for a specific collection + id.
+// Returns an unsubscribe function — call it in disconnectedCallback.
+export function subscribe(collection, id, callback) {
+  if (!useBackend()) return () => {};
+  const key = `${collection}:${id}`;
+  if (!_subscribers.has(key)) _subscribers.set(key, new Set());
+  _subscribers.get(key).add(callback);
+  _startPolling();
+  return () => _subscribers.get(key)?.delete(callback);
 }
 
 // ─── List helpers ──────────────────────────────────────────────────────────
@@ -123,7 +182,6 @@ export async function saveGantt(appId, gantt) {
 export async function getInstances() {
   if (useBackend()) {
     let data = await getData('meta', 'instances');
-    // One-time migration: push localStorage instances to backend if backend is empty
     if (!data?.list?.length) {
       const raw = localStorage.getItem('os:meta:instances');
       if (raw) {

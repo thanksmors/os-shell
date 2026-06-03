@@ -19,6 +19,29 @@ async function upsert(collection, appId, record) {
   return record;
 }
 
+// Record a change timestamp for cross-client sync polling
+async function recordChange(collection, id) {
+  try {
+    const db = await datastore.open();
+    const feed = await db.getOne('_changes', { appId: 'feed' }).catch(() => null);
+    const changes = feed?.changes || {};
+    changes[`${collection}:${id}`] = Date.now();
+    if (feed) {
+      await db.updateOne('_changes', { appId: 'feed' }, { appId: 'feed', changes });
+    } else {
+      await db.insertOne('_changes', { appId: 'feed', changes });
+    }
+  } catch {}
+}
+
+// ─── Changes feed (for cross-client polling) ──────────────────────────────
+
+app.get('/changes', async (req, res) => {
+  const db = await datastore.open();
+  const feed = await db.getOne('_changes', { appId: 'feed' }).catch(() => null);
+  res.json(feed?.changes || {});
+});
+
 // ─── Lists ────────────────────────────────────────────────────────────────
 
 app.get('/lists/:appId', async (req, res) => {
@@ -28,6 +51,7 @@ app.get('/lists/:appId', async (req, res) => {
 
 app.put('/lists/:appId', async (req, res) => {
   const record = await upsert('lists', req.params.appId, { ...req.body, appId: req.params.appId });
+  await recordChange('lists', req.params.appId);
   res.json(record);
 });
 
@@ -40,6 +64,7 @@ app.get('/boards/:appId', async (req, res) => {
 
 app.put('/boards/:appId', async (req, res) => {
   const record = await upsert('boards', req.params.appId, { ...req.body, appId: req.params.appId });
+  await recordChange('boards', req.params.appId);
   res.json(record);
 });
 
@@ -51,7 +76,9 @@ app.get('/:collection/:id', async (req, res) => {
 });
 
 app.put('/:collection/:id', async (req, res) => {
-  const record = await upsert(req.params.collection, req.params.id, { ...req.body, appId: req.params.id });
+  const { collection, id } = req.params;
+  const record = await upsert(collection, id, { ...req.body, appId: id });
+  await recordChange(collection, id);
   res.json(record);
 });
 

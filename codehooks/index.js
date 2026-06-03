@@ -244,6 +244,33 @@ app.put('/workspaces/:workspaceId', async (req, res) => {
   res.json(updated);
 });
 
+app.delete('/workspaces/:workspaceId', async (req, res) => {
+  const authUser = await getSessionUser(req);
+  if (!authUser) { sendUnauth(res); return; }
+
+  const { workspaceId } = req.params;
+  const ws = await dbGet('workspaces', workspaceId);
+  if (!ws) { res.json({ error: 'Not found' }); return; }
+  if (ws.ownerId !== authUser.userId) { res.json({ error: 'Only the owner can delete a workspace' }); return; }
+
+  // Remove workspace from every member's user_workspaces list
+  const membersDoc = await dbGet('ws_members', workspaceId);
+  if (membersDoc?.members) {
+    await Promise.all(membersDoc.members.map(async m => {
+      const userWs = await dbGet('user_workspaces', m.userId);
+      if (userWs) {
+        userWs.workspaceIds = (userWs.workspaceIds || []).filter(id => id !== workspaceId);
+        await dbUpsert('user_workspaces', m.userId, userWs);
+      }
+    }));
+  }
+
+  await dbDelete('workspaces', workspaceId);
+  await dbDelete('ws_members', workspaceId);
+  await dbDelete('ws_instances', workspaceId);
+  res.json({ ok: true });
+});
+
 // ─── Members ──────────────────────────────────────────────────────────────────
 
 app.get('/workspaces/:workspaceId/members', async (req, res) => {

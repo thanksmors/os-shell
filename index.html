@@ -233,27 +233,31 @@
           :data-win-host="win.id"
         ></div>
 
-        <!-- Resize Handle -->
-        <div
-          x-show="win.resizable && win.state !== 'maximized'"
-          class="os-resize-handle"
-          @mousedown.prevent.stop="
-            const startW = win.w;
-            const startH = win.h;
-            const startX = $event.clientX;
-            const startY = $event.clientY;
-            const onMove = e => {
-              win.w = Math.max(win.minSize.w, startW + (e.clientX - startX));
-              win.h = Math.max(win.minSize.h, startH + (e.clientY - startY));
-            };
-            const onUp = () => {
-              window.removeEventListener('mousemove', onMove);
-              window.removeEventListener('mouseup', onUp);
-            };
-            window.addEventListener('mousemove', onMove);
-            window.addEventListener('mouseup', onUp);
-          "
-        ></div>
+        <!-- Resize Handles (all 8 edges/corners) -->
+        <template x-if="win.resizable && win.state !== 'maximized'">
+          <div>
+            <template x-for="handle in ['n','s','e','w','nw','ne','sw','se']" :key="handle">
+              <div
+                :class="'os-rh os-rh-' + handle"
+                @mousedown.prevent.stop="
+                  const h = handle;
+                  const startW = win.w, startH = win.h, startX2 = win.x, startY2 = win.y;
+                  const startMX = $event.clientX, startMY = $event.clientY;
+                  const onMove = e => {
+                    const dx = e.clientX - startMX, dy = e.clientY - startMY;
+                    if (h.includes('e')) win.w = Math.max(win.minSize.w, startW + dx);
+                    if (h.includes('s')) win.h = Math.max(win.minSize.h, startH + dy);
+                    if (h.includes('w')) { const nw = Math.max(win.minSize.w, startW - dx); win.x = startX2 + (startW - nw); win.w = nw; }
+                    if (h.includes('n')) { const nh = Math.max(win.minSize.h, startH - dy); win.y = startY2 + (startH - nh); win.h = nh; }
+                  };
+                  const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+                  window.addEventListener('mousemove', onMove);
+                  window.addEventListener('mouseup', onUp);
+                "
+              ></div>
+            </template>
+          </div>
+        </template>
       </div>
     </template>
   </template>

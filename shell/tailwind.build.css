@@ -884,27 +884,16 @@ input, button, textarea, select { font: inherit; }
 }
 
 /* Resize handle */
-.os-resize-handle {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 16px;
-  height: 16px;
-  cursor: se-resize;
-  z-index: 10;
-}
-.os-resize-handle::after {
-  content: '';
-  position: absolute;
-  bottom: 3px;
-  right: 3px;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid rgba(0,0,0,0.2);
-  border-bottom: 2px solid rgba(0,0,0,0.2);
-  border-radius: 1px;
-}
-.dark .os-resize-handle::after { border-color: rgba(255,255,255,0.2); }
+/* Resize handles — 8 hit-targets around the window edge */
+.os-rh { position: absolute; z-index: 10; }
+.os-rh-n  { top: 0;    left: 6px;  right: 6px;  height: 5px; cursor: n-resize; }
+.os-rh-s  { bottom: 0; left: 6px;  right: 6px;  height: 5px; cursor: s-resize; }
+.os-rh-w  { left: 0;   top: 6px;   bottom: 6px; width: 5px;  cursor: w-resize; }
+.os-rh-e  { right: 0;  top: 6px;   bottom: 6px; width: 5px;  cursor: e-resize; }
+.os-rh-nw { top: 0;    left: 0;    width: 10px; height: 10px; cursor: nw-resize; }
+.os-rh-ne { top: 0;    right: 0;   width: 10px; height: 10px; cursor: ne-resize; }
+.os-rh-sw { bottom: 0; left: 0;    width: 10px; height: 10px; cursor: sw-resize; }
+.os-rh-se { bottom: 0; right: 0;   width: 10px; height: 10px; cursor: se-resize; }
 
 /* Launcher overlay */
 .os-launcher {

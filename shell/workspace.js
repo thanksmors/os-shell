@@ -68,3 +68,7 @@ export async function acceptInvite(inviteId, sessionToken) {
     method: 'POST',
   });
 }
+
+export async function deleteWorkspace(workspaceId, sessionToken) {
+  return apiFetch(`/workspaces/${workspaceId}`, sessionToken, { method: 'DELETE' });
+}

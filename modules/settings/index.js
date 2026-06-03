@@ -461,6 +461,19 @@ class AppSettings extends HTMLElement {
           <button class="settings-btn" id="btn-signout" style="color:#ef4444;border-color:#fca5a5;">Sign Out</button>
         </div>
       </div>
+
+      ${ws.role === 'owner' ? `
+      <div class="settings-section">
+        <div class="settings-section-title" style="color:#ef4444;">Danger Zone</div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Delete Workspace</div>
+            <div class="settings-row-desc">Permanently delete "${this._esc(ws.name)}" and all its data. This cannot be undone.</div>
+          </div>
+          <button class="settings-btn" id="btn-delete-ws" style="color:#ef4444;border-color:#fca5a5;">Delete</button>
+        </div>
+      </div>
+      ` : ''}
     `;
 
     // Edit workspace toggle
@@ -531,6 +544,24 @@ class AppSettings extends HTMLElement {
     content.querySelector('#btn-signout')?.addEventListener('click', () => {
       window.Alpine?.store('auth')?.signOut();
       this.api?.requestClose();
+    });
+
+    // Delete workspace (owner only)
+    content.querySelector('#btn-delete-ws')?.addEventListener('click', async () => {
+      if (!confirm(`Delete workspace "${ws.name}"? This permanently removes all data and cannot be undone.`)) return;
+      try {
+        const { deleteWorkspace } = await import('/shell/workspace.js');
+        await deleteWorkspace(ws.workspaceId, session);
+        localStorage.removeItem('os-workspace');
+        const authStore = window.Alpine?.store('auth');
+        if (authStore) {
+          authStore.workspaces = authStore.workspaces.filter(w => w.workspaceId !== ws.workspaceId);
+          authStore.workspace = null;
+          authStore.screen = authStore.workspaces.length ? 'workspace-select' : 'login';
+          if (!authStore.workspaces.length) authStore.signOut();
+        }
+        this.api?.requestClose();
+      } catch { this.api?.notify('Failed to delete workspace', 'error'); }
     });
   }
 

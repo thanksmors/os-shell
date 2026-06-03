@@ -16,12 +16,16 @@
   <script type="module">
     import { initStore } from '/shell/store.js';
     import { initShortcuts } from '/shell/shortcuts.js';
-    if (window.Alpine) {
-      initStore();
-      initShortcuts();
-    } else {
-      document.addEventListener('alpine:init', () => { initStore(); });
-      document.addEventListener('alpine:initialized', () => { initShortcuts(); });
+    try {
+      if (window.Alpine) {
+        initStore();
+        initShortcuts();
+      } else {
+        document.addEventListener('alpine:init', () => { initStore(); });
+        document.addEventListener('alpine:initialized', () => { initShortcuts(); });
+      }
+    } catch (e) {
+      console.error('Store init failed:', e);
     }
   </script>
 
@@ -57,8 +61,7 @@
 >
 
   <!-- ===== AUTH SCREEN ===== -->
-  <template x-if="$store.auth && $store.auth.screen !== 'desktop'">
-    <div class="os-auth-screen">
+  <div class="os-auth-screen" x-show="!$store.auth || $store.auth.screen !== 'desktop'">
       <!-- Loading -->
       <template x-if="$store.auth.screen === 'loading'">
         <div class="os-auth-card">
@@ -115,7 +118,7 @@
         </div>
       </template>
     </div>
-  </template>
+  </div>
 
   <!-- ===== DESKTOP LAYER ===== -->
   <div

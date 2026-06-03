@@ -63,7 +63,7 @@
   <!-- ===== AUTH SCREEN ===== -->
   <div class="os-auth-screen" x-show="!$store.auth || $store.auth.screen !== 'desktop'">
       <!-- Loading -->
-      <template x-if="$store.auth.screen === 'loading'">
+      <template x-if="!$store.auth || $store.auth.screen === 'loading'">
         <div class="os-auth-card">
           <div class="os-auth-logo">🏔️</div>
           <div class="os-auth-title">Alpine Shell</div>
@@ -72,7 +72,7 @@
       </template>
 
       <!-- Login -->
-      <template x-if="$store.auth.screen === 'login'">
+      <template x-if="$store.auth && $store.auth.screen === 'login'">
         <div class="os-auth-card">
           <div class="os-auth-logo">🏔️</div>
           <div class="os-auth-title">Alpine Shell</div>
@@ -83,7 +83,7 @@
       </template>
 
       <!-- Workspace Select -->
-      <template x-if="$store.auth.screen === 'workspace-select'">
+      <template x-if="$store.auth && $store.auth.screen === 'workspace-select'">
         <div class="os-auth-card os-auth-card--wide">
           <div class="os-auth-header">
             <div>
@@ -118,7 +118,6 @@
         </div>
       </template>
     </div>
-  </div>
 
   <!-- ===== DESKTOP LAYER ===== -->
   <div

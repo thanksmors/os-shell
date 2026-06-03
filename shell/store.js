@@ -1,7 +1,154 @@
 import { iconUrl } from './icon.js';
-import { getData, setData, getInstances, saveInstances, subscribe } from './api.js';
+import { getData, setData, getInstances, saveInstances, subscribe, setSession, setWorkspace, resetPolling } from './api.js';
+import { getSavedSession, getSavedUser, clearSession, initGoogleSignIn, renderGoogleButton } from './auth.js';
+import { fetchWorkspaces, acceptInvite } from './workspace.js';
 
 export function initStore() {
+
+  Alpine.store('auth', {
+    user: null,
+    workspaces: [],
+    workspace: null,
+    screen: 'loading', // 'loading' | 'login' | 'workspace-select' | 'desktop'
+    inviteId: null,
+    inviteInfo: null,
+    error: null,
+
+    async init() {
+      // Check for invite link
+      const params = new URLSearchParams(window.location.search);
+      this.inviteId = params.get('invite') || null;
+
+      const session = getSavedSession();
+      const user = getSavedUser();
+      if (!session || !user) {
+        this.screen = 'login';
+        this._initGoogle();
+        return;
+      }
+
+      // Validate session by fetching workspaces
+      try {
+        setSession(session);
+        const workspaces = await fetchWorkspaces(session);
+        if (!Array.isArray(workspaces) || workspaces.error) throw new Error('invalid session');
+        this.user = user;
+        this.workspaces = workspaces;
+
+        // Accept pending invite before selecting workspace
+        if (this.inviteId) {
+          try {
+            const result = await acceptInvite(this.inviteId, session);
+            if (result?.workspaceId && !this.workspaces.find(w => w.workspaceId === result.workspaceId)) {
+              const fresh = await fetchWorkspaces(session);
+              this.workspaces = fresh;
+            }
+          } catch {}
+          history.replaceState({}, '', window.location.pathname);
+          this.inviteId = null;
+        }
+
+        const savedWsId = localStorage.getItem('os-workspace');
+        const savedWs = savedWsId && this.workspaces.find(w => w.workspaceId === savedWsId);
+        if (savedWs) {
+          await this._activateWorkspace(savedWs, session);
+        } else if (this.workspaces.length === 1) {
+          await this._activateWorkspace(this.workspaces[0], session);
+        } else {
+          this.screen = 'workspace-select';
+        }
+      } catch {
+        clearSession();
+        this.screen = 'login';
+        this._initGoogle();
+      }
+    },
+
+    _initGoogle() {
+      if (window.google?.accounts?.id) {
+        this._setupGoogle();
+      } else {
+        window.addEventListener('google-ready', () => this._setupGoogle(), { once: true });
+      }
+    },
+
+    _setupGoogle() {
+      initGoogleSignIn(async (err, data) => {
+        if (err) { this.error = 'Sign-in failed. Please try again.'; return; }
+        this.error = null;
+        this.user = { userId: data.userId, name: data.name, email: data.email, picture: data.picture };
+        setSession(data.sessionToken);
+        try {
+          const workspaces = await fetchWorkspaces(data.sessionToken);
+          this.workspaces = workspaces;
+
+          if (this.inviteId) {
+            try {
+              await acceptInvite(this.inviteId, data.sessionToken);
+              const fresh = await fetchWorkspaces(data.sessionToken);
+              this.workspaces = fresh;
+            } catch {}
+            history.replaceState({}, '', window.location.pathname);
+            this.inviteId = null;
+          }
+
+          if (this.workspaces.length === 1) {
+            await this._activateWorkspace(this.workspaces[0], data.sessionToken);
+          } else {
+            this.screen = 'workspace-select';
+          }
+        } catch { this.error = 'Failed to load workspaces.'; }
+      });
+      this._renderButton();
+    },
+
+    _renderButton() {
+      Alpine.nextTick(() => {
+        const el = document.getElementById('google-signin-btn');
+        if (el) renderGoogleButton(el);
+      });
+    },
+
+    async selectWorkspace(workspaceId) {
+      const ws = this.workspaces.find(w => w.workspaceId === workspaceId);
+      if (!ws) return;
+      const session = getSavedSession();
+      await this._activateWorkspace(ws, session);
+    },
+
+    async _activateWorkspace(ws, session) {
+      this.workspace = ws;
+      localStorage.setItem('os-workspace', ws.workspaceId);
+      setSession(session);
+      setWorkspace(ws.workspaceId);
+      resetPolling();
+      this.screen = 'desktop';
+      await Alpine.nextTick();
+      Alpine.store('os').loadWorkspaceData();
+    },
+
+    async createWorkspace(name, icon) {
+      const { createWorkspace } = await import('./workspace.js');
+      const session = getSavedSession();
+      const ws = await createWorkspace(name, icon || '🏢', session);
+      this.workspaces = [...this.workspaces, ws];
+      await this._activateWorkspace(ws, session);
+    },
+
+    signOut() {
+      clearSession();
+      setSession(null);
+      setWorkspace(null);
+      this.user = null;
+      this.workspaces = [];
+      this.workspace = null;
+      this.screen = 'login';
+      Alpine.store('os').windows = [];
+      Alpine.store('os').instances = [];
+      this._initGoogle();
+    },
+  });
+
   Alpine.store('os', {
     windows: [],
     apps: {},
@@ -15,12 +162,21 @@ export function initStore() {
     init() {
       // apply saved theme
       document.documentElement.classList.toggle('dark', this.theme === 'dark');
-      // mobile watch
-      window.matchMedia('(max-width: 767px)').addEventListener('change', e => {
-        this.isMobile = e.matches;
-      });
+      // mobile watch (only set up once)
+      if (!this._mobileWatcher) {
+        this._mobileWatcher = true;
+        window.matchMedia('(max-width: 767px)').addEventListener('change', e => {
+          this.isMobile = e.matches;
+        });
+      }
       // load manifests
       this._loadManifests();
+      // instances are loaded by auth store after workspace is selected
+    },
+
+    // Called by auth store after workspace is activated
+    loadWorkspaceData() {
+      this.instances = [];
       this._loadInstances();
     },
 

@@ -17,7 +17,6 @@
     import { initStore } from '/shell/store.js';
     import { initShortcuts } from '/shell/shortcuts.js';
     if (window.Alpine) {
-      // Alpine already started (e.g. cached): register immediately.
       initStore();
       initShortcuts();
     } else {
@@ -25,6 +24,10 @@
       document.addEventListener('alpine:initialized', () => { initShortcuts(); });
     }
   </script>
+
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async
+    onload="window.dispatchEvent(new Event('google-ready'))"></script>
 
   <!-- Alpine Plugins (must load before Alpine core) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/focus@3/dist/cdn.min.js"></script>
@@ -53,8 +56,70 @@
   @keydown.escape.window="launcherOpen = false"
 >
 
+  <!-- ===== AUTH SCREEN ===== -->
+  <template x-if="$store.auth && $store.auth.screen !== 'desktop'">
+    <div class="os-auth-screen">
+      <!-- Loading -->
+      <template x-if="$store.auth.screen === 'loading'">
+        <div class="os-auth-card">
+          <div class="os-auth-logo">🏔️</div>
+          <div class="os-auth-title">Alpine Shell</div>
+          <div class="os-auth-spinner"></div>
+        </div>
+      </template>
+
+      <!-- Login -->
+      <template x-if="$store.auth.screen === 'login'">
+        <div class="os-auth-card">
+          <div class="os-auth-logo">🏔️</div>
+          <div class="os-auth-title">Alpine Shell</div>
+          <div class="os-auth-subtitle">Sign in to continue</div>
+          <div id="google-signin-btn" style="margin-top:20px;"></div>
+          <div x-show="$store.auth.error" class="os-auth-error" x-text="$store.auth.error"></div>
+        </div>
+      </template>
+
+      <!-- Workspace Select -->
+      <template x-if="$store.auth.screen === 'workspace-select'">
+        <div class="os-auth-card os-auth-card--wide">
+          <div class="os-auth-header">
+            <div>
+              <div class="os-auth-title" style="font-size:1.1rem;">Choose a Workspace</div>
+              <div class="os-auth-subtitle" x-text="'Signed in as ' + ($store.auth.user?.email || '')"></div>
+            </div>
+            <button class="os-auth-signout" @click="$store.auth.signOut()">Sign out</button>
+          </div>
+
+          <div class="os-ws-list">
+            <template x-for="ws in $store.auth.workspaces" :key="ws.workspaceId">
+              <button class="os-ws-item" @click="$store.auth.selectWorkspace(ws.workspaceId)">
+                <span class="os-ws-icon" x-text="ws.icon"></span>
+                <div class="os-ws-info">
+                  <div class="os-ws-name" x-text="ws.name"></div>
+                  <div class="os-ws-role" x-text="ws.role"></div>
+                </div>
+                <span style="color:#9ca3af;font-size:1rem;">›</span>
+              </button>
+            </template>
+          </div>
+
+          <!-- Create new workspace -->
+          <div class="os-ws-create" x-data="{ open: false, name: '', icon: '🏢' }">
+            <button class="os-ws-create-btn" @click="open = !open">＋ New Workspace</button>
+            <div x-show="open" x-transition style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+              <input class="os-auth-input" style="width:60px;" maxlength="4" x-model="icon" placeholder="🏢" />
+              <input class="os-auth-input" style="flex:1;" x-model="name" placeholder="Workspace name…" @keydown.enter="name.trim() && $store.auth.createWorkspace(name.trim(), icon)" />
+              <button class="os-ws-create-go" @click="name.trim() && $store.auth.createWorkspace(name.trim(), icon)">Create</button>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </template>
+
   <!-- ===== DESKTOP LAYER ===== -->
   <div
+    x-show="$store.auth && $store.auth.screen === 'desktop'"
     class="os-desktop"
     @contextmenu.prevent="$store.os.buildDesktopContextMenu($event.clientX, $event.clientY)"
   >
@@ -96,7 +161,7 @@
   </div>
 
   <!-- ===== WINDOWS LAYER ===== -->
-  <template x-if="$store.os">
+  <template x-if="$store.os && $store.auth && $store.auth.screen === 'desktop'">
     <template x-for="win in $store.os.windows" :key="win.id">
       <div
         x-show="win.state !== 'minimized'"
@@ -188,7 +253,7 @@
   </template>
 
   <!-- ===== TASKBAR ===== -->
-  <div class="os-taskbar">
+  <div class="os-taskbar" x-show="$store.auth && $store.auth.screen === 'desktop'">
     <!-- Start / Launcher Button -->
     <button
       class="os-start-btn"
@@ -224,6 +289,18 @@
         x-text="($store.os && $store.os.theme === 'dark') ? '☀️' : '🌙'"
       ></button>
 
+      <!-- User avatar + workspace switcher -->
+      <template x-if="$store.auth && $store.auth.user">
+        <button
+          class="os-user-btn"
+          @click.stop="$store.auth.screen = 'workspace-select'; $store.auth.workspaces.length || $store.auth.init()"
+          :title="($store.auth.user?.name || '') + ' · ' + ($store.auth.workspace?.name || '')"
+        >
+          <span x-text="$store.auth.workspace?.icon || '🏔️'"></span>
+          <span style="font-size:0.75rem;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="$store.auth.workspace?.name || ''"></span>
+        </button>
+      </template>
+
       <!-- Clock -->
       <div
         class="os-clock"
@@ -244,7 +321,7 @@
   <!-- ===== LAUNCHER ===== -->
   <div
     class="os-launcher"
-    x-show="launcherOpen"
+    x-show="launcherOpen && $store.auth && $store.auth.screen === 'desktop'"
     @click.self="launcherOpen = false"
     x-transition:enter="transition duration-150 ease-out"
     x-transition:enter-start="opacity-0"

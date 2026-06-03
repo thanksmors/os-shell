@@ -2,8 +2,19 @@ import { BACKEND_URL, API_KEY } from './config.js';
 
 const useBackend = () => Boolean(BACKEND_URL);
 
+// ─── Session + workspace context ──────────────────────────────────────────────
+// Set by auth store after login + workspace selection.
+
+let _session = null;
+let _workspaceId = null;
+
+export function setSession(token) { _session = token; }
+export function setWorkspace(wsId) { _workspaceId = wsId; }
+
 function lsKey(collection, id) {
-  return `os:${collection}:${id}`;
+  // Namespace by workspaceId when active so different workspaces don't share cache
+  const prefix = _workspaceId ? `os:${_workspaceId}:${collection}:${id}` : `os:${collection}:${id}`;
+  return prefix;
 }
 
 function headers() {
@@ -11,6 +22,14 @@ function headers() {
 }
 
 function url(collection, id) {
+  // When workspace is active, use workspace-scoped routes with session auth.
+  // Fall back to legacy API-key-only routes (dev/offline mode).
+  if (_workspaceId && _session) {
+    if (collection === 'meta' && id === 'instances') {
+      return `${BACKEND_URL}/w/${_workspaceId}/instances?apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
+    }
+    return `${BACKEND_URL}/w/${_workspaceId}/${collection}/${encodeURIComponent(id)}?apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
+  }
   const base = `${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`;
   return API_KEY ? `${base}?apikey=${API_KEY}` : base;
 }
@@ -67,27 +86,22 @@ export async function setData(collection, id, data) {
 }
 
 // ─── Cross-client sync (polling) ───────────────────────────────────────────
-// One GET /changes request every 5 minutes regardless of how many modules are
-// open. On a changed timestamp, invalidates the local cache for that key and
-// calls all registered subscriber callbacks so open modules re-fetch.
 
 const _subscribers = new Map(); // "collection:id" → Set<callback>
-let _lastSeen = {};             // "collection:id" → last known timestamp
+let _lastSeen = {};
 let _initialized = false;
 let _pollTimer = null;
 
 async function _poll() {
+  if (!_workspaceId || !_session) return;
   try {
-    const changesUrl = API_KEY
-      ? `${BACKEND_URL}/changes?apikey=${API_KEY}`
-      : `${BACKEND_URL}/changes`;
+    const changesUrl = `${BACKEND_URL}/w/${_workspaceId}/changes?apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
     const r = await fetch(changesUrl);
     if (!r.ok) return;
     const changes = await safeJson(r);
     if (!changes || typeof changes !== 'object') return;
 
     if (!_initialized) {
-      // First poll: record current state so we don't fire stale callbacks.
       _lastSeen = { ...changes };
       _initialized = true;
       return;
@@ -108,12 +122,17 @@ async function _poll() {
 
 function _startPolling() {
   if (_pollTimer || !useBackend()) return;
-  _poll(); // immediate first poll to seed _lastSeen
-  _pollTimer = setInterval(_poll, 5 * 60 * 1000); // every 5 minutes
+  _poll();
+  _pollTimer = setInterval(_poll, 5 * 60 * 1000);
 }
 
-// Subscribe to changes for a specific collection + id.
-// Returns an unsubscribe function — call it in disconnectedCallback.
+export function resetPolling() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  _initialized = false;
+  _lastSeen = {};
+  _startPolling();
+}
+
 export function subscribe(collection, id, callback) {
   if (!useBackend()) return () => {};
   const key = `${collection}:${id}`;
@@ -180,20 +199,8 @@ export async function saveGantt(appId, gantt) {
 // ─── Instance registry ─────────────────────────────────────────────────────
 
 export async function getInstances() {
-  if (useBackend()) {
-    let data = await getData('meta', 'instances');
-    if (!data?.list?.length) {
-      const raw = localStorage.getItem('os:meta:instances');
-      if (raw) {
-        try {
-          const local = JSON.parse(raw);
-          if (local?.list?.length) {
-            await setData('meta', 'instances', local);
-            return local.list;
-          }
-        } catch {}
-      }
-    }
+  if (useBackend() && _workspaceId && _session) {
+    const data = await getData('meta', 'instances');
     return data?.list || [];
   }
   const data = await getData('meta', 'instances');

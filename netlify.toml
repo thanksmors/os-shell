@@ -1,0 +1,17 @@
+# Netlify configuration for the Alpine OS Shell frontend.
+#
+# This is a static client-side app with NO build step — every file is served
+# as-is from the repo root. The backend lives separately on Codehooks
+# (see shell/config.js BACKEND_URL), so there is nothing to compile here.
+
+[build]
+  # Serve the repository root, where index.html and the absolute asset paths
+  # (/shell, /modules, /registry.json) all resolve from.
+  publish = "."
+  # No build command — publishing static files directly.
+  command = ""
+
+# Don't publish backend source or docs as part of the site. These are harmless
+# (the repo is public anyway) but excluding them keeps the deploy tidy.
+[build.processing]
+  skip_processing = true

@@ -18,12 +18,14 @@
   <script type="module">
     import { initStore } from '/shell/store.js';
     import { initShortcuts } from '/shell/shortcuts.js';
+    import { registerWindowManager } from '/shell/window-manager.js';
     try {
       if (window.Alpine) {
         initStore();
+        registerWindowManager();
         initShortcuts();
       } else {
-        document.addEventListener('alpine:init', () => { initStore(); });
+        document.addEventListener('alpine:init', () => { initStore(); registerWindowManager(); });
         document.addEventListener('alpine:initialized', () => { initShortcuts(); });
       }
     } catch (e) {
@@ -187,22 +189,7 @@
         <!-- Titlebar -->
         <div
           class="os-titlebar"
-          @mousedown.prevent="
-            if ($store.os.isMobile || win.state === 'maximized') return;
-            $store.os.focus(win.id);
-            const startX = $event.clientX - win.x;
-            const startY = $event.clientY - win.y;
-            const onMove = e => {
-              win.x = Math.max(0, Math.min(window.innerWidth - win.w, e.clientX - startX));
-              win.y = Math.max(0, Math.min(window.innerHeight - 96, e.clientY - startY));
-            };
-            const onUp = () => {
-              window.removeEventListener('mousemove', onMove);
-              window.removeEventListener('mouseup', onUp);
-            };
-            window.addEventListener('mousemove', onMove);
-            window.addEventListener('mouseup', onUp);
-          "
+          @mousedown.prevent="$wm.startDrag($event, win, $store.os)"
           @dblclick="$store.os.toggleMaximize(win.id)"
         >
           <!-- Icon + Title -->
@@ -241,21 +228,7 @@
             <template x-for="handle in ['n','s','e','w','nw','ne','sw','se']" :key="handle">
               <div
                 :class="'os-rh os-rh-' + handle"
-                @mousedown.prevent.stop="
-                  const h = handle;
-                  const startW = win.w, startH = win.h, startX2 = win.x, startY2 = win.y;
-                  const startMX = $event.clientX, startMY = $event.clientY;
-                  const onMove = e => {
-                    const dx = e.clientX - startMX, dy = e.clientY - startMY;
-                    if (h.includes('e')) win.w = Math.max(win.minSize.w, startW + dx);
-                    if (h.includes('s')) win.h = Math.max(win.minSize.h, startH + dy);
-                    if (h.includes('w')) { const nw = Math.max(win.minSize.w, startW - dx); win.x = startX2 + (startW - nw); win.w = nw; }
-                    if (h.includes('n')) { const nh = Math.max(win.minSize.h, startH - dy); win.y = startY2 + (startH - nh); win.h = nh; }
-                  };
-                  const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-                  window.addEventListener('mousemove', onMove);
-                  window.addEventListener('mouseup', onUp);
-                "
+                @mousedown.prevent.stop="$wm.startResize($event, win, handle)"
               ></div>
             </template>
           </div>

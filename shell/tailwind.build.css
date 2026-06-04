@@ -882,6 +882,17 @@ input, button, textarea, select { font: inherit; }
   display: flex;
   flex-direction: column;
 }
+/* Every module host fills the window so its internal scroll regions work.
+   (Some modules set this via :host, but not all — this guarantees it for all,
+   so windows scroll consistently regardless of the module.) */
+.os-window-content > * {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  overflow: auto;
+}
 
 /* Resize handle */
 /* Resize handles — 8 hit-targets around the window edge */

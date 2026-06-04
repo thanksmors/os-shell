@@ -158,12 +158,24 @@ class AppList extends HTMLElement {
   _bindEvents() {
     const shadow = this.shadowRoot;
 
-    // rename list
+    // rename list — keeps the window title, desktop icon, and saved data in sync
     const titleInput = shadow.querySelector('.list-title');
     titleInput.addEventListener('input', () => {
+      const name = titleInput.value || 'List';
       this._state.name = titleInput.value;
-      if (this.api) this.api.setTitle(this._state.name || 'List');
+      if (this.api) this.api.setTitle(name);
       this._save();
+      // Live-update the desktop icon label (in-memory, instant); debounce the
+      // persistence so we're not firing a cloud write on every keystroke.
+      const inst = this.api?.store?.instances?.find(i => i.instanceId === this._appId);
+      if (inst) {
+        inst.name = name;
+        this.api.store.instances = [...this.api.store.instances];
+        clearTimeout(this._renameTimer);
+        this._renameTimer = setTimeout(() => {
+          if (this.api?.updateInstance) this.api.updateInstance(name, inst.icon);
+        }, 600);
+      }
     });
 
     // add item

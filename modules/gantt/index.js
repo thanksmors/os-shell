@@ -1,5 +1,6 @@
 import { AppModuleBase } from '/shell/module-base.js';
 import { getGantt, saveGantt } from '/shell/api.js';
+import { showEmojiPicker } from '/shell/emoji-picker.js';
 
 const MONTH_W = 64;
 const ROW_H = 40;
@@ -138,7 +139,10 @@ class AppGantt extends AppModuleBase {
           </div>
           <div class="settings-row">
             <label class="settings-label">Icon</label>
-            <input class="settings-input settings-icon" id="settings-icon" value="${this._esc(curIcon)}" placeholder="Emoji…" maxlength="4" />
+            <button class="icon-pick-btn" data-action="pick-icon" title="Pick icon">
+              <span id="settings-icon-preview">${this._esc(curIcon)}</span> <span style="font-size:10px;opacity:.5;">▾</span>
+            </button>
+            <input type="hidden" id="settings-icon" value="${this._esc(curIcon)}" />
           </div>
           <div class="settings-row" style="justify-content:flex-end;gap:8px;">
             <button class="settings-cancel" data-action="toggle-settings">Cancel</button>
@@ -227,6 +231,16 @@ class AppGantt extends AppModuleBase {
         e.stopPropagation();
         const action = el.dataset.action;
 
+        if (action === 'pick-icon') {
+          const cur = w.querySelector('#settings-icon')?.value || '📊';
+          showEmojiPicker(el, cur, emoji => {
+            const hidden = w.querySelector('#settings-icon');
+            const preview = w.querySelector('#settings-icon-preview');
+            if (hidden) hidden.value = emoji;
+            if (preview) preview.textContent = emoji;
+          });
+          return;
+        }
         if (action === 'toggle-settings') {
           this._settingsOpen = !this._settingsOpen;
           this._render();

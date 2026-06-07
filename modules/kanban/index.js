@@ -1,5 +1,6 @@
 import { AppModuleBase } from '/shell/module-base.js';
 import { getBoard, saveBoard } from '/shell/api.js';
+import { showEmojiPicker } from '/shell/emoji-picker.js';
 
 class AppKanban extends AppModuleBase {
   constructor() {
@@ -39,7 +40,10 @@ class AppKanban extends AppModuleBase {
           </div>
           <div class="settings-row">
             <label class="settings-label">Icon</label>
-            <input class="settings-input settings-icon" id="settings-icon" value="${this._esc(this.api?.store?.instances?.find(i => i.instanceId === this._appId)?.icon || '🗂️')}" placeholder="Emoji…" maxlength="4" />
+            <button class="icon-pick-btn" data-action="pick-icon" title="Pick icon">
+              <span id="settings-icon-preview">${this._esc(this.api?.store?.instances?.find(i => i.instanceId === this._appId)?.icon || '🗂️')}</span> <span style="font-size:10px;opacity:.5;">▾</span>
+            </button>
+            <input type="hidden" id="settings-icon" value="${this._esc(this.api?.store?.instances?.find(i => i.instanceId === this._appId)?.icon || '🗂️')}" />
           </div>
           <div class="settings-row" style="justify-content:flex-end;gap:8px;">
             <button class="settings-cancel" data-action="toggle-settings">Cancel</button>
@@ -114,6 +118,16 @@ class AppKanban extends AppModuleBase {
         e.stopPropagation();
         const action = el.dataset.action;
 
+        if (action === 'pick-icon') {
+          const cur = this._wrapper.querySelector('#settings-icon')?.value || '🗂️';
+          showEmojiPicker(el, cur, emoji => {
+            const hidden = this._wrapper.querySelector('#settings-icon');
+            const preview = this._wrapper.querySelector('#settings-icon-preview');
+            if (hidden) hidden.value = emoji;
+            if (preview) preview.textContent = emoji;
+          });
+          return;
+        }
         if (action === 'toggle-settings') {
           this._settingsOpen = !this._settingsOpen;
           this._render();

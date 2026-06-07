@@ -1,5 +1,6 @@
 import { AppModuleBase } from '/shell/module-base.js';
 import { getList, saveList } from '/shell/api.js';
+import { showEmojiPicker } from '/shell/emoji-picker.js';
 
 class AppList extends AppModuleBase {
   constructor() {
@@ -70,7 +71,10 @@ class AppList extends AppModuleBase {
           </div>
           <div class="settings-row">
             <label class="settings-label">Icon</label>
-            <input class="settings-input settings-icon" id="settings-icon" value="${this._esc(curIcon)}" placeholder="Emoji…" maxlength="4" />
+            <button class="icon-pick-btn" data-action="pick-icon" title="Pick icon">
+              <span id="settings-icon-preview">${this._esc(curIcon)}</span> <span style="font-size:10px;opacity:.5;">▾</span>
+            </button>
+            <input type="hidden" id="settings-icon" value="${this._esc(curIcon)}" />
           </div>
           <div class="settings-section-label">Custom Fields</div>
           ${settingsFields}
@@ -164,6 +168,15 @@ class AppList extends AppModuleBase {
           this._state.items = this._state.items.filter(i => i.id !== id);
           this._save();
           this._render();
+        } else if (action === 'pick-icon') {
+          const cur = this.shadowRoot.querySelector('#settings-icon')?.value || '✅';
+          showEmojiPicker(el, cur, emoji => {
+            const hidden = this.shadowRoot.querySelector('#settings-icon');
+            const preview = this.shadowRoot.querySelector('#settings-icon-preview');
+            if (hidden) hidden.value = emoji;
+            if (preview) preview.textContent = emoji;
+          });
+          return;
         } else if (action === 'toggle-settings') {
           this._settingsOpen = !this._settingsOpen;
           this._render();

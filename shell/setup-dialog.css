@@ -1,0 +1,101 @@
+/* Setup dialog — injected into every module shadow root via module-base.js */
+.setup-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  padding: 32px 24px;
+  text-align: center;
+  font-family: system-ui, sans-serif;
+  color: inherit;
+}
+.setup-icon { font-size: 36px; }
+.setup-title { font-size: 16px; font-weight: 700; }
+.setup-desc { font-size: 13px; opacity: .55; max-width: 320px; line-height: 1.5; }
+
+.setup-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 400px;
+  margin-top: 4px;
+}
+
+.setup-row {
+  background: rgba(0,0,0,.04);
+  border-radius: 10px;
+  padding: 12px 14px;
+  text-align: left;
+}
+.wrapper.dark .setup-row { background: rgba(255,255,255,.06); }
+
+.setup-slot-label {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: .5;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.setup-choices { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.setup-btn {
+  background: rgba(0,0,0,.06);
+  border: 1.5px solid rgba(0,0,0,.1);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: inherit;
+  transition: background .12s, border-color .12s;
+  white-space: nowrap;
+}
+.setup-btn:hover { background: rgba(0,0,0,.1); }
+.wrapper.dark .setup-btn { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.12); }
+.wrapper.dark .setup-btn:hover { background: rgba(255,255,255,.13); }
+.setup-btn.active {
+  background: rgba(0,122,255,.12);
+  border-color: #007aff;
+  color: #007aff;
+}
+.wrapper.dark .setup-btn.active { background: rgba(0,122,255,.2); }
+
+.setup-or { font-size: 12px; opacity: .4; }
+
+.setup-select {
+  background: rgba(0,0,0,.04);
+  border: 1.5px solid rgba(0,0,0,.1);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: inherit;
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+}
+.wrapper.dark .setup-select {
+  background: rgba(255,255,255,.08);
+  border-color: rgba(255,255,255,.12);
+  color: #f5f5f7;
+}
+.setup-select:focus { border-color: #007aff; }
+
+.setup-continue {
+  margin-top: 8px;
+  background: #007aff;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 28px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s, background .15s;
+}
+.setup-continue:hover { background: #0066d6; }
+.setup-continue:disabled { opacity: .35; cursor: not-allowed; }

@@ -1,26 +1,7 @@
 import { adoptTailwind } from '/shell/shadow-tailwind.js';
-import { subscribe } from '/shell/api.js';
+import { subscribe, getData, setData } from '/shell/api.js';
+import { getCollections, createCollection } from '/modules/data/api.js';
 
-/**
- * Base class for data-backed modules (List, Kanban, Gantt, Rocks).
- *
- * Handles all boilerplate in connectedCallback/disconnectedCallback so
- * subclasses only implement their actual logic:
- *
- *   async _load()     — fetch data, populate this._state
- *   _render()         — build innerHTML / DOM from this._state
- *   _getTitle()       — window title string (optional, defaults to this._state?.name)
- *   _collection()     — subscribe topic (optional, defaults to manifest appId)
- *
- * Shared utilities (no longer copy-pasted per module):
- *   _esc(str)         — HTML-escape a string for innerHTML
- *   _applyTheme()     — sync dark class on this._wrapper
- *   _resolveAppId()   — stable instanceId || windowId || appId-timestamp
- *
- * Sync is automatic when the module's manifest includes "sync": true.
- * The base class reads that field from this.api.store.apps and wires
- * subscribe() / unsubscribe without any per-module code.
- */
 export class AppModuleBase extends HTMLElement {
   constructor() {
     super();
@@ -29,6 +10,7 @@ export class AppModuleBase extends HTMLElement {
     this._wrapper = null;
     this._themeObserver = null;
     this._unsub = null;
+    this._slots = {}; // resolved slot → collection name
   }
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────
@@ -38,7 +20,11 @@ export class AppModuleBase extends HTMLElement {
     const shadow = this.attachShadow({ mode: 'open' });
     const styleEl = document.createElement('style');
     const moduleId = this._moduleId();
-    styleEl.textContent = await fetch(`/modules/${moduleId}/styles.css`).then(r => r.text()).catch(() => '');
+    const [moduleCss, setupCss] = await Promise.all([
+      fetch(`/modules/${moduleId}/styles.css`).then(r => r.text()).catch(() => ''),
+      fetch('/shell/setup-dialog.css').then(r => r.text()).catch(() => ''),
+    ]);
+    styleEl.textContent = moduleCss + '\n' + setupCss;
     this._wrapper = document.createElement('div');
     this._wrapper.className = 'wrapper';
     shadow.appendChild(styleEl);
@@ -51,19 +37,22 @@ export class AppModuleBase extends HTMLElement {
     // 3. Resolve stable appId
     this._appId = this._resolveAppId();
 
-    // 4. Load data (subclass)
+    // 4. Resolve required collections (shows setup dialog if needed)
+    await this._setupCollections();
+
+    // 5. Load data (subclass)
     await this._load();
 
-    // 5. Render (subclass)
+    // 6. Render (subclass)
     this._applyTheme();
     this._render();
     if (this.api) this.api.setTitle(this._getTitle());
 
-    // 6. Theme observer
+    // 7. Theme observer
     this._themeObserver = new MutationObserver(() => this._applyTheme());
     this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
-    // 7. Cross-client sync — only if manifest declares sync:true
+    // 8. Cross-client sync — only if manifest declares sync:true
     const manifest = this.api?.store?.apps?.[this._manifestId()];
     if (manifest?.sync) {
       const collection = this._collection();
@@ -80,59 +69,162 @@ export class AppModuleBase extends HTMLElement {
     this._unsub?.();
   }
 
+  // ─── Required collections setup ───────────────────────────────────────────
+
+  async _setupCollections() {
+    const manifest = this.api?.store?.apps?.[this._manifestId()];
+    const required = manifest?.requiredCollections;
+    if (!required?.length) return;
+
+    // Load previously saved slot resolutions for this instance
+    const saved = await getData('module-settings', this._appId) || {};
+    this._slots = { ...saved };
+
+    // Find slots not yet resolved
+    const unresolved = required.filter(r => !this._slots[r.slot]);
+    if (!unresolved.length) return;
+
+    // Check which defaults already exist as collections
+    const existing = await getCollections();
+    const toCreate = [];
+    for (const r of unresolved) {
+      if (existing[r.default] !== undefined) {
+        // Default collection already exists — auto-resolve, no dialog
+        this._slots[r.slot] = r.default;
+      } else {
+        toCreate.push(r);
+      }
+    }
+
+    // Save auto-resolved slots
+    if (toCreate.length === 0) {
+      await setData('module-settings', this._appId, this._slots);
+      return;
+    }
+
+    // Show setup dialog for remaining unresolved slots
+    await this._showSetupDialog(toCreate, existing);
+    await setData('module-settings', this._appId, this._slots);
+  }
+
+  _showSetupDialog(items, existing) {
+    return new Promise(resolve => {
+      this._applyTheme();
+      const existingNames = Object.keys(existing);
+
+      const rows = items.map((r, i) => `
+        <div class="setup-row" data-idx="${i}">
+          <div class="setup-slot-label">${this._esc(r.hint || r.default)}</div>
+          <div class="setup-choices">
+            <button class="setup-btn setup-create active" data-idx="${i}" data-action="use-default">
+              Create "${this._esc(r.default)}"
+            </button>
+            ${existingNames.length ? `
+              <span class="setup-or">or</span>
+              <select class="setup-select" data-idx="${i}" data-action="use-existing">
+                <option value="">Use existing…</option>
+                ${existingNames.map(n => `<option value="${this._esc(n)}">${this._esc(n)}</option>`).join('')}
+              </select>
+            ` : ''}
+          </div>
+          <div class="setup-resolved" data-resolved="${i}" style="display:none">
+            <span class="setup-check">✓</span>
+            <span class="setup-resolved-name"></span>
+          </div>
+        </div>
+      `).join('');
+
+      this._wrapper.innerHTML = `
+        <div class="setup-panel">
+          <div class="setup-icon">🗄️</div>
+          <div class="setup-title">Set up collections</div>
+          <div class="setup-desc">This module needs a few data collections to get started.</div>
+          <div class="setup-rows">${rows}</div>
+          <button class="setup-continue" id="setup-continue" disabled>Continue →</button>
+        </div>
+      `;
+
+      // Track choices: idx → { slot, name }
+      const choices = {};
+      // Pre-select "create default" for all
+      items.forEach((r, i) => { choices[i] = { slot: r.slot, name: r.default }; });
+      this._updateContinueBtn(choices, items.length);
+
+      const shadow = this.shadowRoot;
+
+      shadow.querySelectorAll('.setup-btn[data-action="use-default"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const i = parseInt(btn.dataset.idx);
+          choices[i] = { slot: items[i].slot, name: items[i].default };
+          shadow.querySelector(`.setup-select[data-idx="${i}"]`).value = '';
+          btn.classList.add('active');
+          this._updateContinueBtn(choices, items.length);
+        });
+      });
+
+      shadow.querySelectorAll('.setup-select[data-action="use-existing"]').forEach(sel => {
+        sel.addEventListener('change', () => {
+          const i = parseInt(sel.dataset.idx);
+          if (sel.value) {
+            choices[i] = { slot: items[i].slot, name: sel.value };
+            shadow.querySelector(`.setup-btn[data-idx="${i}"]`)?.classList.remove('active');
+          } else {
+            choices[i] = { slot: items[i].slot, name: items[i].default };
+            shadow.querySelector(`.setup-btn[data-idx="${i}"]`)?.classList.add('active');
+          }
+          this._updateContinueBtn(choices, items.length);
+        });
+      });
+
+      shadow.querySelector('#setup-continue').addEventListener('click', async () => {
+        for (const { slot, name } of Object.values(choices)) {
+          await createCollection(name); // no-op if already exists
+          this._slots[slot] = name;
+        }
+        resolve();
+      });
+    });
+  }
+
+  _updateContinueBtn(choices, total) {
+    const btn = this.shadowRoot?.querySelector('#setup-continue');
+    if (!btn) return;
+    const ready = Object.keys(choices).length >= total;
+    btn.disabled = !ready;
+  }
+
+  /** Returns the resolved collection name for a declared slot. */
+  _collectionFor(slot) {
+    return this._slots[slot] || slot;
+  }
+
   // ─── Subclass hooks ───────────────────────────────────────────────────────
 
-  /** Fetch data and populate this._state. Must be implemented by subclass. */
   async _load() {}
-
-  /** Build the module's DOM/innerHTML from this._state. Must be implemented by subclass. */
   _render() {}
-
-  /** Window title shown in the titlebar. Override to customise. */
-  _getTitle() {
-    return this._state?.name || '';
-  }
-
-  /**
-   * The subscribe collection name (e.g. 'lists', 'boards', 'gantt', 'rocks').
-   * Defaults to the manifest appId. Override only if the collection name differs.
-   */
-  _collection() {
-    return this._manifestId();
-  }
+  _getTitle() { return this._state?.name || ''; }
+  _collection() { return this._manifestId(); }
 
   // ─── Shared utilities ─────────────────────────────────────────────────────
 
-  /** Escape a value for safe use in innerHTML. */
   _esc(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  /** Mirror the document dark class onto the wrapper so module CSS dark: selectors work. */
   _applyTheme() {
     this._wrapper?.classList.toggle('dark', document.documentElement.classList.contains('dark'));
   }
 
-  /** Returns the stable per-instance ID used as the data key. */
   _resolveAppId() {
     const id = this._manifestId();
     return this.api?.instanceId || this.api?.windowId || (`${id}-${Date.now()}`);
   }
 
-  // ─── Internal helpers ─────────────────────────────────────────────────────
-
-  /**
-   * Derives the module folder name from the custom element tag name.
-   * e.g. AppList (tag: app-list) → 'list'
-   * Used to fetch /modules/{id}/styles.css and as the default collection name.
-   */
   _moduleId() {
-    // customElements registry stores the tag; fall back to class name heuristic
-    const tag = this.tagName.toLowerCase(); // e.g. 'app-list'
-    return tag.replace(/^app-/, '');        // → 'list'
+    const tag = this.tagName.toLowerCase();
+    return tag.replace(/^app-/, '');
   }
 
-  /** The appId in the manifest registry — same as _moduleId() for all current modules. */
   _manifestId() {
     return this._moduleId();
   }

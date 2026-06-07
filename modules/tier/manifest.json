@@ -1,0 +1,15 @@
+{
+  "appId": "tier",
+  "tag": "app-tier",
+  "entry": "/modules/tier/index.js",
+  "title": "Tier List",
+  "icon": "🏆",
+  "defaultSize": { "w": 720, "h": 560 },
+  "singleton": false,
+  "generator": true,
+  "resizable": true,
+  "minSize": { "w": 480, "h": 360 },
+  "contextMenu": [
+    { "label": "🏆 New Tier List", "config": { "name": "New Tier List", "icon": "🏆" } }
+  ]
+}

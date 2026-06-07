@@ -37,7 +37,7 @@ app.post('/invites/:inviteId/accept', async (req, res) => {
 
   const membersDoc = await dbGet('ws_members', invite.workspaceId);
   const user = await dbGet('users', authUser.userId);
-  if (membersDoc && !membersDoc.members.find(m => m.userId === authUser.userId)) {
+  if (membersDoc && !membersDoc.members?.find(m => m.userId === authUser.userId)) {
     membersDoc.members.push({ userId: authUser.userId, role: invite.role, name: user?.name || '', email: user?.email || '', picture: user?.picture || '', addedAt: Date.now() });
     await dbUpsert('ws_members', invite.workspaceId, membersDoc);
   }

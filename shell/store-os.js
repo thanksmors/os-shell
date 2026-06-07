@@ -282,6 +282,7 @@ export function registerOsStore() {
       localStorage.removeItem(`os:lists:${instanceId}`);
       localStorage.removeItem(`os:boards:${instanceId}`);
       localStorage.removeItem(`os:gantt:${instanceId}`);
+      localStorage.removeItem(`os:rocks:${instanceId}`);
     },
 
     buildDesktopContextMenu(x, y) {

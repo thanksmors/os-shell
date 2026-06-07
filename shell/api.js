@@ -91,8 +91,11 @@ const _subscribers = new Map(); // "collection:id" → Set<callback>
 let _lastSeen = {};
 let _initialized = false;
 let _pollTimer = null;
+let _polling = false;
 
 async function _poll() {
+  if (_polling) return;
+  _polling = true;
   if (!_workspaceId || !_session) return;
   try {
     const changesUrl = `${BACKEND_URL}/w/${_workspaceId}/changes?apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
@@ -118,6 +121,7 @@ async function _poll() {
       }
     }
   } catch {}
+  _polling = false;
 }
 
 function _startPolling() {

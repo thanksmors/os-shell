@@ -24,7 +24,7 @@ app.put('/workspaces/:workspaceId/members/:userId', async (req, res) => {
   const membersDoc = await dbGet('ws_members', workspaceId);
   if (!membersDoc) { res.json({ error: 'Workspace not found' }); return; }
 
-  const me = membersDoc.members.find(m => m.userId === authUser.userId);
+  const me = membersDoc?.members?.find(m => m.userId === authUser.userId);
   if (!me || !['owner', 'admin'].includes(me.role)) { res.json({ error: 'Insufficient permissions' }); return; }
 
   const newRole = req.body.role;
@@ -53,7 +53,7 @@ app.delete('/workspaces/:workspaceId/members/:userId', async (req, res) => {
   const membersDoc = await dbGet('ws_members', workspaceId);
   if (!membersDoc) { res.json({ error: 'Workspace not found' }); return; }
 
-  const me = membersDoc.members.find(m => m.userId === authUser.userId);
+  const me = membersDoc?.members?.find(m => m.userId === authUser.userId);
   const isSelf = userId === authUser.userId;
   if (!isSelf && !['owner', 'admin'].includes(me?.role)) { res.json({ error: 'Insufficient permissions' }); return; }
 

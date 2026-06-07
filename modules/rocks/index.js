@@ -1,5 +1,5 @@
 import { adoptTailwind } from '/shell/shadow-tailwind.js';
-import { getData, setData } from '/shell/api.js';
+import { getData, setData, subscribe } from '/shell/api.js';
 
 async function getBoard(appId) {
   const d = await getData('rocks', appId);
@@ -35,7 +35,7 @@ class AppRocks extends HTMLElement {
     await adoptTailwind(shadow, this._wrapper);
 
     await new Promise(r => setTimeout(r, 0));
-    this._appId = this.api?.windowId || ('rocks-' + Date.now());
+    this._appId = this.api?.instanceId || this.api?.windowId || ('rocks-' + Date.now());
     this._state = await getBoard(this._appId);
 
     const cfg = this.api?.config || {};
@@ -50,9 +50,18 @@ class AppRocks extends HTMLElement {
 
     this._themeObserver = new MutationObserver(() => this._applyTheme());
     this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+    this._unsub = subscribe('rocks', this._appId, async () => {
+      this._state = await getBoard(this._appId);
+      this._render();
+      if (this.api) this.api.setTitle(this._state.name);
+    });
   }
 
-  disconnectedCallback() { this._themeObserver?.disconnect(); }
+  disconnectedCallback() {
+    this._themeObserver?.disconnect();
+    this._unsub?.();
+  }
   _applyTheme() { this._wrapper?.classList.toggle('dark', document.documentElement.classList.contains('dark')); }
   async _save() { await saveBoard(this._appId, this._state); }
 

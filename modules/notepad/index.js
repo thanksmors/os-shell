@@ -69,21 +69,6 @@ class AppNotepad extends HTMLElement {
     } catch (e) {}
     this._shadow.appendChild(style);
 
-    // Events
-    textarea.addEventListener('input', () => this._updateStats());
-    toolbar.querySelector('#btn-clear').addEventListener('click', () => {
-      textarea.value = '';
-      this._updateStats();
-      textarea.focus();
-    });
-    toolbar.querySelector('#btn-copy').addEventListener('click', () => {
-      navigator.clipboard.writeText(textarea.value).then(() => {
-        if (this.api) this.api.notify('Copied to clipboard!', 'success');
-      }).catch(() => {
-        if (this.api) this.api.notify('Copy failed', 'error');
-      });
-    });
-
     // Restore saved content per window
     const key = this.api ? `notepad-content-${this.api.windowId}` : 'notepad-content-default';
     const saved = sessionStorage.getItem(key);
@@ -92,12 +77,28 @@ class AppNotepad extends HTMLElement {
       this._updateStats();
     }
 
+    // Single input listener — stats + persistence + title
     textarea.addEventListener('input', () => {
+      this._updateStats();
       sessionStorage.setItem(key, textarea.value);
       if (this.api) {
         const words = this._countWords(textarea.value);
         this.api.setTitle(`Notepad — ${words} word${words !== 1 ? 's' : ''}`);
       }
+    });
+
+    toolbar.querySelector('#btn-clear').addEventListener('click', () => {
+      textarea.value = '';
+      this._updateStats();
+      sessionStorage.removeItem(key);
+      textarea.focus();
+    });
+    toolbar.querySelector('#btn-copy').addEventListener('click', () => {
+      navigator.clipboard.writeText(textarea.value).then(() => {
+        if (this.api) this.api.notify('Copied to clipboard!', 'success');
+      }).catch(() => {
+        if (this.api) this.api.notify('Copy failed', 'error');
+      });
     });
 
     textarea.focus();

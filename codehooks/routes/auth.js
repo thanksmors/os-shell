@@ -38,18 +38,21 @@ app.get('/auth/google/callback', async (req, res) => {
   if (!code) { back('nocode'); return; }
 
   // Exchange the authorization code for tokens (needs the client secret).
-  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      code,
-      client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
-      redirect_uri: REDIRECT_URI,
-      grant_type: 'authorization_code',
-    }).toString(),
-  });
-  const tokens = await tokenRes.json().catch(() => null);
+  let tokens;
+  try {
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: REDIRECT_URI,
+        grant_type: 'authorization_code',
+      }).toString(),
+    });
+    tokens = await tokenRes.json().catch(() => null);
+  } catch { back('exchange'); return; }
   if (!tokens?.id_token) { back('exchange'); return; }
 
   const gData = await verifyGoogleIdToken(tokens.id_token);

@@ -1,0 +1,13 @@
+{
+  "appId": "data",
+  "tag": "app-data",
+  "entry": "/modules/data/index.js",
+  "title": "Data",
+  "icon": "🗄️",
+  "defaultSize": { "w": 560, "h": 480 },
+  "singleton": true,
+  "generator": false,
+  "resizable": true,
+  "minSize": { "w": 340, "h": 300 },
+  "contextMenu": []
+}

@@ -200,6 +200,31 @@ export async function saveGantt(appId, gantt) {
   return setData('gantt', appId, gantt);
 }
 
+// ─── Tier List helpers ─────────────────────────────────────────────────────
+
+const DEFAULT_TIERS = [
+  { id: 'tier-s', label: 'S', color: '#ff7f7f' },
+  { id: 'tier-a', label: 'A', color: '#ffbf7f' },
+  { id: 'tier-b', label: 'B', color: '#ffdf7f' },
+  { id: 'tier-c', label: 'C', color: '#ffff7f' },
+  { id: 'tier-d', label: 'D', color: '#7fff7f' },
+  { id: 'tier-e', label: 'E', color: '#7fbfff' },
+  { id: 'tier-f', label: 'F', color: '#ff7fff' },
+];
+
+export async function getTierList(id) {
+  const data = await getData('tierlists', id);
+  if (!data || typeof data !== 'object') return { name: 'New Tier List', tiers: DEFAULT_TIERS, cards: [] };
+  if (!Array.isArray(data.tiers)) data.tiers = DEFAULT_TIERS;
+  if (!Array.isArray(data.cards)) data.cards = [];
+  if (typeof data.name !== 'string') data.name = 'New Tier List';
+  return data;
+}
+
+export async function saveTierList(id, data) {
+  return setData('tierlists', id, data);
+}
+
 // ─── Instance registry ─────────────────────────────────────────────────────
 
 export async function getInstances() {

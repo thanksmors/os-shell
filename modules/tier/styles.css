@@ -1,0 +1,273 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:host { display: flex; flex-direction: column; height: 100%; }
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #f2f2f7;
+  color: #1c1c1e;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  overflow: hidden;
+}
+.wrapper.dark { background: #1c1c1e; color: #f5f5f7; }
+
+/* ── Header ── */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,.7);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0,0,0,.08);
+  flex-shrink: 0;
+}
+.wrapper.dark .header {
+  background: rgba(44,44,46,.8);
+  border-color: rgba(255,255,255,.08);
+}
+.tier-title {
+  flex: 1;
+  font-weight: 700;
+  font-size: 15px;
+  background: none;
+  border: none;
+  outline: none;
+  color: inherit;
+  cursor: text;
+  min-width: 0;
+}
+.header-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-weight: 500;
+  opacity: .7;
+  transition: opacity .15s, background .15s;
+  color: inherit;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.header-btn:hover { opacity: 1; background: rgba(0,0,0,.06); }
+.wrapper.dark .header-btn:hover { background: rgba(255,255,255,.08); }
+.header-btn.primary { background: #007aff; color: #fff; opacity: 1; font-size: 13px; }
+.header-btn.primary:hover { background: #0066d6; }
+
+/* ── Settings panel ── */
+.settings-panel {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+  background: rgba(255,255,255,.6);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.wrapper.dark .settings-panel { background: rgba(44,44,46,.9); border-color: rgba(255,255,255,.08); }
+.settings-row { display: flex; align-items: center; gap: 10px; }
+.settings-label { font-size: 12px; font-weight: 600; opacity: .55; width: 36px; flex-shrink: 0; }
+.settings-input {
+  flex: 1;
+  background: rgba(0,0,0,.04);
+  border: 1px solid rgba(0,0,0,.1);
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 13px;
+  outline: none;
+  color: inherit;
+  font-family: inherit;
+}
+.wrapper.dark .settings-input { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.1); color: #f5f5f7; }
+.settings-input:focus { border-color: #007aff; }
+.settings-icon { max-width: 60px; text-align: center; font-size: 18px; padding: 4px 8px; }
+.settings-cancel {
+  background: none; border: 1px solid rgba(0,0,0,.15); border-radius: 7px;
+  padding: 5px 12px; font-size: 12px; cursor: pointer; color: inherit; opacity: .65;
+}
+.settings-cancel:hover { opacity: 1; }
+.settings-save {
+  background: #007aff; color: #fff; border: none; border-radius: 7px;
+  padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.settings-save:hover { opacity: .88; }
+
+/* ── Tiers scroll container ── */
+.tiers-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.tiers-container::-webkit-scrollbar { width: 6px; }
+.tiers-container::-webkit-scrollbar-thumb { background: rgba(0,0,0,.2); border-radius: 3px; }
+.wrapper.dark .tiers-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); }
+
+/* ── Tier row ── */
+.tier-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid rgba(0,0,0,.07);
+  min-height: 64px;
+}
+.wrapper.dark .tier-row { border-color: rgba(255,255,255,.07); }
+
+/* ── Tier label box ── */
+.tier-label {
+  width: 56px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 22px;
+  color: rgba(0,0,0,.75);
+  user-select: none;
+  border-right: 1px solid rgba(0,0,0,.1);
+}
+
+/* ── Cards drop area ── */
+.cards-area {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px;
+  align-items: flex-start;
+  align-content: flex-start;
+  min-height: 64px;
+  transition: background .15s;
+}
+.cards-area.drag-over { background: rgba(0,122,255,.1); }
+
+/* ── Individual card ── */
+.tier-card {
+  position: relative;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 1px 1px rgba(0,0,0,.06);
+  cursor: grab;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  width: 88px;
+  overflow: hidden;
+  transition: box-shadow .15s, transform .12s;
+}
+.wrapper.dark .tier-card { background: #2c2c2e; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+.tier-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,.15); }
+.wrapper.dark .tier-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,.5); }
+.tier-card.dragging { opacity: .4; transform: scale(1.04); }
+.tier-card.editing { cursor: default; }
+
+/* ── Card image ── */
+.card-img {
+  width: 100%;
+  height: 72px;
+  object-fit: cover;
+  display: block;
+  flex-shrink: 0;
+}
+
+/* ── Card text ── */
+.card-text {
+  padding: 6px 7px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  word-break: break-word;
+  cursor: text;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  transition: background .1s;
+}
+.tier-card:hover .card-text { background: rgba(0,0,0,.025); }
+.wrapper.dark .tier-card:hover .card-text { background: rgba(255,255,255,.04); }
+
+/* ── Inline edit textarea ── */
+.card-edit {
+  padding: 6px 7px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  line-height: 1.35;
+  background: rgba(0,122,255,.07);
+  border: none;
+  border-top: 1.5px solid #007aff;
+  outline: none;
+  color: inherit;
+  resize: none;
+  width: 100%;
+  min-height: 44px;
+}
+.wrapper.dark .card-edit { background: rgba(0,122,255,.12); color: #f5f5f7; }
+
+/* ── Card hover action buttons ── */
+.card-actions {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity .12s;
+}
+.tier-card:hover .card-actions,
+.tier-card.editing .card-actions { opacity: 1; }
+.card-del, .card-img-btn {
+  background: rgba(28,28,30,.6);
+  backdrop-filter: blur(4px);
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  color: #fff;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  transition: background .12s;
+  line-height: 1;
+  padding: 0;
+}
+.card-del:hover { background: #ff3b30; }
+.card-img-btn:hover { background: #007aff; }
+
+/* ── Unranked pool ── */
+.unranked-section {
+  padding: 14px 12px 16px;
+}
+.unranked-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  opacity: .35;
+  margin-bottom: 8px;
+  padding-left: 2px;
+}
+.unranked-pool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  min-height: 76px;
+  border: 1.5px dashed rgba(0,0,0,.15);
+  border-radius: 10px;
+  transition: background .15s, border-color .15s;
+  align-items: flex-start;
+  align-content: flex-start;
+}
+.wrapper.dark .unranked-pool { border-color: rgba(255,255,255,.14); }
+.unranked-pool.drag-over {
+  background: rgba(0,122,255,.08);
+  border-color: #007aff;
+}

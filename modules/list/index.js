@@ -1,66 +1,24 @@
-import { adoptTailwind } from '/shell/shadow-tailwind.js';
-import { getList, saveList, subscribe } from '/shell/api.js';
+import { AppModuleBase } from '/shell/module-base.js';
+import { getList, saveList } from '/shell/api.js';
 
-class AppList extends HTMLElement {
+class AppList extends AppModuleBase {
   constructor() {
     super();
-    this._state = null;
-    this._appId = null;
     this._settingsOpen = false;
   }
 
-  async connectedCallback() {
-    const shadow = this.attachShadow({ mode: 'open' });
+  _collection() { return 'lists'; }
 
-    const styleEl = document.createElement('style');
-    const css = await fetch('/modules/list/styles.css').then(r => r.text());
-    styleEl.textContent = css;
-
-    this._wrapper = document.createElement('div');
-    this._wrapper.className = 'wrapper';
-    shadow.appendChild(styleEl);
-    shadow.appendChild(this._wrapper);
-    await adoptTailwind(shadow, this._wrapper);
-
-    // wait one tick for el.api to be set by shell
-    await new Promise(r => setTimeout(r, 0));
-
-    this._appId = this.api?.instanceId || this.api?.windowId || ('list-' + Date.now());
-    // If launched with a config name (first launch), use it as the list name
+  async _load() {
     const cfg = this.api?.config || {};
     this._state = await getList(this._appId);
     if (cfg.name && this._state.items.length === 0 && this._state.name === 'My List') {
       this._state.name = cfg.name;
       await saveList(this._appId, this._state);
     }
-    this._applyTheme();
-    this._render();
-
-    this._themeObserver = new MutationObserver(() => this._applyTheme());
-    this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-
-    if (this.api) this.api.setTitle(this._state.name);
-
-    // Cross-client sync: re-fetch and re-render when another client saves this list
-    this._unsub = subscribe('lists', this._appId, async () => {
-      this._state = await getList(this._appId);
-      this._render();
-      if (this.api) this.api.setTitle(this._state.name);
-    });
   }
 
-  disconnectedCallback() {
-    this._themeObserver?.disconnect();
-    this._unsub?.();
-  }
-
-  _applyTheme() {
-    if (document.documentElement.classList.contains('dark')) {
-      this._wrapper.classList.add('dark');
-    } else {
-      this._wrapper.classList.remove('dark');
-    }
-  }
+  _getTitle() { return this._state?.name || 'List'; }
 
   async _save() {
     await saveList(this._appId, this._state);
@@ -158,15 +116,12 @@ class AppList extends HTMLElement {
   _bindEvents() {
     const shadow = this.shadowRoot;
 
-    // rename list — keeps the window title, desktop icon, and saved data in sync
     const titleInput = shadow.querySelector('.list-title');
     titleInput.addEventListener('input', () => {
       const name = titleInput.value || 'List';
       this._state.name = titleInput.value;
       if (this.api) this.api.setTitle(name);
       this._save();
-      // Live-update the desktop icon label (in-memory, instant); debounce the
-      // persistence so we're not firing a cloud write on every keystroke.
       const inst = this.api?.store?.instances?.find(i => i.instanceId === this._appId);
       if (inst) {
         inst.name = name;
@@ -178,7 +133,6 @@ class AppList extends HTMLElement {
       }
     });
 
-    // add item
     const addInput = shadow.querySelector('.add-input');
     const addBtn = shadow.querySelector('.add-btn');
     const doAdd = () => {
@@ -199,7 +153,6 @@ class AppList extends HTMLElement {
     addBtn.addEventListener('click', doAdd);
     addInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); });
 
-    // toggle / delete
     shadow.querySelectorAll('[data-action]').forEach(el => {
       el.addEventListener('click', async e => {
         const action = el.dataset.action;
@@ -221,7 +174,6 @@ class AppList extends HTMLElement {
           const newName = nameEl?.value.trim() || this._state.name;
           const newIcon = iconEl?.value.trim() || '✅';
           this._state.name = newName;
-          // persist field name/type edits from settings UI
           const fields = this._fields();
           fields.forEach((f, idx) => {
             const nameInput = this.shadowRoot.querySelector(`.settings-field-name[data-field-idx="${idx}"]`);
@@ -256,10 +208,6 @@ class AppList extends HTMLElement {
         }
       });
     });
-  }
-
-  _esc(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 }
 

@@ -9,6 +9,7 @@
   "generator": true,
   "resizable": true,
   "minSize": { "w": 260, "h": 300 },
+  "sync": true,
   "contextMenu": [
     { "label": "📋 New List", "config": { "name": "New List", "icon": "📋" } }
   ]

@@ -1,7 +1,7 @@
-import { adoptTailwind } from '/shell/shadow-tailwind.js';
-import { getData, setData, subscribe } from '/shell/api.js';
+import { AppModuleBase } from '/shell/module-base.js';
+import { getData, setData } from '/shell/api.js';
 
-async function getBoard(appId) {
+async function getRocksBoard(appId) {
   const d = await getData('rocks', appId);
   return d || {
     name: 'My Rocks',
@@ -13,57 +13,29 @@ async function getBoard(appId) {
     rocks: [],
   };
 }
-async function saveBoard(appId, board) { return setData('rocks', appId, board); }
+async function saveRocksBoard(appId, board) { return setData('rocks', appId, board); }
 
-class AppRocks extends HTMLElement {
+class AppRocks extends AppModuleBase {
   constructor() {
     super();
-    this._state = null;
-    this._appId = null;
-    this._openRock = null;   // rock object whose modal is open
-    this._dragRock = null;   // { rockId }
+    this._openRock = null;
+    this._dragRock = null;
   }
 
-  async connectedCallback() {
-    const shadow = this.attachShadow({ mode: 'open' });
-    const styleEl = document.createElement('style');
-    styleEl.textContent = await fetch('/modules/rocks/styles.css').then(r => r.text());
-    this._wrapper = document.createElement('div');
-    this._wrapper.className = 'wrapper';
-    shadow.appendChild(styleEl);
-    shadow.appendChild(this._wrapper);
-    await adoptTailwind(shadow, this._wrapper);
+  _collection() { return 'rocks'; }
 
-    await new Promise(r => setTimeout(r, 0));
-    this._appId = this.api?.instanceId || this.api?.windowId || ('rocks-' + Date.now());
-    this._state = await getBoard(this._appId);
-
+  async _load() {
+    this._state = await getRocksBoard(this._appId);
     const cfg = this.api?.config || {};
     if (cfg.name && this._state.rocks.length === 0 && this._state.name === 'My Rocks') {
       this._state.name = cfg.name;
-      await saveBoard(this._appId, this._state);
+      await saveRocksBoard(this._appId, this._state);
     }
-
-    this._applyTheme();
-    this._render();
-    if (this.api) this.api.setTitle(this._state.name);
-
-    this._themeObserver = new MutationObserver(() => this._applyTheme());
-    this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-
-    this._unsub = subscribe('rocks', this._appId, async () => {
-      this._state = await getBoard(this._appId);
-      this._render();
-      if (this.api) this.api.setTitle(this._state.name);
-    });
   }
 
-  disconnectedCallback() {
-    this._themeObserver?.disconnect();
-    this._unsub?.();
-  }
-  _applyTheme() { this._wrapper?.classList.toggle('dark', document.documentElement.classList.contains('dark')); }
-  async _save() { await saveBoard(this._appId, this._state); }
+  _getTitle() { return this._state?.name || 'Rocks'; }
+
+  async _save() { await saveRocksBoard(this._appId, this._state); }
 
   _milestoneProgress(rock) {
     const ms = rock.milestones || [];
@@ -83,10 +55,6 @@ class AppRocks extends HTMLElement {
   _formatDate(dateStr) {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  }
-
-  _esc(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   _render() {
@@ -172,14 +140,12 @@ class AppRocks extends HTMLElement {
   _bindEvents() {
     const w = this._wrapper;
 
-    // Board title
     w.querySelector('.board-title')?.addEventListener('input', e => {
       this._state.name = e.target.value;
       if (this.api) this.api.setTitle(this._state.name || 'Rocks');
       this._save();
     });
 
-    // Function titles
     w.querySelectorAll('.fn-title').forEach(inp => {
       inp.addEventListener('input', e => {
         const fn = this._state.functions.find(f => f.id === e.target.dataset.fnId);
@@ -187,7 +153,6 @@ class AppRocks extends HTMLElement {
       });
     });
 
-    // All data-action elements
     w.querySelectorAll('[data-action]').forEach(el => {
       el.addEventListener('click', e => {
         const action = el.dataset.action;
@@ -196,40 +161,30 @@ class AppRocks extends HTMLElement {
         if (action === 'add-fn') {
           this._state.functions.push({ id: 'fn-' + Date.now(), name: 'New Function' });
           this._save(); this._render();
-
         } else if (action === 'del-fn') {
           const id = el.dataset.fnId;
           this._state.functions = this._state.functions.filter(f => f.id !== id);
           this._state.rocks = this._state.rocks.filter(r => r.functionId !== id);
           this._save(); this._render();
-
         } else if (action === 'add-rock') {
           const title = prompt('Rock title:');
           if (!title) return;
           this._state.rocks.push({ id: 'rock-' + Date.now(), functionId: el.dataset.fnId, title: title.trim(), milestones: [] });
           this._save(); this._render();
-
         } else if (action === 'del-rock') {
           this._state.rocks = this._state.rocks.filter(r => r.id !== el.dataset.rockId);
           if (this._openRock?.id === el.dataset.rockId) this._openRock = null;
           this._save(); this._render();
-
         } else if (action === 'close-modal' || action === 'close-modal-overlay') {
           this._openRock = null; this._render();
-
-        } else if (action === 'rename-rock') {
-          // handled via input event below
-
         } else if (action === 'toggle-ms') {
           const ms = (this._openRock?.milestones || []).find(m => m.id === el.dataset.msId);
           if (ms) { ms.done = !ms.done; this._save(); this._render(); }
-
         } else if (action === 'del-ms') {
           if (this._openRock) {
             this._openRock.milestones = this._openRock.milestones.filter(m => m.id !== el.dataset.msId);
             this._save(); this._render();
           }
-
         } else if (action === 'add-ms') {
           const textEl = w.querySelector('#ms-text-input');
           const dateEl = w.querySelector('#ms-date-input');
@@ -242,10 +197,8 @@ class AppRocks extends HTMLElement {
       });
     });
 
-    // Stop modal overlay clicks from hitting the board behind when clicking inside modal
     w.querySelector('[data-stop-close]')?.addEventListener('click', e => e.stopPropagation());
 
-    // Open rock modal on card click (not on button clicks)
     w.querySelectorAll('.rock-card').forEach(card => {
       card.addEventListener('click', e => {
         if (e.target.closest('[data-action]')) return;
@@ -254,7 +207,6 @@ class AppRocks extends HTMLElement {
       });
     });
 
-    // Modal rock title rename
     const modalTitleInput = w.querySelector('.modal-title-input');
     if (modalTitleInput) {
       modalTitleInput.addEventListener('input', e => {
@@ -263,7 +215,6 @@ class AppRocks extends HTMLElement {
       });
     }
 
-    // Add milestone on Enter
     const msTextInput = w.querySelector('#ms-text-input');
     if (msTextInput) {
       msTextInput.focus();
@@ -272,7 +223,6 @@ class AppRocks extends HTMLElement {
       });
     }
 
-    // Drag-and-drop rocks between functions
     w.querySelectorAll('.rock-card').forEach(card => {
       card.addEventListener('dragstart', e => {
         this._dragRock = card.dataset.rockId;

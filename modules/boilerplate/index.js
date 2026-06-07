@@ -1,17 +1,15 @@
-import { adoptTailwind } from '/shell/shadow-tailwind.js';
+import { AppModuleBase } from '/shell/module-base.js';
 
-class AppBoilerplate extends HTMLElement {
-  async connectedCallback() {
-    const shadow = this.attachShadow({ mode: 'open' });
+class AppBoilerplate extends AppModuleBase {
+  async _load() {
+    // fetch your data here and set this._state
+    this._state = { name: 'Boilerplate' };
+  }
 
-    // Load module-scoped styles
-    const styleEl = document.createElement('style');
-    const css = await fetch('/modules/boilerplate/styles.css').then(r => r.text());
-    styleEl.textContent = css;
+  _getTitle() { return this._state?.name || 'Boilerplate'; }
 
-    const wrapper = document.createElement('div');
-    wrapper.className = 'wrapper';
-    wrapper.innerHTML = `
+  _render() {
+    this._wrapper.innerHTML = `
       <div class="body">
         <div>
           <div class="title">🧩 Boilerplate App</div>
@@ -19,14 +17,6 @@ class AppBoilerplate extends HTMLElement {
         </div>
       </div>
     `;
-
-    shadow.appendChild(styleEl);
-    shadow.appendChild(wrapper);
-    await adoptTailwind(shadow, wrapper);
-
-    // el.api is set by the shell after connectedCallback — access it in a tick
-    await new Promise(r => setTimeout(r, 0));
-    if (this.api) this.api.setTitle('Boilerplate');
   }
 }
 

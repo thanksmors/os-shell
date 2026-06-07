@@ -1,68 +1,35 @@
-import { adoptTailwind } from '/shell/shadow-tailwind.js';
-import { getGantt, saveGantt, subscribe } from '/shell/api.js';
+import { AppModuleBase } from '/shell/module-base.js';
+import { getGantt, saveGantt } from '/shell/api.js';
 
-const MONTH_W = 64;       // px per month column
-const ROW_H = 40;         // px per project row
-const HEADER_H = 56;      // px for the two header rows combined
+const MONTH_W = 64;
+const ROW_H = 40;
+const HEADER_H = 56;
 const COLORS = ['#007aff','#34c759','#ff9500','#ff3b30','#af52de','#5ac8fa','#ff2d55','#a2845e'];
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-class AppGantt extends HTMLElement {
+class AppGantt extends AppModuleBase {
   constructor() {
     super();
-    this._state = null;
-    this._appId = null;
     this._settingsOpen = false;
-    this._editProject = null;   // project object being edited (modal open)
-    this._viewStart = null;     // Date — first visible month
+    this._editProject = null;
+    this._viewStart = null;
   }
 
-  async connectedCallback() {
-    const shadow = this.attachShadow({ mode: 'open' });
-    const styleEl = document.createElement('style');
-    styleEl.textContent = await fetch('/modules/gantt/styles.css').then(r => r.text());
-    this._wrapper = document.createElement('div');
-    this._wrapper.className = 'wrapper';
-    shadow.appendChild(styleEl);
-    shadow.appendChild(this._wrapper);
-    await adoptTailwind(shadow, this._wrapper);
+  _collection() { return 'gantt'; }
 
-    await new Promise(r => setTimeout(r, 0));
-    this._appId = this.api?.instanceId || this.api?.windowId || ('gantt-' + Date.now());
+  async _load() {
     this._state = await getGantt(this._appId);
-
     const cfg = this.api?.config || {};
     if (cfg.name && this._state.projects.length === 0 && this._state.name === 'My Projects') {
       this._state.name = cfg.name;
       await saveGantt(this._appId, this._state);
     }
-
-    this._viewStart = this._quarterStart(new Date());
-
-    this._applyTheme();
-    this._render();
-    if (this.api) this.api.setTitle(this._state.name);
-
-    this._themeObserver = new MutationObserver(() => this._applyTheme());
-    this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-
-    this._unsub = subscribe('gantt', this._appId, async () => {
-      this._state = await getGantt(this._appId);
-      this._render();
-      if (this.api) this.api.setTitle(this._state.name);
-    });
+    if (!this._viewStart) this._viewStart = this._quarterStart(new Date());
   }
 
-  disconnectedCallback() {
-    this._themeObserver?.disconnect();
-    this._unsub?.();
-  }
-  _applyTheme() { this._wrapper?.classList.toggle('dark', document.documentElement.classList.contains('dark')); }
+  _getTitle() { return this._state?.name || 'Gantt'; }
+
   async _save() { await saveGantt(this._appId, this._state); }
-
-  _esc(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
 
   // ─── Date helpers ─────────────────────────────────────────────────────────
   _quarterStart(date) {
@@ -79,7 +46,6 @@ class AppGantt extends HTMLElement {
     return d.toISOString().slice(0, 10);
   }
 
-  // fractional months between two dates, approximating each month as its real day count
   _monthsBetween(fromDate, toDate) {
     const from = new Date(fromDate), to = new Date(toDate);
     let months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
@@ -112,7 +78,6 @@ class AppGantt extends HTMLElement {
     const tlWidth = months.length * MONTH_W;
     const curIcon = this.api?.store?.instances?.find(i => i.instanceId === this._appId)?.icon || '📊';
 
-    // Quarter cells (span up to 3 months)
     let quarterCells = '';
     for (let i = 0; i < months.length; i += 3) {
       const chunk = months.slice(i, i + 3);
@@ -125,7 +90,6 @@ class AppGantt extends HTMLElement {
       `<div class="month-cell ${m.isQuarterStart ? 'quarter-start' : ''}" style="width:${MONTH_W}px;">${this._esc(m.label)}</div>`
     ).join('');
 
-    // grid lines
     let gridLines = '';
     for (let i = 0; i < months.length; i++) {
       gridLines += `<div class="grid-line ${months[i].isQuarterStart ? 'quarter' : ''}" style="left:${i * MONTH_W}px;"></div>`;
@@ -362,10 +326,7 @@ class AppGantt extends HTMLElement {
       });
     });
 
-    // focus name in edit modal
     w.querySelector('#edit-name')?.focus();
-
-    // drag-to-reorder project rows
     this._bindRowDrag(w);
   }
 
@@ -379,20 +340,17 @@ class AppGantt extends HTMLElement {
         e.dataTransfer.effectAllowed = 'move';
         row.classList.add('dragging');
       });
-
       row.addEventListener('dragend', () => {
         row.classList.remove('dragging');
         w.querySelectorAll('.project-row').forEach(r => r.classList.remove('drag-over'));
         dragIdx = null;
       });
-
       row.addEventListener('dragover', e => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         w.querySelectorAll('.project-row').forEach(r => r.classList.remove('drag-over'));
         row.classList.add('drag-over');
       });
-
       row.addEventListener('drop', async e => {
         e.preventDefault();
         const dropIdx = parseInt(row.dataset.idx, 10);

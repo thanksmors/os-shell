@@ -1,56 +1,21 @@
-import { adoptTailwind } from '/shell/shadow-tailwind.js';
-import { getBoard, saveBoard, subscribe } from '/shell/api.js';
+import { AppModuleBase } from '/shell/module-base.js';
+import { getBoard, saveBoard } from '/shell/api.js';
 
-class AppKanban extends HTMLElement {
+class AppKanban extends AppModuleBase {
   constructor() {
     super();
-    this._state = null;
-    this._appId = null;
-    this._addingCardCol = null; // colId of column with open add-card form
-    this._dragCard = null;      // { cardId, fromColId }
+    this._addingCardCol = null;
+    this._dragCard = null;
     this._settingsOpen = false;
   }
 
-  async connectedCallback() {
-    const shadow = this.attachShadow({ mode: 'open' });
+  _collection() { return 'boards'; }
 
-    const styleEl = document.createElement('style');
-    const css = await fetch('/modules/kanban/styles.css').then(r => r.text());
-    styleEl.textContent = css;
-
-    this._wrapper = document.createElement('div');
-    this._wrapper.className = 'wrapper';
-    shadow.appendChild(styleEl);
-    shadow.appendChild(this._wrapper);
-    await adoptTailwind(shadow, this._wrapper);
-
-    await new Promise(r => setTimeout(r, 0));
-
-    this._appId = this.api?.instanceId || this.api?.windowId || ('kanban-' + Date.now());
+  async _load() {
     this._state = await getBoard(this._appId);
-    this._applyTheme();
-    this._render();
-
-    this._themeObserver = new MutationObserver(() => this._applyTheme());
-    this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-
-    if (this.api) this.api.setTitle(this._state.name);
-
-    this._unsub = subscribe('boards', this._appId, async () => {
-      this._state = await getBoard(this._appId);
-      this._render();
-      if (this.api) this.api.setTitle(this._state.name);
-    });
   }
 
-  disconnectedCallback() {
-    this._themeObserver?.disconnect();
-    this._unsub?.();
-  }
-
-  _applyTheme() {
-    this._wrapper?.classList.toggle('dark', document.documentElement.classList.contains('dark'));
-  }
+  _getTitle() { return this._state?.name || 'Kanban'; }
 
   async _save() {
     await saveBoard(this._appId, this._state);
@@ -122,7 +87,6 @@ class AppKanban extends HTMLElement {
 
     this._bindEvents();
 
-    // focus the card input if we just opened the form
     if (addingCol) {
       const form = this._wrapper.querySelector(`.add-card-form[data-col-id="${addingCol}"]`);
       form?.querySelector('textarea')?.focus();
@@ -132,14 +96,12 @@ class AppKanban extends HTMLElement {
   _bindEvents() {
     const w = this._wrapper;
 
-    // board title rename
     w.querySelector('.board-title').addEventListener('input', e => {
       this._state.name = e.target.value;
       if (this.api) this.api.setTitle(this._state.name || 'Kanban');
       this._save();
     });
 
-    // column title rename
     w.querySelectorAll('.col-title').forEach(input => {
       input.addEventListener('input', e => {
         const col = this._state.columns.find(c => c.id === e.target.dataset.colId);
@@ -147,7 +109,6 @@ class AppKanban extends HTMLElement {
       });
     });
 
-    // all data-action buttons/elements
     w.querySelectorAll('[data-action]').forEach(el => {
       el.addEventListener('click', async e => {
         e.stopPropagation();
@@ -176,22 +137,18 @@ class AppKanban extends HTMLElement {
           this._save();
           this._addingCardCol = null;
           this._render();
-
         } else if (action === 'del-col') {
           const colId = el.dataset.colId;
           this._state.columns = this._state.columns.filter(c => c.id !== colId);
           this._state.cards = this._state.cards.filter(c => c.colId !== colId);
           this._save();
           this._render();
-
         } else if (action === 'open-add-card') {
           this._addingCardCol = el.dataset.colId;
           this._render();
-
         } else if (action === 'cancel-card') {
           this._addingCardCol = null;
           this._render();
-
         } else if (action === 'save-card') {
           const form = el.closest('.add-card-form');
           const inputs = form.querySelectorAll('textarea');
@@ -202,7 +159,6 @@ class AppKanban extends HTMLElement {
           this._addingCardCol = null;
           this._save();
           this._render();
-
         } else if (action === 'del-card') {
           this._state.cards = this._state.cards.filter(c => c.id !== el.dataset.cardId);
           this._save();
@@ -211,7 +167,6 @@ class AppKanban extends HTMLElement {
       });
     });
 
-    // Drag-and-drop between columns (native HTML5 drag API)
     w.querySelectorAll('.card').forEach(card => {
       card.addEventListener('dragstart', e => {
         this._dragCard = { cardId: card.dataset.cardId, fromColId: card.dataset.colId };
@@ -226,7 +181,6 @@ class AppKanban extends HTMLElement {
 
     w.querySelectorAll('.column').forEach(col => {
       const colId = col.dataset.colId;
-
       col.addEventListener('dragover', e => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
@@ -249,10 +203,6 @@ class AppKanban extends HTMLElement {
         this._dragCard = null;
       });
     });
-  }
-
-  _esc(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 }
 

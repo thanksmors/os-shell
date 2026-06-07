@@ -9,6 +9,7 @@
   "generator": true,
   "resizable": true,
   "minSize": { "w": 480, "h": 360 },
+  "sync": true,
   "contextMenu": [
     { "label": "🗂️ New Kanban Board", "config": { "name": "New Board", "icon": "🗂️" } }
   ]

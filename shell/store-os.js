@@ -13,6 +13,7 @@ export function registerOsStore() {
     instances: [],
     dragInstanceId: null,
     dragOverFolderId: null,
+    dragOverReorderId: null,
 
     init() {
       // apply saved theme
@@ -303,7 +304,28 @@ export function registerOsStore() {
       const id = this.dragInstanceId;
       this.dragInstanceId = null;
       this.dragOverFolderId = null;
+      this.dragOverReorderId = null;
       if (id) await this.moveToFolder(id, folderId);
+    },
+
+    async dropReorder(targetId) {
+      const id = this.dragInstanceId;
+      this.dragInstanceId = null;
+      this.dragOverFolderId = null;
+      this.dragOverReorderId = null;
+      if (id && id !== targetId) await this.reorderInstance(id, targetId);
+    },
+
+    async reorderInstance(dragId, targetId) {
+      const arr = [...this.instances];
+      const from = arr.findIndex(i => i.instanceId === dragId);
+      const to   = arr.findIndex(i => i.instanceId === targetId);
+      if (from === -1 || to === -1 || from === to) return;
+      const [item] = arr.splice(from, 1);
+      arr.splice(to, 0, item);
+      this.instances = arr;
+      await saveInstances(this.instances);
+      window.dispatchEvent(new CustomEvent('os:instances-changed'));
     },
 
     async moveToFolder(instanceId, folderId) {

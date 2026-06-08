@@ -331,6 +331,7 @@
 .os-desktop-icon:active { background: rgba(255,255,255,0.25); }
 .os-desktop-icon.icon-dragging { opacity: 0.4; transform: scale(0.95); }
 .os-desktop-icon.icon-drag-over { background: rgba(0,122,255,0.35) !important; transform: scale(1.08); box-shadow: 0 0 0 2px rgba(0,122,255,0.6); }
+.os-desktop-icon.icon-reorder-target { transform: scale(1.05); box-shadow: 0 0 0 2px rgba(255,255,255,0.5); }
 .os-desktop-icon-emoji { font-size: 2rem; line-height: 1; }
 .os-desktop-icon-label {
   font-size: 0.7rem;

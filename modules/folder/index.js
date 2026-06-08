@@ -4,6 +4,7 @@ class AppFolder extends HTMLElement {
   constructor() {
     super();
     this._renameTimer = null;
+    this._dragChildId = null;
     this._onInstancesChanged = () => this._render();
   }
 
@@ -58,10 +59,10 @@ class AppFolder extends HTMLElement {
       <div class="icon-grid">
         ${children.length === 0 ? `
           <div class="empty-state">
-            <div class="empty-hint">Right-click a desktop icon<br>to move it into this folder</div>
+            <div class="empty-hint">Drag a desktop icon here<br>to add it to this folder</div>
           </div>
         ` : children.map(child => `
-          <button class="folder-icon" data-instance-id="${this._esc(child.instanceId)}">
+          <button class="folder-icon" draggable="true" data-instance-id="${this._esc(child.instanceId)}">
             <span class="folder-icon-emoji">${this._esc(child.icon)}</span>
             <span class="folder-icon-label">${this._esc(child.name)}</span>
           </button>
@@ -87,6 +88,33 @@ class AppFolder extends HTMLElement {
       }, 600);
     });
 
+    // External drop: desktop icon dragged into this folder window
+    const grid = w.querySelector('.icon-grid');
+    grid.addEventListener('dragover', e => {
+      const store = this.api?.store;
+      if (!store?.dragInstanceId) return;
+      const dragged = store.instances.find(i => i.instanceId === store.dragInstanceId);
+      if (dragged && dragged.parentId !== this._instanceId) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        grid.classList.add('drop-target');
+      }
+    });
+    grid.addEventListener('dragleave', e => {
+      if (!grid.contains(e.relatedTarget)) grid.classList.remove('drop-target');
+    });
+    grid.addEventListener('drop', e => {
+      e.preventDefault();
+      grid.classList.remove('drop-target');
+      const store = this.api?.store;
+      if (!store?.dragInstanceId) return;
+      store.moveToFolder(store.dragInstanceId, this._instanceId);
+      store.dragInstanceId = null;
+      store.dragOverFolderId = null;
+      store.dragOverReorderId = null;
+    });
+
+    // Child icon interactions: click, context menu, and internal reorder drag
     w.querySelectorAll('.folder-icon').forEach(btn => {
       const childId = btn.dataset.instanceId;
 
@@ -105,6 +133,35 @@ class AppFolder extends HTMLElement {
           { separator: true },
           { label: '🗑 Delete', action: () => store.removeInstance(childId) },
         ]);
+      });
+
+      // Internal reorder drag
+      btn.addEventListener('dragstart', e => {
+        this._dragChildId = childId;
+        btn.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.stopPropagation(); // don't set store.dragInstanceId
+      });
+      btn.addEventListener('dragend', () => {
+        this._dragChildId = null;
+        this._render();
+      });
+      btn.addEventListener('dragover', e => {
+        if (this._dragChildId && this._dragChildId !== childId) {
+          e.preventDefault();
+          e.stopPropagation();
+          btn.classList.add('reorder-target');
+        }
+      });
+      btn.addEventListener('dragleave', () => btn.classList.remove('reorder-target'));
+      btn.addEventListener('drop', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        btn.classList.remove('reorder-target');
+        if (this._dragChildId && this._dragChildId !== childId) {
+          this.api.store.reorderInstance(this._dragChildId, childId);
+          this._dragChildId = null;
+        }
       });
     });
   }

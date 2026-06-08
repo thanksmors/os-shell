@@ -111,8 +111,6 @@ class AppFolder extends HTMLElement {
         const store = this.api?.store;
         if (!store) return;
         store.showContextMenu(e.clientX, e.clientY, [
-          { label: '↩ Remove from Folder', action: () => store.moveToDesktop(childId) },
-          { separator: true },
           { label: '🗑 Delete', action: () => store.removeInstance(childId) },
         ]);
       });

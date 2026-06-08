@@ -23,9 +23,6 @@ class AppNotepad extends HTMLElement {
     const toolbar = document.createElement('div');
     toolbar.className = 'notepad-toolbar';
     toolbar.innerHTML = `
-      <span style="font-size:1.1rem;">📝</span>
-      <span style="font-weight:600;font-size:0.875rem;color:#374151;">Notepad</span>
-      <div style="flex:1;"></div>
       <button class="notepad-toolbar-btn" id="btn-clear" title="Clear all">🗑 Clear</button>
       <button class="notepad-toolbar-btn" id="btn-copy" title="Copy all">📋 Copy</button>
     `;

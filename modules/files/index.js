@@ -182,16 +182,6 @@ class AppFiles extends HTMLElement {
     const wrapper = document.createElement('div');
     wrapper.className = 'module-root files-root';
 
-    // Toolbar
-    const toolbar = document.createElement('div');
-    toolbar.className = 'files-toolbar';
-    toolbar.innerHTML = `
-      <span style="font-size:1.1rem;">📁</span>
-      <span style="font-weight:600;font-size:0.875rem;">Files</span>
-      <div style="flex:1;"></div>
-      <span style="font-size:0.75rem;color:#9ca3af;">Home</span>
-    `;
-
     // Breadcrumb
     const breadcrumb = document.createElement('div');
     breadcrumb.className = 'files-breadcrumb';
@@ -203,7 +193,6 @@ class AppFiles extends HTMLElement {
     const treeContainer = document.createElement('div');
     treeContainer.className = 'files-tree';
 
-    wrapper.appendChild(toolbar);
     wrapper.appendChild(breadcrumb);
     wrapper.appendChild(treeContainer);
     this._shadow.appendChild(wrapper);

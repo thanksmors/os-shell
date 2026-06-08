@@ -59,9 +59,6 @@ class AppList extends AppModuleBase {
     `).join('');
 
     this._wrapper.innerHTML = `
-      <div class="header">
-        <button class="header-btn" data-action="clear-done" title="Clear completed">🗑</button>
-      </div>
       ${this._settingsOpen ? `
         <div class="settings-panel">
           <div class="settings-row">

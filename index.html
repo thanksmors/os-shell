@@ -139,7 +139,11 @@
     <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 20% 30%,rgba(96,165,250,0.08) 0%,transparent 60%),radial-gradient(ellipse at 80% 70%,rgba(139,92,246,0.08) 0%,transparent 60%);pointer-events:none;"></div>
 
     <!-- Desktop Icons -->
-    <div style="position:absolute;top:16px;left:16px;bottom:64px;display:flex;flex-direction:column;flex-wrap:wrap;gap:8px;z-index:1;align-content:flex-start;">
+    <div
+      style="position:absolute;top:16px;left:16px;bottom:64px;display:flex;flex-direction:column;flex-wrap:wrap;gap:8px;z-index:1;align-content:flex-start;"
+      @dragover.prevent="$store.os.dragInstanceId && $store.os.instances?.find(i => i.instanceId === $store.os.dragInstanceId)?.parentId ? $event.dataTransfer.dropEffect = 'move' : null"
+      @drop.prevent="$store.os.dragInstanceId && $store.os.instances?.find(i => i.instanceId === $store.os.dragInstanceId)?.parentId ? ($store.os.moveToDesktop($store.os.dragInstanceId), $store.os.dragInstanceId = null) : null"
+    >
       <template x-if="$store.os">
         <template x-for="item in $store.os.desktopItems()" :key="item.key">
           <button
@@ -161,20 +165,20 @@
               $store.os.dragOverFolderId = null;
               $store.os.dragOverDesktopKey = null
             "
-            @dragover.prevent="$store.os.dragDesktopKey && $store.os.dragDesktopKey !== item.key
-              ? ($store.os.dragInstanceId && item.type === 'instance' && item.appId === 'folder'
-                  ? ($store.os.dragOverFolderId = item.id, $store.os.dragOverDesktopKey = null)
-                  : ($store.os.dragOverDesktopKey = item.key, $store.os.dragOverFolderId = null))
-              : null"
+            @dragover.prevent="
+              ($store.os.dragDesktopKey && $store.os.dragDesktopKey !== item.key) || ($store.os.dragInstanceId && !$store.os.dragDesktopKey)
+                ? (item.type === 'instance' && item.appId === 'folder'
+                    ? ($store.os.dragOverFolderId = item.id, $store.os.dragOverDesktopKey = null)
+                    : ($store.os.dragDesktopKey ? ($store.os.dragOverDesktopKey = item.key, $store.os.dragOverFolderId = null) : null))
+                : null"
             @dragleave="
               if ($store.os.dragOverFolderId === item.id) $store.os.dragOverFolderId = null;
               if ($store.os.dragOverDesktopKey === item.key) $store.os.dragOverDesktopKey = null
             "
-            @drop.prevent="$store.os.dragDesktopKey
-              ? ($store.os.dragInstanceId && item.type === 'instance' && item.appId === 'folder'
-                  ? $store.os.dropOnFolder(item.id)
-                  : $store.os.reorderDesktop($store.os.dragDesktopKey, item.key))
-              : null"
+            @drop.prevent="
+              $store.os.dragInstanceId && item.type === 'instance' && item.appId === 'folder'
+                ? $store.os.dropOnFolder(item.id)
+                : ($store.os.dragDesktopKey ? $store.os.reorderDesktop($store.os.dragDesktopKey, item.key) : null)"
             @click.stop="item.type === 'app' ? $store.os.launch(item.id) : $store.os.launchInstance(item.id)"
             @contextmenu.prevent.stop="item.type === 'instance' ? $store.os.buildInstanceContextMenu($event.clientX, $event.clientY, item) : null"
           >

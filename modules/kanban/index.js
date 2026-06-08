@@ -28,9 +28,6 @@ class AppKanban extends AppModuleBase {
     const addingCol = this._addingCardCol;
 
     this._wrapper.innerHTML = `
-      <div class="header">
-        <button class="header-btn primary" data-action="add-col">＋ Add column</button>
-      </div>
       ${this._settingsOpen ? `
         <div class="settings-panel">
           <div class="settings-row">

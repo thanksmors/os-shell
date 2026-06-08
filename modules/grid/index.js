@@ -33,10 +33,11 @@ class AppGrid extends AppModuleBase {
   constructor() {
     super();
     this._settingsOpen = false;
-    this._addingCell = null;   // { rowId, colId } of open add-item form
-    this._dragItem = null;     // itemId being dragged
-    this._dragCol = null;      // colIdx being dragged
-    this._dragRow = null;      // rowIdx being dragged
+    this._addingCell = null;
+    this._dragItem = null;
+    this._dragCol = null;
+    this._dragRow = null;
+    this.addEventListener('os:toggle-settings', () => { this._settingsOpen = !this._settingsOpen; this._render(); });
   }
 
   _collection() { return 'grids'; }
@@ -108,10 +109,6 @@ class AppGrid extends AppModuleBase {
     }).join('');
 
     this._wrapper.innerHTML = `
-      <div class="header">
-        <input class="grid-title" value="${this._esc(name)}" placeholder="Grid name…" />
-        <button class="header-btn" data-action="toggle-settings" title="Settings">⚙️</button>
-      </div>
       ${this._settingsOpen ? `
         <div class="settings-panel">
           <div class="settings-row">
@@ -162,22 +159,6 @@ class AppGrid extends AppModuleBase {
 
   _bindEvents() {
     const w = this._wrapper;
-
-    // Grid title rename
-    w.querySelector('.grid-title').addEventListener('input', e => {
-      this._state.name = e.target.value;
-      if (this.api) this.api.setTitle(this._state.name || 'Grid');
-      this._save();
-      const inst = this.api?.store?.instances?.find(i => i.instanceId === this._appId);
-      if (inst) {
-        inst.name = this._state.name;
-        this.api.store.instances = [...this.api.store.instances];
-        clearTimeout(this._renameTimer);
-        this._renameTimer = setTimeout(() => {
-          if (this.api?.updateInstance) this.api.updateInstance(this._state.name, inst.icon);
-        }, 600);
-      }
-    });
 
     // Column title rename
     w.querySelectorAll('.col-title-input').forEach(inp => {

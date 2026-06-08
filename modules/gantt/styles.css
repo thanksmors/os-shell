@@ -117,6 +117,18 @@
 }
 .settings-save:hover { opacity: .88; }
 
+/* Controls bar (replaces header) */
+.gantt-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #fff;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+  flex-shrink: 0;
+}
+.wrapper.dark .gantt-controls { background: #2c2c2e; border-color: rgba(255,255,255,.08); }
+
 /* Body */
 .gantt-body {
   flex: 1;

@@ -95,9 +95,6 @@ class AppTier extends HTMLElement {
     const instanceIcon = this.api?.store?.instances?.find(i => i.instanceId === this._appId)?.icon || '🏆';
 
     this._wrapper.innerHTML = `
-      <div class="header">
-        <button class="header-btn primary" data-action="add-card">＋ Add Card</button>
-      </div>
       ${this._settingsOpen ? `
         <div class="settings-panel">
           <div class="settings-row">
@@ -117,7 +114,10 @@ class AppTier extends HTMLElement {
       <div class="tiers-container">
         ${tiersHtml}
         <div class="unranked-section">
-          <div class="unranked-label">Unranked</div>
+          <div class="unranked-header">
+            <div class="unranked-label">Unranked</div>
+            <button class="header-btn primary" data-action="add-card">＋ Add Card</button>
+          </div>
           <div class="unranked-pool" data-tier-id="">
             ${unrankedCards.map(c => this._renderCard(c)).join('')}
           </div>

@@ -7,6 +7,7 @@
   "defaultSize": { "w": 700, "h": 520 },
   "singleton": false,
   "generator": true,
+  "hasSettings": true,
   "sync": true,
   "resizable": true,
   "minSize": { "w": 420, "h": 340 },

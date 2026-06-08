@@ -245,13 +245,18 @@
 .unranked-section {
   padding: 14px 12px 16px;
 }
+.unranked-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
 .unranked-label {
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .07em;
   opacity: .35;
-  margin-bottom: 8px;
   padding-left: 2px;
 }
 .unranked-pool {

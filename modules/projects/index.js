@@ -10,9 +10,10 @@ class AppProjects extends AppModuleBase {
   constructor() {
     super();
     this._settingsOpen = false;
-    this._expanded = {};      // projectItemId → bool
-    this._assigneeOpen = null; // projectItemId of open assignee dropdown
+    this._expanded = {};
+    this._assigneeOpen = null;
     this._unsubData = null;
+    this.addEventListener('os:toggle-settings', () => { this._settingsOpen = !this._settingsOpen; this._render(); });
   }
 
   _collection() { return 'projects'; }
@@ -140,10 +141,6 @@ class AppProjects extends AppModuleBase {
     }).join('');
 
     this._wrapper.innerHTML = `
-      <div class="header">
-        <input class="board-title" value="${this._esc(name)}" placeholder="Board name…" />
-        <button class="header-btn" data-action="toggle-settings" title="Settings">⚙️</button>
-      </div>
       ${this._settingsOpen ? `
         <div class="settings-panel">
           <div class="settings-row">
@@ -186,13 +183,6 @@ class AppProjects extends AppModuleBase {
   _bindEvents(projects, team) {
     const root = this.shadowRoot;
     const projCol = this._collectionFor('projectsCollection');
-
-    // Board title rename
-    root.querySelector('.board-title')?.addEventListener('input', async e => {
-      this._state.name = e.target.value || 'Projects';
-      if (this.api) this.api.setTitle(this._state.name);
-      await this._save();
-    });
 
     // Add project
     const addInput = root.querySelector('#add-input');

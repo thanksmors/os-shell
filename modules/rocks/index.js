@@ -61,10 +61,6 @@ class AppRocks extends AppModuleBase {
     const { name, functions, rocks } = this._state;
 
     this._wrapper.innerHTML = `
-      <div class="header">
-        <input class="board-title" value="${this._esc(name)}" placeholder="Board name…" />
-        <button class="header-btn" data-action="add-fn">＋ Function</button>
-      </div>
       <div class="board">
         ${functions.map(fn => {
           const fnRocks = rocks.filter(r => r.functionId === fn.id);
@@ -139,12 +135,6 @@ class AppRocks extends AppModuleBase {
 
   _bindEvents() {
     const w = this._wrapper;
-
-    w.querySelector('.board-title')?.addEventListener('input', e => {
-      this._state.name = e.target.value;
-      if (this.api) this.api.setTitle(this._state.name || 'Rocks');
-      this._save();
-    });
 
     w.querySelectorAll('.fn-title').forEach(inp => {
       inp.addEventListener('input', e => {

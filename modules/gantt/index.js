@@ -122,13 +122,6 @@ class AppGantt extends AppModuleBase {
       </div>`).join('');
 
     this._wrapper.innerHTML = `
-      <div class="header">
-        <div class="view-toggle">
-          ${[12,24,36].map(v => `<button class="view-btn ${viewMonths === v ? 'active' : ''}" data-action="set-view" data-v="${v}">${v}m</button>`).join('')}
-        </div>
-        <button class="nav-btn" data-action="prev-q" title="Previous quarter">‹</button>
-        <button class="nav-btn" data-action="next-q" title="Next quarter">›</button>
-      </div>
       ${this._settingsOpen ? `
         <div class="settings-panel">
           <div class="settings-row">
@@ -148,6 +141,13 @@ class AppGantt extends AppModuleBase {
           </div>
         </div>
       ` : ''}
+      <div class="gantt-controls">
+        <div class="view-toggle">
+          ${[12,24,36].map(v => `<button class="view-btn ${viewMonths === v ? 'active' : ''}" data-action="set-view" data-v="${v}">${v}m</button>`).join('')}
+        </div>
+        <button class="nav-btn" data-action="prev-q" title="Previous quarter">‹</button>
+        <button class="nav-btn" data-action="next-q" title="Next quarter">›</button>
+      </div>
       <div class="gantt-body">
         <div class="gantt-left">
           <div class="gantt-left-header">Projects</div>

@@ -157,6 +157,16 @@
         <template x-for="inst in $store.os.instances.filter(i => !i.parentId)" :key="inst.instanceId">
           <button
             class="os-desktop-icon"
+            :class="{
+              'icon-dragging':  $store.os.dragInstanceId === inst.instanceId,
+              'icon-drag-over': $store.os.dragOverFolderId === inst.instanceId
+            }"
+            draggable="true"
+            @dragstart.stop="$store.os.dragInstanceId = inst.instanceId; $event.dataTransfer.effectAllowed = 'move'"
+            @dragend="$store.os.dragInstanceId = null; $store.os.dragOverFolderId = null"
+            @dragover.prevent="inst.appId === 'folder' && $store.os.dragInstanceId && $store.os.dragInstanceId !== inst.instanceId ? ($store.os.dragOverFolderId = inst.instanceId) : ($event.dataTransfer.dropEffect = 'none')"
+            @dragleave="if ($store.os.dragOverFolderId === inst.instanceId) $store.os.dragOverFolderId = null"
+            @drop.prevent="inst.appId === 'folder' && $store.os.dragInstanceId ? $store.os.dropOnFolder(inst.instanceId) : null"
             @click.stop="$store.os.launchInstance(inst.instanceId)"
             @contextmenu.prevent.stop="$store.os.buildInstanceContextMenu($event.clientX, $event.clientY, inst)"
           >

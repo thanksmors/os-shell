@@ -11,6 +11,8 @@ export function registerOsStore() {
     toasts: [],
     contextMenu: { visible: false, x: 0, y: 0, items: [] },
     instances: [],
+    dragInstanceId: null,
+    dragOverFolderId: null,
 
     init() {
       // apply saved theme
@@ -292,15 +294,16 @@ export function registerOsStore() {
     },
 
     buildInstanceContextMenu(x, y, inst) {
-      const folders = this.instances.filter(f => f.appId === 'folder' && f.instanceId !== inst.instanceId);
-      const items = [];
-      folders.forEach(f => items.push({
-        label: `📁 → ${f.name}`,
-        action: () => this.moveToFolder(inst.instanceId, f.instanceId),
-      }));
-      if (folders.length) items.push({ separator: true });
-      items.push({ label: '🗑 Delete', action: () => this.removeInstance(inst.instanceId) });
-      this.showContextMenu(x, y, items);
+      this.showContextMenu(x, y, [
+        { label: '🗑 Delete', action: () => this.removeInstance(inst.instanceId) },
+      ]);
+    },
+
+    async dropOnFolder(folderId) {
+      const id = this.dragInstanceId;
+      this.dragInstanceId = null;
+      this.dragOverFolderId = null;
+      if (id) await this.moveToFolder(id, folderId);
     },
 
     async moveToFolder(instanceId, folderId) {

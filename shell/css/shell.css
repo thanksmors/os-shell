@@ -105,14 +105,26 @@
 .dark .os-titlebar-title { color: #e5e7eb; }
 
 .os-titlebar-title-edit {
+  flex: 1;
   min-width: 0;
   background: none;
   border: none;
   outline: none;
   color: inherit;
   font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
   padding: 0;
+  cursor: default;
+  caret-color: transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+.os-titlebar-title-edit:focus {
   cursor: text;
+  caret-color: auto;
   user-select: text;
 }
 .os-titlebar-instance-actions {
@@ -174,21 +186,20 @@
 /* Window content */
 .os-window-content {
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
   position: relative;
   display: flex;
   flex-direction: column;
 }
-/* Every module host fills the window so its internal scroll regions work.
-   (Some modules set this via :host, but not all — this guarantees it for all,
-   so windows scroll consistently regardless of the module.) */
+/* Module host fills the window; overflow: visible lets shadow content that grows
+   beyond window height escape into .os-window-content's scroll container. */
 .os-window-content > * {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   width: 100%;
-  overflow: auto;
+  overflow: visible;
 }
 
 /* Resize handle */

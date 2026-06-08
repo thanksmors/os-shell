@@ -4,6 +4,12 @@ This is a browser-based desktop OS shell: draggable/resizable windows, a taskbar
 a launcher, persistent desktop icons, and pluggable app modules. Everything runs
 client-side; the optional Codehooks backend adds cross-device sync.
 
+## Git Workflow
+
+**Always commit directly to `main`.** Do not create feature branches. This is a
+solo project deployed via Netlify from `main` — feature branches mean changes are
+invisible until merged, which is just wasted friction.
+
 ---
 
 ## Stack & Key Choices

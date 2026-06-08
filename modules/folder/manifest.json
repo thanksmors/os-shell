@@ -1,0 +1,15 @@
+{
+  "appId": "folder",
+  "tag": "app-folder",
+  "entry": "/modules/folder/index.js",
+  "title": "Folder",
+  "icon": "📁",
+  "defaultSize": { "w": 420, "h": 340 },
+  "singleton": false,
+  "generator": true,
+  "resizable": true,
+  "minSize": { "w": 280, "h": 200 },
+  "contextMenu": [
+    { "label": "📁 New Folder", "config": { "name": "New Folder", "icon": "📁" } }
+  ]
+}

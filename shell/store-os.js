@@ -194,9 +194,11 @@ export function registerOsStore() {
         appId,
         name: config.name || app?.title || appId,
         icon: config.icon || app?.icon || '📄',
+        parentId: null,
       };
       this.instances = [...this.instances, instance];
       await saveInstances(this.instances);
+      window.dispatchEvent(new CustomEvent('os:instances-changed'));
       await this._launchInstance(instance);
     },
 
@@ -276,13 +278,42 @@ export function registerOsStore() {
     async removeInstance(instanceId) {
       const win = this.windows.find(w => w._instanceId === instanceId);
       if (win) this.close(win.id);
+      // If deleting a folder, move its children back to the desktop
+      this.instances.forEach(i => { if (i.parentId === instanceId) i.parentId = null; });
       this.instances = this.instances.filter(i => i.instanceId !== instanceId);
       await saveInstances(this.instances);
+      window.dispatchEvent(new CustomEvent('os:instances-changed'));
       // clean up stored data
       localStorage.removeItem(`os:lists:${instanceId}`);
       localStorage.removeItem(`os:boards:${instanceId}`);
       localStorage.removeItem(`os:gantt:${instanceId}`);
       localStorage.removeItem(`os:rocks:${instanceId}`);
+      localStorage.removeItem(`os:tierlists:${instanceId}`);
+    },
+
+    buildInstanceContextMenu(x, y, inst) {
+      const folders = this.instances.filter(f => f.appId === 'folder' && f.instanceId !== inst.instanceId);
+      const items = [];
+      folders.forEach(f => items.push({
+        label: `📁 → ${f.name}`,
+        action: () => this.moveToFolder(inst.instanceId, f.instanceId),
+      }));
+      if (folders.length) items.push({ separator: true });
+      items.push({ label: '🗑 Delete', action: () => this.removeInstance(inst.instanceId) });
+      this.showContextMenu(x, y, items);
+    },
+
+    async moveToFolder(instanceId, folderId) {
+      const inst = this.instances.find(i => i.instanceId === instanceId);
+      if (!inst) return;
+      inst.parentId = folderId || null;
+      this.instances = [...this.instances];
+      await saveInstances(this.instances);
+      window.dispatchEvent(new CustomEvent('os:instances-changed'));
+    },
+
+    async moveToDesktop(instanceId) {
+      await this.moveToFolder(instanceId, null);
     },
 
     buildDesktopContextMenu(x, y) {

@@ -200,9 +200,13 @@ export class AppModuleBase extends HTMLElement {
 
   // ─── Subclass hooks ───────────────────────────────────────────────────────
 
+  /** Called once after shadow DOM is ready and el.api is available. Load persisted state into this._state here. */
   async _load() {}
+  /** Called after _load() and on every state change. Write to this._wrapper.innerHTML here. */
   _render() {}
+  /** Return the string to display in the OS titlebar. Called after _render(). */
   _getTitle() { return this._state?.name || ''; }
+  /** Return the localStorage collection name used for cross-client sync polling. Defaults to appId. */
   _collection() { return this._manifestId(); }
 
   // ─── Shared utilities ─────────────────────────────────────────────────────

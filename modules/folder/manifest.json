@@ -9,6 +9,8 @@
   "generator": true,
   "resizable": true,
   "minSize": { "w": 280, "h": 200 },
+  "acceptsDroppedInstances": true,
+  "dataCollections": [],
   "contextMenu": [
     { "label": "📁 New Folder", "config": { "name": "New Folder", "icon": "📁" } }
   ]

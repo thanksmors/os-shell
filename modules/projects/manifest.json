@@ -11,6 +11,7 @@
   "sync": true,
   "resizable": true,
   "minSize": { "w": 420, "h": 340 },
+  "dataCollections": ["projects"],
   "requiredCollections": [
     { "slot": "teamCollection",     "default": "Team Members", "hint": "People you can assign to projects" },
     { "slot": "projectsCollection", "default": "Projects",     "hint": "Your list of projects" }

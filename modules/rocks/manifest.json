@@ -10,6 +10,7 @@
   "sync": true,
   "resizable": true,
   "minSize": { "w": 600, "h": 400 },
+  "dataCollections": ["rocks"],
   "contextMenu": [
     { "label": "🪨 New Rocks Board", "config": { "name": "Q1 Rocks" } }
   ]

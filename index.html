@@ -150,7 +150,7 @@
             class="os-desktop-icon"
             :class="{
               'icon-dragging':       $store.os.dragDesktopKey === item.key,
-              'icon-drag-over':      $store.os.dragInstanceId && item.type === 'instance' && item.appId === 'folder' && $store.os.dragOverFolderId === item.id,
+              'icon-drag-over':      $store.os.dragInstanceId && item.acceptsDroppedInstances && $store.os.dragOverFolderId === item.id,
               'icon-reorder-target': $store.os.dragOverDesktopKey === item.key
             }"
             draggable="true"
@@ -167,7 +167,7 @@
             "
             @dragover.prevent="
               ($store.os.dragDesktopKey && $store.os.dragDesktopKey !== item.key) || ($store.os.dragInstanceId && !$store.os.dragDesktopKey)
-                ? (item.type === 'instance' && item.appId === 'folder'
+                ? (item.acceptsDroppedInstances
                     ? ($store.os.dragOverFolderId = item.id, $store.os.dragOverDesktopKey = null)
                     : ($store.os.dragDesktopKey ? ($store.os.dragOverDesktopKey = item.key, $store.os.dragOverFolderId = null) : null))
                 : null"
@@ -176,7 +176,7 @@
               if ($store.os.dragOverDesktopKey === item.key) $store.os.dragOverDesktopKey = null
             "
             @drop.prevent="
-              $store.os.dragInstanceId && item.type === 'instance' && item.appId === 'folder'
+              $store.os.dragInstanceId && item.acceptsDroppedInstances
                 ? $store.os.dropOnFolder(item.id)
                 : ($store.os.dragDesktopKey ? $store.os.reorderDesktop($store.os.dragDesktopKey, item.key) : null)"
             @click.stop="item.type === 'app' ? $store.os.launch(item.id) : $store.os.launchInstance(item.id)"

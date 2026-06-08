@@ -11,6 +11,7 @@
   "resizable": true,
   "minSize": { "w": 260, "h": 300 },
   "sync": true,
+  "dataCollections": ["lists"],
   "contextMenu": [
     { "label": "📋 New List", "config": { "name": "New List", "icon": "📋" } }
   ]

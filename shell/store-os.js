@@ -283,23 +283,34 @@ export function registerOsStore() {
     async removeInstance(instanceId) {
       const win = this.windows.find(w => w._instanceId === instanceId);
       if (win) this.close(win.id);
+      // Capture app manifest before removing so we can clean up storage
+      const inst = this.instances.find(i => i.instanceId === instanceId);
+      const app = inst ? this.apps[inst.appId] : null;
       // If deleting a folder, move its children back to the desktop
       this.instances.forEach(i => { if (i.parentId === instanceId) i.parentId = null; });
       this.instances = this.instances.filter(i => i.instanceId !== instanceId);
       window.dispatchEvent(new CustomEvent('os:instances-changed'));
       saveInstances(this.instances); // fire-and-forget
-      // clean up stored data
-      localStorage.removeItem(`os:lists:${instanceId}`);
-      localStorage.removeItem(`os:boards:${instanceId}`);
-      localStorage.removeItem(`os:gantt:${instanceId}`);
-      localStorage.removeItem(`os:rocks:${instanceId}`);
-      localStorage.removeItem(`os:tierlists:${instanceId}`);
+      // Clean up stored data using manifest.dataCollections (no hardcoding)
+      (app?.dataCollections || []).forEach(col => {
+        localStorage.removeItem(`os:${col}:${instanceId}`);
+      });
     },
 
     buildInstanceContextMenu(x, y, item) {
       this.showContextMenu(x, y, [
         { label: '🗑 Delete', action: () => this.removeInstance(item.id) },
       ]);
+    },
+
+    beginInstanceDrag(id) {
+      this.dragInstanceId = id;
+      this.dragDesktopKey = `inst:${id}`;
+    },
+
+    endInstanceDrag() {
+      this.dragInstanceId = null;
+      this.dragDesktopKey = null;
     },
 
     dropOnFolder(folderId) {
@@ -318,7 +329,8 @@ export function registerOsStore() {
         map[`app:${a.appId}`] = { key: `app:${a.appId}`, type: 'app', id: a.appId, icon: a.icon, label: a.title };
       });
       this.instances.filter(i => !i.parentId).forEach(i => {
-        map[`inst:${i.instanceId}`] = { key: `inst:${i.instanceId}`, type: 'instance', id: i.instanceId, icon: i.icon, label: i.name, appId: i.appId };
+        const app = this.apps[i.appId];
+        map[`inst:${i.instanceId}`] = { key: `inst:${i.instanceId}`, type: 'instance', id: i.instanceId, icon: i.icon, label: i.name, appId: i.appId, acceptsDroppedInstances: app?.acceptsDroppedInstances || false };
       });
       const seen = new Set();
       const out = [];

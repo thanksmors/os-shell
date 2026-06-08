@@ -11,6 +11,7 @@
   "resizable": true,
   "minSize": { "w": 560, "h": 360 },
   "sync": true,
+  "dataCollections": ["gantt"],
   "contextMenu": [
     { "label": "📊 New Gantt", "config": { "name": "New Gantt", "icon": "📊" } }
   ]

@@ -17,7 +17,9 @@ modules/your-id/
 └── styles.css      — scoped styles (shadow DOM)
 ```
 
-### manifest.json
+---
+
+## manifest.json — full field reference
 
 ```json
 {
@@ -29,113 +31,186 @@ modules/your-id/
   "defaultSize": { "w": 560, "h": 380 },
   "singleton": false,
   "generator": false,
+  "hasSettings": false,
   "resizable": true,
   "minSize": { "w": 240, "h": 180 },
+  "sync": false,
+  "dataCollections": [],
+  "acceptsDroppedInstances": false,
+  "requiredCollections": [],
   "contextMenu": []
 }
 ```
 
-**`generator: true`** — Hides the module from the desktop and launcher entirely.
-It only appears via right-click context menu entries defined in `contextMenu`.
-Each context menu action creates a persistent instance with its own `instanceId`
-and desktop icon. Use for apps that make sense to have multiple named copies of
-(List, Kanban, Gantt).
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `appId` | string | required | Unique identifier. Used as data key, manifest lookup key, and CSS namespace. |
+| `tag` | string | required | Custom element name. Must contain a hyphen. Must match `customElements.define`. |
+| `entry` | string | required | Absolute path to the JS module. Lazy-loaded only on first launch. |
+| `title` | string | required | Window titlebar label and launcher entry name. |
+| `icon` | string | required | Emoji shown on desktop icon, taskbar, and launcher. |
+| `defaultSize` | `{w,h}` | required | Initial window size in pixels. |
+| `singleton` | boolean | `false` | If true, launching when a window is already open focuses the existing window instead of opening another. |
+| `generator` | boolean | `false` | If true, hides from desktop and launcher. Module only appears via `contextMenu` entries. Each invocation creates a persistent `instanceId`-keyed instance with its own desktop icon. |
+| `hasSettings` | boolean | `false` | If true, the OS titlebar shows a ⚙️ button. Clicking it fires `os:toggle-settings` on the module element. The module must listen for this event. |
+| `resizable` | boolean | `false` | If true, a drag handle appears on the bottom-right corner of the window. |
+| `minSize` | `{w,h}` | `{w:240,h:180}` | Minimum window dimensions enforced during resize. |
+| `sync` | boolean | `false` | If true, `AppModuleBase` subscribes to cross-device sync polling for this module's collection. Triggers a `_load()` + `_render()` when remote data changes. |
+| `dataCollections` | string[] | `[]` | Collection names owned by this module. `removeInstance()` deletes `os:{name}:{instanceId}` from localStorage for each. Always declare these — they won't be cleaned up otherwise. |
+| `acceptsDroppedInstances` | boolean | `false` | If true, desktop drag-and-drop treats this instance as a container. Dropping another icon onto it calls `store.dropOnFolder(instanceId)`. Set on the folder module. |
+| `requiredCollections` | object[] | `[]` | (Projects module) Declares named collection slots that the user must resolve on first launch. Each entry: `{ slot, default, hint }`. `AppModuleBase._setupCollections()` shows a setup dialog if the defaults don't exist yet. |
+| `contextMenu` | object[] | `[]` | Entries added to the desktop right-click menu. Generator modules must have at least one or they are unreachable. Shape: `{ label, config }`. `config` is passed as `el.api.config`. |
 
-**`singleton: true`** — Only one window can be open at a time. Focusing an
-existing window instead of opening a new one (About, Settings).
+### generator vs. singleton vs. plain
 
-**`contextMenu`** — Array of entries that appear in the desktop right-click menu.
-Each entry has a `label` and optional `config` object passed to the module as
-`el.api.config`. Generator modules must have at least one contextMenu entry or
-they are completely unreachable.
-
-### index.js
-
-A standard Web Component class extending `HTMLElement`. Pattern:
-
-```js
-import { adoptTailwind } from '/shell/shadow-tailwind.js';
-import { getData, setData } from '/shell/api.js';
-
-class AppYourId extends HTMLElement {
-  async connectedCallback() {
-    const shadow = this.attachShadow({ mode: 'open' });
-    // 1. Load styles
-    const styleEl = document.createElement('style');
-    styleEl.textContent = await fetch('/modules/your-id/styles.css').then(r => r.text());
-    // 2. Create wrapper
-    this._wrapper = document.createElement('div');
-    this._wrapper.className = 'wrapper';
-    shadow.appendChild(styleEl);
-    shadow.appendChild(this._wrapper);
-    // 3. Inject Tailwind + dark mode into shadow root
-    await adoptTailwind(shadow, this._wrapper);
-    // 4. Wait one tick — el.api is set by the shell after createElement,
-    //    but before appendChild. The tick ensures it's available.
-    await new Promise(r => setTimeout(r, 0));
-    // 5. Load state using stable instanceId
-    this._appId = this.api?.instanceId || this.api?.windowId || ('fallback-' + Date.now());
-    this._state = await getData('your-collection', this._appId);
-    // 6. Render
-    this._render();
-  }
-}
-customElements.define('app-your-id', AppYourId);
-```
-
-### styles.css
-
-Scoped to the shadow root. Start with:
-
-```css
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:host { display: flex; flex-direction: column; height: 100%; }
-
-.wrapper { display: flex; flex-direction: column; height: 100%; background: #f2f2f7; }
-.wrapper.dark { background: #1c1c1e; color: #f5f5f7; }
-```
+| Type | Desktop icon? | Launcher? | Multiple instances? | Created by |
+|---|---|---|---|---|
+| Plain (`generator: false, singleton: false`) | Yes (auto) | Yes (auto) | Yes — each launch opens a new independent window | Launcher / desktop icon click |
+| Singleton (`singleton: true`) | Yes | Yes | No — second launch focuses existing window | Same |
+| Generator (`generator: true`) | No | No | Yes — each `createInstance()` creates a new icon + data slot | Right-click context menu only |
 
 ---
 
 ## el.api contract
 
-The shell sets `el.api` before mounting:
+The shell sets `el.api` on the custom element before appending it to the DOM.
+Always wait one tick in `connectedCallback` before reading it:
 
-| Property | Type | Description |
+```js
+await new Promise(r => setTimeout(r, 0));
+```
+
+| Property / Method | Type | Description |
 |---|---|---|
-| `windowId` | string | Ephemeral window ID — changes every launch. Use only for closing. |
-| `instanceId` | string | Stable ID (generator modules only). Use as the data key. |
-| `config` | object | Config from the contextMenu entry that launched this instance. |
+| `windowId` | string | Ephemeral — changes every launch. `win-{timestamp}`. Use only for `requestClose()`. |
+| `instanceId` | string | Stable — set once at `createInstance()`. `inst-{timestamp}`. **Always use this as the data key.** Generator modules only. |
+| `config` | object | Config from the `contextMenu` entry that triggered this launch. |
 | `mode` | `'windowed'`\|`'fullscreen'` | Current window state. |
 | `isDark` | boolean | Current theme. |
-| `setTitle(t)` | fn | Update the titlebar title. |
+| `setTitle(t)` | fn | Update the titlebar title string. |
 | `notify(msg, type)` | fn | Fire a toast. `type`: `'info'`\|`'success'`\|`'error'`. |
 | `requestClose()` | fn | Close this window programmatically. |
-| `updateInstance(name, icon)` | fn | Rename the desktop icon and save. Generator modules only. |
-| `store` | object | Read-only access to `Alpine.store('os')`. |
+| `updateInstance(name, icon)` | fn | Rename the desktop icon and persist. Generator modules only. |
+| `store` | object | Read-only reference to `Alpine.store('os')`. See store public API in `shell/CONTEXT.md`. |
 
-**CRITICAL:** Always use `instanceId` as the data persistence key, never `windowId`.
-`windowId` is `win-{timestamp}` and changes every time the window is opened.
-Using it means each launch creates a fresh empty state — data appears to vanish.
+**CRITICAL:** Never use `windowId` as a persistence key. It changes every launch, so
+each open would load a fresh empty state and each save would write to a different key.
+Use `instanceId` (generators) or a hardcoded stable key (singletons/plain modules).
 
 ---
 
-## Persistence inside modules
+## AppModuleBase
 
-```js
-import { getList, saveList } from '/shell/api.js';
-// or for custom collections:
-import { getData, setData } from '/shell/api.js';
+Generator modules should extend `AppModuleBase` from `shell/module-base.js` instead
+of `HTMLElement` directly. It handles the full lifecycle:
 
-// Load
-this._state = await getList(this._appId);
-
-// Save (call after every mutation)
-await saveList(this._appId, this._state);
+```
+connectedCallback()
+  1. Shadow DOM + styles (modules/{id}/styles.css + setup-dialog.css)
+  2. adoptTailwind(shadow, wrapper)           — Tailwind + dark-mode sync
+  3. await one tick                           — el.api is now set
+  4. _resolveAppId()                          — sets this._appId
+  5. _setupCollections()                      — required collections dialog if needed
+  6. await _load()                            ← subclass implements
+  7. _applyTheme() + _render()                ← subclass implements
+  8. api.setTitle(_getTitle())                ← subclass implements
+  9. MutationObserver on <html>               — keeps .dark class in sync
+ 10. subscribe() if manifest.sync === true    — cross-device sync polling
 ```
 
-Data is written to localStorage immediately and synced to Codehooks in the
-background. The module never needs to know or care which backend is active.
+### Hooks to override
+
+```js
+async _load()    // Load persisted state into this._state. Called once on mount.
+_render()        // Write DOM from this._state into this._wrapper.innerHTML.
+_getTitle()      // Return string for the OS titlebar. Default: this._state?.name
+_collection()    // Return collection name for sync polling. Default: this._manifestId()
+```
+
+### Properties available in subclasses
+
+| Property | Description |
+|---|---|
+| `this._state` | Your data object. Set in `_load()`, read in `_render()`. |
+| `this._appId` | Stable data key — `instanceId` for generators, fallback otherwise. |
+| `this._wrapper` | Root `div.wrapper` in the shadow DOM. |
+| `this.api` | Full shell API (see el.api contract above). |
+| `this.shadowRoot` | The shadow root (standard Web Component). |
+
+### Methods available in subclasses
+
+| Method | Description |
+|---|---|
+| `this._esc(str)` | HTML-escape a string for safe use in `innerHTML`. |
+| `this._applyTheme()` | Sync `.dark` class to `this._wrapper`. Called automatically on mount and theme change. |
+| `this._collectionFor(slot)` | Resolve a `requiredCollections` slot name to the actual collection name. |
+
+### Minimal generator module using AppModuleBase
+
+```js
+import { AppModuleBase } from '/shell/module-base.js';
+import { getData, setData } from '/shell/api.js';
+
+class AppTodo extends AppModuleBase {
+  async _load() {
+    this._state = await getData('todos', this._appId) || { name: 'Todo', items: [] };
+  }
+
+  _render() {
+    this._wrapper.innerHTML = `
+      <div class="body">
+        ${this._state.items.map(i => `<div>${this._esc(i.text)}</div>`).join('')}
+      </div>
+    `;
+  }
+
+  _getTitle() { return this._state.name; }
+}
+
+customElements.define('app-todo', AppTodo);
+```
+
+---
+
+## Persistence and collections
+
+All reads/writes go through `shell/api.js`. Never touch `localStorage` directly.
+
+```js
+import { getData, setData } from '/shell/api.js';
+
+const data = await getData('todos', this._appId);
+await setData('todos', this._appId, this._state);
+```
+
+**localStorage key format:** `os:{collection}:{id}`
+
+### Active collection registry
+
+| Collection | Module | Key |
+|---|---|---|
+| `lists` | list | `instanceId` |
+| `boards` | kanban | `instanceId` |
+| `gantt` | gantt | `instanceId` |
+| `rocks` | rocks | `instanceId` |
+| `tierlists` | tier | `instanceId` |
+| `grids` | grid | `instanceId` |
+| `projects` | projects | `instanceId` |
+| `module-settings` | AppModuleBase | `instanceId` (slot resolutions for requiredCollections) |
+| `meta` | shell | `'instances'` (desktop instance registry) |
+
+> Always declare `"dataCollections": ["your-collection"]` in the manifest so
+> `removeInstance()` cleans up data when the user deletes the instance.
+> Without this, stale data accumulates in localStorage.
+
+---
+
+## Custom events
+
+| Event | Direction | When |
+|---|---|---|
+| `os:instances-changed` | `window` | After any create/remove/move/reorder of instances. Folder module listens to re-render. |
+| `os:toggle-settings` | module element | Dispatched by `store.toggleWindowSettings()` when ⚙️ is clicked in the OS titlebar. Handle with `this.addEventListener('os:toggle-settings', ...)`. |
 
 ---
 
@@ -143,48 +218,81 @@ background. The module never needs to know or care which backend is active.
 
 ### list — Task List ✅
 **Generator.** Creates named to-do lists. Supports custom fields (text/number/date)
-configurable in the settings panel. Each list is independent, keyed by `instanceId`.
-Data shape: `{ name, items: [{id, text, checked, fieldValues}], fields: [{id, name, type}] }`.
+configurable via the settings panel (⚙️ in titlebar). Each list is independent.
+Collections: `lists`. Schema: `{ name, items: [{id, text, checked, fieldValues}], fields: [{id, name, type}] }`.
 
 ### kanban — Kanban Board 🗂️
-**Generator.** Drag-and-drop kanban with customisable column names. Cards belong to
-columns; columns are ordered. Data shape:
-`{ name, columns: [{id, name}], cards: [{id, colId, text, ...}] }`.
+**Generator.** Drag-and-drop kanban with customisable column names. Columns and
+cards ordered by array position. Settings panel for column management.
+Collections: `boards`. Schema: `{ name, columns: [{id, name}], cards: [{id, colId, text}] }`.
 
 ### gantt — Gantt Chart 📊
-**Generator.** Project timeline view with quarter/month headers. 12/24/36 month
-viewport. Bars are draggable to reorder. Projects have start/end dates and a colour.
-Data shape: `{ name, viewMonths, projects: [{id, name, startDate, endDate, color}] }`.
+**Generator.** Project timeline with 12/24/36-month viewport toggle. Bars draggable
+to reorder. Settings panel for project management. Collections: `gantt`.
+Schema: `{ name, viewMonths, projects: [{id, name, startDate, endDate, color}] }`.
 
 ### rocks — Rocks Board 🪨
-**Non-generator** (appears on desktop). OKR-style: Functions contain Rocks (cards);
-Rocks contain Milestones (checklist items with target dates). Milestone dates are
-colour-coded by urgency. Non-generator means one shared board per launch.
+**Generator.** OKR-style board: Functions contain Rocks; Rocks contain Milestones
+with target dates. Collections: `rocks`.
+
+### tier — Tier List 🏆
+**Generator.** S–F ranked rows plus an unranked card pool. Cards support inline
+text editing and image uploads (base64). Collections: `tierlists`.
+Schema: `{ name, tiers: [{id, label, color}], cards: [{id, tierId, text, image}] }`.
+
+### grid — Grid ⊞
+**Generator.** Spreadsheet-style grid. Settings panel available.
+Collections: `grids`.
+
+### projects — Projects 📋
+**Generator.** Project management board. Uses `requiredCollections` to link to
+shared Data module collections for team members and project records.
+Collections: `projects`. Imports from `modules/data/api.js` (only module with
+a cross-module import — treat as a known exception, not a pattern to copy).
+
+### folder — Folder 📁
+**Generator.** Container for other instances. `acceptsDroppedInstances: true` in
+manifest causes desktop drag-and-drop to route drops to `store.dropOnFolder()`.
+Listens to `os:instances-changed` to re-render when children change.
+Collections: none (`dataCollections: []`).
+
+### emoji — Emoji Picker 😀
+**Singleton.** Browses emojis by category (8 groups) or search. Click copies to
+clipboard and fires a success toast. Fetches from CDN with module-level cache.
+No persistent data.
 
 ### notepad — Notepad 📝
-Simple plain-text editor. Non-generator. Persists content via `getData`/`setData`.
+Plain text editor. Non-generator singleton. Persists content to `getData`/`setData`.
 
 ### files — Files 📁
-File browser / explorer. Non-generator.
+File browser. Non-generator.
 
 ### settings — Settings ⚙️
-System settings. Singleton — only one instance allowed. Controls theme, etc.
+System settings (theme, etc.). Singleton.
 
 ### about — About 🏔️
-App info modal. Singleton, non-resizable.
+App info. Singleton, non-generator.
+
+### data — Data 🗄️
+Shared data layer for the Projects module. Not a visible app — provides a collection
+management API used by `modules/projects/`. The only inter-module dependency in
+the codebase; treat as a known exception.
 
 ### boilerplate — Template 🧩
-**Not in registry.json.** Starting point for new modules. Copy the folder,
-rename everything, add your `appId` to `registry.json`. See `boilerplate/README.md`.
+**Not in registry.json.** Starting point for new modules. Copy the folder, rename
+everything, add your `appId` to `registry.json`. See `boilerplate/README.md`.
 
 ---
 
 ## Adding a module: checklist
 
 - [ ] Copy `modules/boilerplate/` → `modules/your-id/`
-- [ ] Update `manifest.json` — appId, tag, title, icon, sizes, generator flag
-- [ ] Update `index.js` — class name, `customElements.define` tag
-- [ ] Update styles.css fetch path in `connectedCallback`
+- [ ] Edit `manifest.json` — `appId`, `tag`, `title`, `icon`, `defaultSize`, `minSize`
+- [ ] Set `"generator": true` if this is a multi-instance app (and add `contextMenu`)
+- [ ] Set `"singleton": true` if only one window should open at a time
+- [ ] Set `"hasSettings": true` + listen for `os:toggle-settings` if there's a settings panel
+- [ ] Set `"dataCollections": ["your-collection"]` for every localStorage collection you write
+- [ ] Set `"sync": true` if changes should sync across devices automatically
+- [ ] Edit `index.js` — rename class, update `customElements.define` tag
+- [ ] Edit `styles.css`
 - [ ] Add `"your-id"` to `/registry.json`
-- [ ] If generator: add at least one `contextMenu` entry in the manifest
-- [ ] Use `instanceId` (not `windowId`) as the data key

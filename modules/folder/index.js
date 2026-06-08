@@ -115,17 +115,17 @@ class AppFolder extends HTMLElement {
         ]);
       });
 
-      // Internal reorder drag (also sets store.dragInstanceId so desktop drop zones work)
+      // Internal reorder drag (also notifies store so desktop drop zones work)
       btn.addEventListener('dragstart', e => {
         this._dragChildId = childId;
         btn.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
         e.stopPropagation();
-        if (this.api?.store) this.api.store.dragInstanceId = childId;
+        if (this.api?.store) this.api.store.beginInstanceDrag(childId);
       });
       btn.addEventListener('dragend', () => {
         this._dragChildId = null;
-        if (this.api?.store) this.api.store.dragInstanceId = null;
+        if (this.api?.store) this.api.store.endInstanceDrag();
         this._render();
       });
       btn.addEventListener('dragover', e => {

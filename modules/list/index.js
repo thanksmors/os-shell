@@ -6,6 +6,7 @@ class AppList extends AppModuleBase {
   constructor() {
     super();
     this._settingsOpen = false;
+    this.addEventListener('os:toggle-settings', () => { this._settingsOpen = !this._settingsOpen; this._render(); });
   }
 
   _collection() { return 'lists'; }
@@ -59,8 +60,6 @@ class AppList extends AppModuleBase {
 
     this._wrapper.innerHTML = `
       <div class="header">
-        <input class="list-title" value="${this._esc(name)}" placeholder="List name…" title="Click to rename" />
-        <button class="header-btn" data-action="toggle-settings" title="Settings">⚙️</button>
         <button class="header-btn" data-action="clear-done" title="Clear completed">🗑</button>
       </div>
       ${this._settingsOpen ? `
@@ -119,23 +118,6 @@ class AppList extends AppModuleBase {
 
   _bindEvents() {
     const shadow = this.shadowRoot;
-
-    const titleInput = shadow.querySelector('.list-title');
-    titleInput.addEventListener('input', () => {
-      const name = titleInput.value || 'List';
-      this._state.name = titleInput.value;
-      if (this.api) this.api.setTitle(name);
-      this._save();
-      const inst = this.api?.store?.instances?.find(i => i.instanceId === this._appId);
-      if (inst) {
-        inst.name = name;
-        this.api.store.instances = [...this.api.store.instances];
-        clearTimeout(this._renameTimer);
-        this._renameTimer = setTimeout(() => {
-          if (this.api?.updateInstance) this.api.updateInstance(name, inst.icon);
-        }, 600);
-      }
-    });
 
     const addInput = shadow.querySelector('.add-input');
     const addBtn = shadow.querySelector('.add-btn');

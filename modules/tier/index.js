@@ -9,7 +9,7 @@ class AppTier extends HTMLElement {
     this._dragCardId = null;
     this._editingCardId = null;
     this._settingsOpen = false;
-    this._renameTimer = null;
+    this.addEventListener('os:toggle-settings', () => { this._settingsOpen = !this._settingsOpen; if (this._wrapper) this._render(); });
   }
 
   async connectedCallback() {
@@ -47,7 +47,6 @@ class AppTier extends HTMLElement {
   disconnectedCallback() {
     this._themeObserver?.disconnect();
     this._unsub?.();
-    clearTimeout(this._renameTimer);
   }
 
   _applyTheme() {
@@ -97,9 +96,7 @@ class AppTier extends HTMLElement {
 
     this._wrapper.innerHTML = `
       <div class="header">
-        <input class="tier-title" value="${this._esc(name)}" placeholder="Tier List name…" />
         <button class="header-btn primary" data-action="add-card">＋ Add Card</button>
-        <button class="header-btn" data-action="toggle-settings" title="Settings">⚙️</button>
       </div>
       ${this._settingsOpen ? `
         <div class="settings-panel">
@@ -147,20 +144,6 @@ class AppTier extends HTMLElement {
 
   _bindEvents() {
     const w = this._wrapper;
-
-    // Title rename with debounce
-    w.querySelector('.tier-title').addEventListener('input', e => {
-      this._state.name = e.target.value;
-      if (this.api) this.api.setTitle(this._state.name || 'Tier List');
-      clearTimeout(this._renameTimer);
-      this._renameTimer = setTimeout(async () => {
-        await this._save();
-        if (this.api?.updateInstance) {
-          const icon = this.api?.store?.instances?.find(i => i.instanceId === this._appId)?.icon || '🏆';
-          this.api.updateInstance(this._state.name, icon);
-        }
-      }, 600);
-    });
 
     // Inline card text editing
     w.querySelectorAll('.card-text').forEach(span => {

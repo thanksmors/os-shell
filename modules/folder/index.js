@@ -3,7 +3,6 @@ import { adoptTailwind } from '/shell/shadow-tailwind.js';
 class AppFolder extends HTMLElement {
   constructor() {
     super();
-    this._renameTimer = null;
     this._dragChildId = null;
     this._onInstancesChanged = () => this._render();
   }
@@ -36,7 +35,6 @@ class AppFolder extends HTMLElement {
   disconnectedCallback() {
     this._themeObserver?.disconnect();
     window.removeEventListener('os:instances-changed', this._onInstancesChanged);
-    clearTimeout(this._renameTimer);
   }
 
   _applyTheme() {
@@ -48,14 +46,9 @@ class AppFolder extends HTMLElement {
   }
 
   _render() {
-    const inst = this.api?.store?.instances?.find(i => i.instanceId === this._instanceId);
-    const name = inst?.name || 'Folder';
     const children = this._children();
 
     this._wrapper.innerHTML = `
-      <div class="header">
-        <input class="folder-title" value="${this._esc(name)}" placeholder="Folder name…" />
-      </div>
       <div class="icon-grid">
         ${children.length === 0 ? `
           <div class="empty-state">
@@ -75,18 +68,6 @@ class AppFolder extends HTMLElement {
 
   _bindEvents() {
     const w = this._wrapper;
-
-    w.querySelector('.folder-title').addEventListener('input', e => {
-      const name = e.target.value;
-      if (this.api) this.api.setTitle(name || 'Folder');
-      clearTimeout(this._renameTimer);
-      this._renameTimer = setTimeout(async () => {
-        if (this.api?.updateInstance) {
-          const inst = this.api?.store?.instances?.find(i => i.instanceId === this._instanceId);
-          await this.api.updateInstance(name || 'Folder', inst?.icon || '📁');
-        }
-      }, 600);
-    });
 
     // External drop: desktop icon dragged into this folder window
     const grid = w.querySelector('.icon-grid');
@@ -110,8 +91,9 @@ class AppFolder extends HTMLElement {
       if (!store?.dragInstanceId) return;
       store.moveToFolder(store.dragInstanceId, this._instanceId);
       store.dragInstanceId = null;
+      store.dragDesktopKey = null;
       store.dragOverFolderId = null;
-      store.dragOverReorderId = null;
+      store.dragOverDesktopKey = null;
     });
 
     // Child icon interactions: click, context menu, and internal reorder drag

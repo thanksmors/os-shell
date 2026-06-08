@@ -8,6 +8,7 @@ class AppKanban extends AppModuleBase {
     this._addingCardCol = null;
     this._dragCard = null;
     this._settingsOpen = false;
+    this.addEventListener('os:toggle-settings', () => { this._settingsOpen = !this._settingsOpen; this._render(); });
   }
 
   _collection() { return 'boards'; }
@@ -28,8 +29,6 @@ class AppKanban extends AppModuleBase {
 
     this._wrapper.innerHTML = `
       <div class="header">
-        <input class="board-title" value="${this._esc(name)}" placeholder="Board name…" />
-        <button class="header-btn" data-action="toggle-settings" title="Settings">⚙️</button>
         <button class="header-btn primary" data-action="add-col">＋ Add column</button>
       </div>
       ${this._settingsOpen ? `
@@ -99,12 +98,6 @@ class AppKanban extends AppModuleBase {
 
   _bindEvents() {
     const w = this._wrapper;
-
-    w.querySelector('.board-title').addEventListener('input', e => {
-      this._state.name = e.target.value;
-      if (this.api) this.api.setTitle(this._state.name || 'Kanban');
-      this._save();
-    });
 
     w.querySelectorAll('.col-title').forEach(input => {
       input.addEventListener('input', e => {

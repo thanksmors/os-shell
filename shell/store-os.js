@@ -13,7 +13,9 @@ export function registerOsStore() {
     instances: [],
     dragInstanceId: null,
     dragOverFolderId: null,
-    dragOverReorderId: null,
+    dragDesktopKey: null,
+    dragOverDesktopKey: null,
+    desktopOrder: JSON.parse(localStorage.getItem('os:desktopOrder') || '[]'),
 
     init() {
       // apply saved theme
@@ -178,8 +180,6 @@ export function registerOsStore() {
       }
       const loaded = await getInstances();
       // Merge: preserve any instances created while the async fetch was in flight.
-      // Without this, a slow backend cold-start overwrites instances the user
-      // just created, making desktop icons vanish mid-session.
       if (this.instances.length === 0) {
         this.instances = loaded;
       } else {
@@ -200,8 +200,8 @@ export function registerOsStore() {
         parentId: null,
       };
       this.instances = [...this.instances, instance];
-      await saveInstances(this.instances);
       window.dispatchEvent(new CustomEvent('os:instances-changed'));
+      saveInstances(this.instances); // fire-and-forget
       await this._launchInstance(instance);
     },
 
@@ -220,6 +220,7 @@ export function registerOsStore() {
         _instanceId: instance.instanceId,
         title: instance.name,
         icon: instance.icon,
+        hasSettings: app.hasSettings || false,
         x: isMobile ? 0 : 80 + Math.random() * 120,
         y: isMobile ? 0 : 60 + Math.random() * 80,
         w: isMobile ? window.innerWidth : (app.defaultSize?.w || 560),
@@ -265,11 +266,12 @@ export function registerOsStore() {
             win.title = name;
             win.icon = icon;
             self.instances = [...self.instances];
-            await saveInstances(self.instances);
+            saveInstances(self.instances); // fire-and-forget
           }
         },
         store: Alpine.store('os'),
       };
+      win.moduleEl = el;
       hostEl.appendChild(el);
     },
 
@@ -284,8 +286,8 @@ export function registerOsStore() {
       // If deleting a folder, move its children back to the desktop
       this.instances.forEach(i => { if (i.parentId === instanceId) i.parentId = null; });
       this.instances = this.instances.filter(i => i.instanceId !== instanceId);
-      await saveInstances(this.instances);
       window.dispatchEvent(new CustomEvent('os:instances-changed'));
+      saveInstances(this.instances); // fire-and-forget
       // clean up stored data
       localStorage.removeItem(`os:lists:${instanceId}`);
       localStorage.removeItem(`os:boards:${instanceId}`);
@@ -294,29 +296,68 @@ export function registerOsStore() {
       localStorage.removeItem(`os:tierlists:${instanceId}`);
     },
 
-    buildInstanceContextMenu(x, y, inst) {
+    buildInstanceContextMenu(x, y, item) {
       this.showContextMenu(x, y, [
-        { label: '🗑 Delete', action: () => this.removeInstance(inst.instanceId) },
+        { label: '🗑 Delete', action: () => this.removeInstance(item.id) },
       ]);
     },
 
-    async dropOnFolder(folderId) {
+    dropOnFolder(folderId) {
       const id = this.dragInstanceId;
       this.dragInstanceId = null;
+      this.dragDesktopKey = null;
       this.dragOverFolderId = null;
-      this.dragOverReorderId = null;
-      if (id) await this.moveToFolder(id, folderId);
+      this.dragOverDesktopKey = null;
+      if (id) this.moveToFolder(id, folderId);
     },
 
-    async dropReorder(targetId) {
-      const id = this.dragInstanceId;
-      this.dragInstanceId = null;
-      this.dragOverFolderId = null;
-      this.dragOverReorderId = null;
-      if (id && id !== targetId) await this.reorderInstance(id, targetId);
+    // Merged ordered list of all desktop items (non-generator apps + root instances)
+    desktopItems() {
+      const map = {};
+      Object.values(this.apps).filter(a => !a.generator).forEach(a => {
+        map[`app:${a.appId}`] = { key: `app:${a.appId}`, type: 'app', id: a.appId, icon: a.icon, label: a.title };
+      });
+      this.instances.filter(i => !i.parentId).forEach(i => {
+        map[`inst:${i.instanceId}`] = { key: `inst:${i.instanceId}`, type: 'instance', id: i.instanceId, icon: i.icon, label: i.name, appId: i.appId };
+      });
+      const seen = new Set();
+      const out = [];
+      for (const k of this.desktopOrder) {
+        if (map[k]) { out.push(map[k]); seen.add(k); }
+      }
+      for (const k of Object.keys(map)) {
+        if (!seen.has(k)) out.push(map[k]);
+      }
+      return out;
     },
 
-    async reorderInstance(dragId, targetId) {
+    reorderDesktop(dragKey, targetKey) {
+      const current = this.desktopItems().map(i => i.key);
+      const from = current.indexOf(dragKey);
+      const to = current.indexOf(targetKey);
+      if (from === -1 || to === -1 || from === to) return;
+      const [moved] = current.splice(from, 1);
+      current.splice(to, 0, moved);
+      this.desktopOrder = current;
+      localStorage.setItem('os:desktopOrder', JSON.stringify(current));
+    },
+
+    renameInstance(instanceId, name) {
+      const inst = this.instances.find(i => i.instanceId === instanceId);
+      if (!inst) return;
+      inst.name = name || inst.name;
+      const win = this.windows.find(w => w._instanceId === instanceId);
+      if (win) win.title = inst.name;
+      this.instances = [...this.instances];
+      saveInstances(this.instances); // fire-and-forget
+    },
+
+    toggleWindowSettings(id) {
+      const win = this.windows.find(w => w.id === id);
+      win?.moduleEl?.dispatchEvent(new CustomEvent('os:toggle-settings'));
+    },
+
+    reorderInstance(dragId, targetId) {
       const arr = [...this.instances];
       const from = arr.findIndex(i => i.instanceId === dragId);
       const to   = arr.findIndex(i => i.instanceId === targetId);
@@ -324,21 +365,21 @@ export function registerOsStore() {
       const [item] = arr.splice(from, 1);
       arr.splice(to, 0, item);
       this.instances = arr;
-      await saveInstances(this.instances);
       window.dispatchEvent(new CustomEvent('os:instances-changed'));
+      saveInstances(this.instances); // fire-and-forget
     },
 
-    async moveToFolder(instanceId, folderId) {
+    moveToFolder(instanceId, folderId) {
       const inst = this.instances.find(i => i.instanceId === instanceId);
       if (!inst) return;
       inst.parentId = folderId || null;
       this.instances = [...this.instances];
-      await saveInstances(this.instances);
       window.dispatchEvent(new CustomEvent('os:instances-changed'));
+      saveInstances(this.instances); // fire-and-forget
     },
 
-    async moveToDesktop(instanceId) {
-      await this.moveToFolder(instanceId, null);
+    moveToDesktop(instanceId) {
+      this.moveToFolder(instanceId, null);
     },
 
     buildDesktopContextMenu(x, y) {

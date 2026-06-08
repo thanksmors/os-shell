@@ -14,6 +14,7 @@ class AppGantt extends AppModuleBase {
     this._settingsOpen = false;
     this._editProject = null;
     this._viewStart = null;
+    this.addEventListener('os:toggle-settings', () => { this._settingsOpen = !this._settingsOpen; this._render(); });
   }
 
   _collection() { return 'gantt'; }
@@ -122,14 +123,11 @@ class AppGantt extends AppModuleBase {
 
     this._wrapper.innerHTML = `
       <div class="header">
-        <input class="board-title" value="${this._esc(name)}" placeholder="Board name…" />
-        <div class="header-spacer"></div>
         <div class="view-toggle">
           ${[12,24,36].map(v => `<button class="view-btn ${viewMonths === v ? 'active' : ''}" data-action="set-view" data-v="${v}">${v}m</button>`).join('')}
         </div>
         <button class="nav-btn" data-action="prev-q" title="Previous quarter">‹</button>
         <button class="nav-btn" data-action="next-q" title="Next quarter">›</button>
-        <button class="icon-btn" data-action="toggle-settings" title="Settings">⚙️</button>
       </div>
       ${this._settingsOpen ? `
         <div class="settings-panel">
@@ -217,12 +215,6 @@ class AppGantt extends AppModuleBase {
 
   _bindEvents() {
     const w = this._wrapper;
-
-    w.querySelector('.board-title')?.addEventListener('input', e => {
-      this._state.name = e.target.value;
-      if (this.api) this.api.setTitle(this._state.name || 'Gantt');
-      this._save();
-    });
 
     w.querySelector('[data-stop-close]')?.addEventListener('click', e => e.stopPropagation());
 

@@ -140,48 +140,46 @@
 
     <!-- Desktop Icons -->
     <div style="position:absolute;top:16px;left:16px;bottom:64px;display:flex;flex-direction:column;flex-wrap:wrap;gap:8px;z-index:1;align-content:flex-start;">
-      <!-- Regular (non-generator) apps -->
       <template x-if="$store.os">
-        <template x-for="app in Object.values($store.os.apps).filter(a => !a.generator)" :key="app.appId">
-          <button
-            class="os-desktop-icon"
-            @click.stop="$store.os.launch(app.appId)"
-          >
-            <span class="os-desktop-icon-emoji" x-text="app.icon"></span>
-            <span class="os-desktop-icon-label" x-text="app.title"></span>
-          </button>
-        </template>
-      </template>
-      <!-- Generator instances (root-level only, not inside folders) -->
-      <template x-if="$store.os">
-        <template x-for="inst in $store.os.instances.filter(i => !i.parentId)" :key="inst.instanceId">
+        <template x-for="item in $store.os.desktopItems()" :key="item.key">
           <button
             class="os-desktop-icon"
             :class="{
-              'icon-dragging':       $store.os.dragInstanceId === inst.instanceId,
-              'icon-drag-over':      $store.os.dragOverFolderId === inst.instanceId,
-              'icon-reorder-target': $store.os.dragOverReorderId === inst.instanceId
+              'icon-dragging':       $store.os.dragDesktopKey === item.key,
+              'icon-drag-over':      $store.os.dragInstanceId && item.type === 'instance' && item.appId === 'folder' && $store.os.dragOverFolderId === item.id,
+              'icon-reorder-target': $store.os.dragOverDesktopKey === item.key
             }"
             draggable="true"
-            @dragstart.stop="$store.os.dragInstanceId = inst.instanceId; $event.dataTransfer.effectAllowed = 'move'"
-            @dragend="$store.os.dragInstanceId = null; $store.os.dragOverFolderId = null; $store.os.dragOverReorderId = null"
-            @dragover.prevent="$store.os.dragInstanceId && $store.os.dragInstanceId !== inst.instanceId
-              ? (inst.appId === 'folder'
-                  ? ($store.os.dragOverFolderId = inst.instanceId, $store.os.dragOverReorderId = null)
-                  : ($store.os.dragOverReorderId = inst.instanceId, $store.os.dragOverFolderId = null))
+            @dragstart.stop="
+              $store.os.dragDesktopKey = item.key;
+              $store.os.dragInstanceId = item.type === 'instance' ? item.id : null;
+              $event.dataTransfer.effectAllowed = 'move'
+            "
+            @dragend="
+              $store.os.dragDesktopKey = null;
+              $store.os.dragInstanceId = null;
+              $store.os.dragOverFolderId = null;
+              $store.os.dragOverDesktopKey = null
+            "
+            @dragover.prevent="$store.os.dragDesktopKey && $store.os.dragDesktopKey !== item.key
+              ? ($store.os.dragInstanceId && item.type === 'instance' && item.appId === 'folder'
+                  ? ($store.os.dragOverFolderId = item.id, $store.os.dragOverDesktopKey = null)
+                  : ($store.os.dragOverDesktopKey = item.key, $store.os.dragOverFolderId = null))
               : null"
-            @dragleave="if ($store.os.dragOverFolderId === inst.instanceId) $store.os.dragOverFolderId = null;
-                        if ($store.os.dragOverReorderId === inst.instanceId) $store.os.dragOverReorderId = null"
-            @drop.prevent="$store.os.dragInstanceId
-              ? (inst.appId === 'folder'
-                  ? $store.os.dropOnFolder(inst.instanceId)
-                  : $store.os.dropReorder(inst.instanceId))
+            @dragleave="
+              if ($store.os.dragOverFolderId === item.id) $store.os.dragOverFolderId = null;
+              if ($store.os.dragOverDesktopKey === item.key) $store.os.dragOverDesktopKey = null
+            "
+            @drop.prevent="$store.os.dragDesktopKey
+              ? ($store.os.dragInstanceId && item.type === 'instance' && item.appId === 'folder'
+                  ? $store.os.dropOnFolder(item.id)
+                  : $store.os.reorderDesktop($store.os.dragDesktopKey, item.key))
               : null"
-            @click.stop="$store.os.launchInstance(inst.instanceId)"
-            @contextmenu.prevent.stop="$store.os.buildInstanceContextMenu($event.clientX, $event.clientY, inst)"
+            @click.stop="item.type === 'app' ? $store.os.launch(item.id) : $store.os.launchInstance(item.id)"
+            @contextmenu.prevent.stop="item.type === 'instance' ? $store.os.buildInstanceContextMenu($event.clientX, $event.clientY, item) : null"
           >
-            <span class="os-desktop-icon-emoji" x-text="inst.icon"></span>
-            <span class="os-desktop-icon-label" x-text="inst.name"></span>
+            <span class="os-desktop-icon-emoji" x-text="item.icon"></span>
+            <span class="os-desktop-icon-label" x-text="item.label"></span>
           </button>
         </template>
       </template>
@@ -212,7 +210,25 @@
         >
           <!-- Icon + Title -->
           <span style="margin-right:6px;font-size:0.9rem;line-height:1;" x-text="win.icon"></span>
-          <span class="os-titlebar-title" x-text="win.title"></span>
+          <template x-if="win._instanceId">
+            <div style="display:contents">
+              <input
+                class="os-titlebar-title os-titlebar-title-edit"
+                :value="win.title"
+                @mousedown.stop
+                @input="win.title = $event.target.value"
+                @change="$store.os.renameInstance(win._instanceId, $event.target.value)"
+                spellcheck="false"
+              />
+              <div class="os-titlebar-instance-actions">
+                <button x-show="win.hasSettings" class="os-titlebar-action-btn" @click.stop="$store.os.toggleWindowSettings(win.id)" title="Settings">⚙️</button>
+                <button class="os-titlebar-action-btn os-titlebar-action-btn--delete" @click.stop="$store.os.removeInstance(win._instanceId)" title="Delete">🗑</button>
+              </div>
+            </div>
+          </template>
+          <template x-if="!win._instanceId">
+            <span class="os-titlebar-title" x-text="win.title"></span>
+          </template>
 
           <!-- Window controls (upper right, order: minimize → maximize → close) -->
           <div class="os-win-controls">

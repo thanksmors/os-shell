@@ -1,0 +1,11 @@
+{
+  "appId": "emoji",
+  "tag": "app-emoji",
+  "entry": "/modules/emoji/index.js",
+  "title": "Emoji",
+  "icon": "😀",
+  "defaultSize": { "w": 360, "h": 460 },
+  "singleton": true,
+  "resizable": true,
+  "minSize": { "w": 300, "h": 360 }
+}

@@ -1,0 +1,101 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  height: auto;
+  background: #fff;
+  color: #111827;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+}
+.wrapper.dark { background: #1e2433; color: #e5e7eb; }
+
+/* Search */
+.search-bar {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+  flex-shrink: 0;
+}
+.wrapper.dark .search-bar { border-color: rgba(255,255,255,.07); }
+
+.search-input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  background: #f9fafb;
+  color: #111827;
+  transition: border-color 150ms;
+}
+.search-input:focus { border-color: #3b82f6; background: #fff; }
+.wrapper.dark .search-input { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); color: #e5e7eb; }
+.wrapper.dark .search-input:focus { border-color: #60a5fa; background: rgba(255,255,255,.08); }
+
+/* Category tabs */
+.cat-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.cat-tabs::-webkit-scrollbar { display: none; }
+.wrapper.dark .cat-tabs { border-color: rgba(255,255,255,.06); }
+
+.cat-btn {
+  flex-shrink: 0;
+  padding: 5px 8px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  opacity: .55;
+  transition: opacity 120ms, background 120ms;
+  line-height: 1;
+}
+.cat-btn:hover { opacity: .85; background: rgba(0,0,0,.05); }
+.wrapper.dark .cat-btn:hover { background: rgba(255,255,255,.07); }
+.cat-btn.active { opacity: 1; background: rgba(59,130,246,.12); }
+.wrapper.dark .cat-btn.active { background: rgba(96,165,250,.15); }
+
+/* Emoji grid */
+.em-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  padding: 8px;
+}
+
+.em-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  font-size: 1.35rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: background 100ms, transform 80ms;
+}
+.em-btn:hover { background: rgba(0,0,0,.06); transform: scale(1.15); }
+.wrapper.dark .em-btn:hover { background: rgba(255,255,255,.08); }
+.em-btn:active { transform: scale(0.95); }
+
+/* Loading / empty states */
+.state-msg {
+  padding: 32px 16px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 13px;
+  width: 100%;
+}

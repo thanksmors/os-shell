@@ -1,0 +1,226 @@
+# shell/ — OS Shell Kernel
+
+## Purpose
+
+The runtime kernel. Loaded once at startup; never reloaded. Provides the Alpine
+store, persistence adapter, module base class, CSS pipeline, auth, animations, and
+keyboard shortcuts. Nothing in this directory imports from `modules/`.
+
+## Ownership
+
+`shell/` is a read-only dependency for all modules. Changes here affect every
+module. If the `el.api` shape changes or `api.js` collection contracts change,
+`modules/AGENTS.md` must be updated in the same commit.
+
+## Local Contracts
+
+### `store-os.js` — `Alpine.store('os')`
+
+Single source of truth for windows, app registry, desktop instances, drag state,
+theme, toasts, and context menu.
+
+**Init sequence:**
+1. `init()` — applies saved theme, starts mobile-breakpoint watcher
+2. `_loadManifests()` — fetches `/registry.json`, then each `/modules/{id}/manifest.json`
+3. `loadWorkspaceData()` — called by auth-store after login; loads persisted instances
+
+**Window mount sequence:**
+```
+launch() / createInstance()
+  → push win object to windows[]
+  → Alpine.nextTick()
+  → _mount() / _mountInstance()
+    → await import(app.entry)      ← lazy, first launch only
+    → el.api = { ... }             ← attach shell API
+    → shadow.host.appendChild(el)
+```
+
+**Instance lifecycle:**
+- `createInstance(appId, config)` — generates `instanceId = inst-{timestamp}`, adds desktop icon, opens window
+- `removeInstance(instanceId)` — closes window, removes icon, deletes `os:{col}:{instanceId}` from localStorage for each name in `manifest.dataCollections`
+
+**Public store methods modules may call via `el.api.store`:**
+
+| Method | Description |
+|---|---|
+| `launch(appId, config)` | Open a non-generator app window |
+| `launchInstance(instanceId)` | Open an existing instance window |
+| `createInstance(appId, config)` | Create a new generator instance |
+| `removeInstance(instanceId)` | Delete an instance permanently |
+| `notify(msg, type)` | Toast: `'info'` / `'success'` / `'error'` |
+| `showContextMenu(x, y, items)` | Open context menu at a position |
+| `moveToFolder(id, folderId)` | Move an instance into a folder |
+| `moveToDesktop(id)` | Move an instance out of a folder |
+| `reorderInstance(dragId, targetId)` | Swap two instances in the array |
+| `beginInstanceDrag(id)` | Start dragging an instance (sets drag state) |
+| `endInstanceDrag()` | Clear drag state after drag ends |
+| `renameInstance(instanceId, name)` | Rename instance + update titlebar |
+| `toggleWindowSettings(windowId)` | Fire `os:toggle-settings` on the module element |
+| `iconUrl(emoji)` | Convert emoji to Twemoji SVG data URL |
+
+**Custom events dispatched on `window`:**
+
+| Event | When |
+|---|---|
+| `os:instances-changed` | After any create/remove/move/reorder of instances |
+
+**Custom events dispatched on the module element:**
+
+| Event | When |
+|---|---|
+| `os:toggle-settings` | When ⚙️ in the OS titlebar is clicked |
+
+---
+
+### `api.js` — persistence adapter
+
+All reads/writes go through `getData(collection, id)` / `setData(collection, id, data)`.
+Nothing in modules touches `localStorage` or `fetch` directly.
+
+**Local-first strategy:**
+- `setData` writes localStorage synchronously, then fires a cloud PUT (fire-and-forget)
+- `getData` returns localStorage cache immediately; falls through to cloud only if cache is empty
+
+All cloud errors are silently caught — UI never breaks on network failure.
+
+**localStorage key format:** `os:{collection}:{id}`
+
+**Special keys (no `os:` wrapper — raw localStorage):**
+- `os:desktopOrder` — persisted icon order array
+- `os:emoji-recent` — recent emoji selections
+- `os-theme` — `'light'` or `'dark'`
+
+**Auth:** API key sent as `?apikey=TOKEN` query param, not a request header. Custom
+headers trigger CORS preflight; Codehooks native CORS doesn't whitelist them — the
+browser blocks the request silently. Query param is a CORS "simple request".
+
+**Cross-client sync:** `subscribe(collection, id, callback)` polls every 5 minutes.
+`AppModuleBase` subscribes automatically when `manifest.sync === true`.
+
+**Adding a collection:** call `getData`/`setData` with a new name. No registration
+needed. Declare `"dataCollections": ["name"]` in the manifest for cleanup.
+
+**Active collection registry lives in `modules/AGENTS.md`.**
+
+---
+
+### `module-base.js` — `AppModuleBase`
+
+Base class for generator modules. Extends `HTMLElement`. Handles the full lifecycle
+so subclasses only implement 3–4 methods.
+
+**Lifecycle (in order):**
+1. Shadow DOM + styles (`modules/{id}/styles.css` + `setup-dialog.css`)
+2. `adoptTailwind(shadow, wrapper)` — Tailwind utilities + dark-mode sync
+3. `await new Promise(r => setTimeout(r, 0))` — wait one tick for `el.api`
+4. `_resolveAppId()` — `instanceId` → `windowId` → `{id}-{timestamp}` fallback
+5. `_setupCollections()` — show setup dialog for unresolved `requiredCollections` slots
+6. `await _load()` — **subclass implements**
+7. `_applyTheme()` + `_render()` — **subclass implements**
+8. `api.setTitle(_getTitle())` — **subclass implements**
+9. `MutationObserver` on `document.documentElement` — keeps `.dark` class in sync
+10. `subscribe()` if `manifest.sync === true` — cross-device polling
+
+**Hooks to override:**
+
+```js
+async _load()    // Load persisted state into this._state. Called once on mount.
+_render()        // Write DOM from this._state into this._wrapper. Called after _load() and on data changes.
+_getTitle()      // Return string for OS titlebar. Default: this._state?.name
+_collection()    // Collection name for sync polling. Default: this._manifestId()
+```
+
+**Available to subclasses:**
+
+| | Description |
+|---|---|
+| `this._state` | Your data object. Set in `_load()`, read in `_render()`. |
+| `this._appId` | Stable key for `getData`/`setData` — `instanceId` for generators. |
+| `this._wrapper` | Root `div.wrapper` in shadow DOM. Write `innerHTML` here. |
+| `this.api` | Full shell API — see `modules/AGENTS.md` for the el.api contract. |
+| `this._esc(str)` | HTML-escape a string for safe use in `innerHTML`. |
+| `this._applyTheme()` | Sync `.dark` class to `_wrapper`. Called automatically. |
+| `this._collectionFor(slot)` | Resolve a `requiredCollections` slot name to the actual collection name. |
+
+---
+
+### `shadow-tailwind.js`
+
+`adoptTailwind(shadowRoot, wrapperEl)`:
+1. Fetches `css/utils.css` + `css/shell.css` + `css/auth.css` and merges into one
+   `CSSStyleSheet` adopted into the shadow root (shared/cached across all modules).
+2. Observes `document.documentElement` and mirrors the `.dark` class to `wrapperEl`.
+
+Called by every module in `connectedCallback`. This is what makes Tailwind utilities
+work inside shadow DOM and keeps dark mode in sync with the OS toggle.
+
+---
+
+### `css/` pipeline
+
+No build step. All files are hand-authored.
+
+| File | Purpose |
+|---|---|
+| `utils.css` | Tailwind-compatible utility classes (layout, spacing, color, etc.) — written manually |
+| `shell.css` | OS chrome styles: windows, titlebar, taskbar, launcher, context menu, toasts, desktop icons |
+| `auth.css` | Login screen and workspace selector styles |
+
+Adding a new utility: write it directly in `utils.css`. The `build/` directory at
+repo root holds a Tailwind config that is **never used** — do not activate it unless
+committing to a full build pipeline change (see repo root `build/`).
+
+---
+
+### `config.js`
+
+```js
+export const BACKEND_URL = 'https://...';  // Set '' for local-only mode
+export const API_KEY = '...';
+```
+
+`BACKEND_URL = ''` → fully offline, localStorage-only mode.
+
+---
+
+### `motion.js`
+
+Thin wrapper around Motion 11. Dynamically imported from CDN on first use. Falls
+back gracefully if CDN is unavailable (final keyframe applied instantly). Respects
+`prefers-reduced-motion`.
+
+Spring presets: `snappy` (520/30), `smooth` (280/30), `gentle` (120/26).
+
+---
+
+### `auth.js` / `auth-store.js` / `workspace.js`
+
+Login screen, Google OAuth, and workspace selection. After login, `auth-store.js`
+calls `os.loadWorkspaceData()` to load the correct instance registry.
+
+---
+
+### `icon.js`
+
+`iconUrl(emoji)` — converts emoji to Twemoji SVG URL (jdecked CDN on jsDelivr).
+Strips `fe0f` variation selectors. Accessible in modules via `this.api.store.iconUrl()`.
+
+---
+
+### `shortcuts.js`
+
+Global keyboard shortcuts. Registered via `initShortcuts()`:
+- `Ctrl/Cmd + K` — toggle launcher
+- `Ctrl/Cmd + W` — close focused window
+- `Escape` — hide context menu
+
+## Verification
+
+No unit tests. Verify via browser:
+- After editing `store-os.js`: open/close/minimize/maximize windows; create and delete instances.
+- After editing `api.js`: confirm `getData`/`setData` round-trip in browser console.
+- After editing `shadow-tailwind.js`: open a module window, toggle dark mode, confirm styles update.
+
+## Child DOX Index
+
+None. `shell/` has no subdirectories with contracts.

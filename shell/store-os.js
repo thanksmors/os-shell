@@ -43,9 +43,15 @@ export function registerOsStore() {
       try {
         const stored = await getData('generated-modules', 'index');
         if (!stored || typeof stored !== 'object') return;
+        const origin = window.location.origin;
         for (const [appId, mod] of Object.entries(stored)) {
           if (!mod?.manifest || !mod?.js) continue;
-          const blobUrl = URL.createObjectURL(new Blob([mod.js], { type: 'application/javascript' }));
+          const absoluteJs = mod.js
+            .replace(/from '\/shell\//g, `from '${origin}/shell/`)
+            .replace(/from "\/shell\//g, `from "${origin}/shell/`)
+            .replace(/from '\/modules\//g, `from '${origin}/modules/`)
+            .replace(/from "\/modules\//g, `from "${origin}/modules/`);
+          const blobUrl = URL.createObjectURL(new Blob([absoluteJs], { type: 'application/javascript' }));
           const cssUrl = mod.css
             ? URL.createObjectURL(new Blob([mod.css], { type: 'text/css' }))
             : null;

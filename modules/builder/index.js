@@ -223,7 +223,16 @@ class AppBuilder extends HTMLElement {
       this._modules[manifest.appId] = { manifest, js, css };
       await setData(COLLECTION, INDEX_KEY, this._modules);
 
-      const blobUrl = URL.createObjectURL(new Blob([js], { type: 'application/javascript' }));
+      // Blob URLs have no origin, so bare absolute imports like '/shell/module-base.js'
+      // can't be resolved. Rewrite them to full URLs before creating the blob.
+      const origin = window.location.origin;
+      const absoluteJs = js
+        .replace(/from '\/shell\//g, `from '${origin}/shell/`)
+        .replace(/from "\/shell\//g, `from "${origin}/shell/`)
+        .replace(/from '\/modules\//g, `from '${origin}/modules/`)
+        .replace(/from "\/modules\//g, `from "${origin}/modules/`);
+
+      const blobUrl = URL.createObjectURL(new Blob([absoluteJs], { type: 'application/javascript' }));
       const cssUrl = css ? URL.createObjectURL(new Blob([css], { type: 'text/css' })) : null;
       this.api?.store?.registerApp({ ...manifest, entry: blobUrl, ...(cssUrl && { cssUrl }) });
 

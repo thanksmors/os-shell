@@ -47,6 +47,7 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   transition: background 150ms, color 150ms;
+  animation: taskbar-btn-in 150ms cubic-bezier(0.34,1.56,0.64,1) both;
 }
 .os-taskbar-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
 .os-taskbar-btn.active { background: rgba(255,255,255,0.18); color: #fff; border-bottom: 2px solid #60a5fa; }

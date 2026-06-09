@@ -116,7 +116,7 @@ export function registerOsStore() {
       };
       this.windows.forEach(w => w.focused = false);
       win.focused = true;
-      this.windows = this.windows.concat([win]);
+      this.windows = [...this.windows, win];
       // mount module after DOM updates
       await Alpine.nextTick();
       this._mount(win, config);
@@ -318,7 +318,7 @@ export function registerOsStore() {
       };
       this.windows.forEach(w => w.focused = false);
       win.focused = true;
-      this.windows = this.windows.concat([win]);
+      this.windows = [...this.windows, win];
       await Alpine.nextTick();
       this._mountInstance(win, instance);
     },

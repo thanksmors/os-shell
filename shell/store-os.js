@@ -124,6 +124,10 @@ export function registerOsStore() {
     },
 
     async _mount(win, config = {}) {
+      // Re-resolve through the store so `win` is the reactive proxy — mutations
+      // on the raw object passed in would update silently without triggering
+      // Alpine re-renders (x-show="!win.ready" would never re-evaluate).
+      win = this.windows.find(w => w.id === win.id) || win;
       const hostEl = document.querySelector(`[data-win-host="${win.id}"]`);
       if (!hostEl) return;
       const app = this.apps[win.appId];
@@ -342,6 +346,8 @@ export function registerOsStore() {
     },
 
     async _mountInstance(win, instance) {
+      // Re-resolve to the reactive proxy (see _mount).
+      win = this.windows.find(w => w.id === win.id) || win;
       const hostEl = document.querySelector(`[data-win-host="${win.id}"]`);
       if (!hostEl) return;
       const app = this.apps[instance.appId];

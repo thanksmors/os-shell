@@ -146,35 +146,48 @@ export function subscribe(collection, id, callback) {
   return () => _subscribers.get(key)?.delete(callback);
 }
 
-// ─── AI module generation ──────────────────────────────────────────────────
+// ─── AI module generation (async job + polling) ───────────────────────────────
+// The backend runs generation in a background worker (no 30s limit). We start a
+// job, get a jobId, then poll until it's done/errored or we hit the cap.
 
 export async function generateModule(prompt) {
   if (!useBackend() || !_workspaceId || !_session) {
     throw new Error('Backend required for AI generation — please log in first.');
   }
-  const genUrl = `${BACKEND_URL}/w/${_workspaceId}/ai-generate?apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
-  const ac = new AbortController();
-  const timeout = setTimeout(() => ac.abort(), 35000);
-  try {
-    const r = await fetch(genUrl, {
-      signal: ac.signal,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
-    });
-    if (!r.ok) {
-      const raw = await r.text().catch(() => '');
-      let detail = raw.slice(0, 300);
-      try { const j = JSON.parse(raw); detail = j.error || JSON.stringify(j); } catch {}
-      throw new Error(`Server error ${r.status}${detail ? ': ' + detail : ''}`);
-    }
-    return r.json();
-  } catch (err) {
-    if (err.name === 'AbortError') throw new Error('No response from server after 35s — try again or redeploy the backend.');
-    throw err;
-  } finally {
-    clearTimeout(timeout);
+  const auth = `apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
+
+  // 1. Start the job
+  const startUrl = `${BACKEND_URL}/w/${_workspaceId}/ai-generate?${auth}`;
+  const startRes = await fetch(startUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  });
+  if (!startRes.ok) {
+    const raw = await startRes.text().catch(() => '');
+    let detail = raw.slice(0, 300);
+    try { const j = JSON.parse(raw); detail = j.error || JSON.stringify(j); } catch {}
+    throw new Error(`Server error ${startRes.status}${detail ? ': ' + detail : ''}`);
   }
+  const startData = await startRes.json().catch(() => ({}));
+  if (startData.error) throw new Error(startData.error);
+  if (!startData.jobId) throw new Error('Server did not return a job id');
+
+  // 2. Poll for the result
+  const pollUrl = `${BACKEND_URL}/w/${_workspaceId}/ai-job?job=${encodeURIComponent(startData.jobId)}&${auth}`;
+  const deadline = Date.now() + 120000; // 2 min cap
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 2000));
+    let data;
+    try {
+      const pr = await fetch(pollUrl);
+      data = await pr.json();
+    } catch { continue; } // transient network hiccup — keep polling
+    if (data.status === 'done') return data.module;
+    if (data.status === 'error') throw new Error(data.error || 'Generation failed');
+    // 'pending' or 'unknown' — keep waiting
+  }
+  throw new Error('Generation timed out after 2 minutes. Try a simpler prompt.');
 }
 
 // ─── List helpers ──────────────────────────────────────────────────────────

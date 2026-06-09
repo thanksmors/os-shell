@@ -1,10 +1,10 @@
-import { app } from 'codehooks-js';
+import { app, datastore } from 'codehooks-js';
 import { getSessionUser, sendUnauth } from '../lib/session.js';
 
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-09-ai-text01-v1';
+const AI_BUILD = '2026-06-09-ai-async-v1';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "Alpine OS Shell".
 Your task is to generate complete, working app modules for this shell.
@@ -124,8 +124,80 @@ app.get('/ai/ping', (req, res) => {
   });
 });
 
-// ─── AI module generation ──────────────────────────────────────────────────────
+// ─── AI module generation (async job + polling) ───────────────────────────────
+//
+// MiniMax reasoning models (M3) can take 40–90s — far past the Codehooks ~30s
+// HTTP handler limit. So generation runs in a background WORKER (which has a
+// configurable, longer timeout). The POST route enqueues a job and returns a
+// jobId instantly; the GET route polls job status. Results live in `ai_jobs`.
 
+const AI_JOBS = 'ai_jobs';
+
+// Shared cleaner: strip <think> reasoning blocks + markdown fences, then extract
+// the outermost {...} so stray prose can't break JSON.parse.
+function extractModuleJson(content) {
+  let cleaned = String(content || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  const braceStart = cleaned.indexOf('{');
+  const braceEnd = cleaned.lastIndexOf('}');
+  return (braceStart !== -1 && braceEnd !== -1) ? cleaned.slice(braceStart, braceEnd + 1) : cleaned;
+}
+
+// Background worker — not bound by the HTTP 30s limit. timeout set to 2 minutes.
+app.worker('ai-generate-worker', async (req, res) => {
+  const { jobId, workspaceId, prompt } = req.body.payload || {};
+  const conn = await datastore.open();
+  const finish = async (patch) => {
+    // Include identity fields so a replace-style updateOne still keeps the doc
+    // findable by the poll route.
+    await conn.updateOne(AI_JOBS, { jobId, workspaceId }, { jobId, workspaceId, ...patch }).catch(() => {});
+    res.end();
+  };
+
+  try {
+    const aiRes = await fetch(MINIMAX_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'MiniMax-M3',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 4096,
+      }),
+    });
+
+    if (!aiRes.ok) {
+      const errBody = await aiRes.text().catch(() => '');
+      await finish({ status: 'error', error: `MiniMax API error ${aiRes.status}: ${errBody.slice(0, 300)}` });
+      return;
+    }
+
+    const aiData = await aiRes.json();
+    const content = aiData.choices?.[0]?.message?.content;
+    if (!content) { await finish({ status: 'error', error: 'Empty response from AI' }); return; }
+
+    const jsonStr = extractModuleJson(content);
+    let parsed;
+    try { parsed = JSON.parse(jsonStr); }
+    catch { await finish({ status: 'error', error: 'AI returned invalid JSON', raw: jsonStr.slice(0, 300) }); return; }
+
+    if (!parsed.manifest || !parsed.js) {
+      await finish({ status: 'error', error: 'AI response missing manifest or js fields', raw: jsonStr.slice(0, 300) });
+      return;
+    }
+
+    await finish({ status: 'done', module: parsed });
+  } catch (err) {
+    await finish({ status: 'error', error: err.message || 'AI request failed' });
+  }
+}, { timeout: 120000 });
+
+// POST — enqueue a generation job, return jobId immediately.
 app.post('/w/:workspaceId/ai-generate', async (req, res) => {
   const authUser = await getSessionUser(req);
   if (!authUser) { sendUnauth(res); return; }
@@ -135,76 +207,31 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
     res.json({ error: 'prompt string required' });
     return;
   }
-
   if (!process.env.MINIMAX_API_KEY) {
     res.json({ error: 'MINIMAX_API_KEY not configured on server' });
     return;
   }
 
-  const ac = new AbortController();
-  const timeout = setTimeout(() => ac.abort(), 25000);
+  const workspaceId = req.params.workspaceId;
+  const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const conn = await datastore.open();
+  await conn.insertOne(AI_JOBS, { jobId, workspaceId, status: 'pending', createdAt: Date.now() });
+  await conn.enqueue('ai-generate-worker', { jobId, workspaceId, prompt });
+  res.json({ jobId });
+});
 
-  try {
-    const aiRes = await fetch(MINIMAX_URL, {
-      signal: ac.signal,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
-      },
-      body: JSON.stringify({
-        // MiniMax-Text-01 is the fast, non-reasoning model. MiniMax-M3 is a
-        // reasoning model that emits <think> blocks and is too slow for the
-        // Codehooks 30s handler limit.
-        model: 'MiniMax-Text-01',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
-        ],
-        max_tokens: 4096,
-      }),
-    });
-    clearTimeout(timeout);
+// GET — poll job status. 3-segment path (`/w/:ws/ai-job`) avoids colliding with
+// the generic 4-segment data route `/w/:ws/:collection/:id`. jobId is a query.
+app.get('/w/:workspaceId/ai-job', async (req, res) => {
+  const authUser = await getSessionUser(req);
+  if (!authUser) { sendUnauth(res); return; }
 
-    if (!aiRes.ok) {
-      const errBody = await aiRes.text().catch(() => '');
-      res.json({ error: `MiniMax API error ${aiRes.status}: ${errBody.slice(0, 300)}` });
-      return;
-    }
+  const { workspaceId } = req.params;
+  const jobId = req.query?.job;
+  if (!jobId) { res.json({ status: 'error', error: 'job query param required' }); return; }
 
-    const aiData = await aiRes.json();
-    const content = aiData.choices?.[0]?.message?.content;
-    if (!content) { res.json({ error: 'Empty response from AI' }); return; }
-
-    // Clean the model output before parsing: drop <think> reasoning blocks and
-    // markdown fences, then extract the outermost {...} so any stray prose can't
-    // break JSON.parse.
-    let cleaned = content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-    const braceStart = cleaned.indexOf('{');
-    const braceEnd = cleaned.lastIndexOf('}');
-    const jsonStr = (braceStart !== -1 && braceEnd !== -1)
-      ? cleaned.slice(braceStart, braceEnd + 1)
-      : cleaned;
-    let parsed;
-    try {
-      parsed = JSON.parse(jsonStr);
-    } catch {
-      res.json({ error: 'AI returned invalid JSON', raw: jsonStr.slice(0, 300) });
-      return;
-    }
-
-    if (!parsed.manifest || !parsed.js) {
-      res.json({ error: 'AI response missing manifest or js fields', raw: jsonStr.slice(0, 300) });
-      return;
-    }
-
-    res.json(parsed);
-  } catch (err) {
-    clearTimeout(timeout);
-    const msg = err.name === 'AbortError'
-      ? 'MiniMax took too long (>25s). Try a shorter/simpler prompt.'
-      : (err.message || 'AI request failed');
-    res.json({ error: msg });
-  }
+  const conn = await datastore.open();
+  const job = await conn.getOne(AI_JOBS, { jobId, workspaceId }).catch(() => null);
+  if (!job) { res.json({ status: 'unknown' }); return; }
+  res.json({ status: job.status, module: job.module, error: job.error, raw: job.raw });
 });

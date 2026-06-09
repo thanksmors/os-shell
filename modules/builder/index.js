@@ -55,6 +55,28 @@ class AppBuilder extends HTMLElement {
     this._modules = modules || {};
     // Anything stuck "building" from a closed session goes back in the queue
     Object.values(this._jobs).forEach(j => { if (j.status === 'building') j.status = 'queued'; });
+    // Migrate old installed modules from generated-modules into the jobs list
+    let migrated = false;
+    for (const [appId, mod] of Object.entries(this._modules)) {
+      if (!mod?.manifest) continue;
+      const alreadyHasJob = Object.values(this._jobs).some(j => j.appId === appId);
+      if (!alreadyHasJob) {
+        const jobId = `migrated-${appId}`;
+        this._jobs[jobId] = {
+          jobId, appId,
+          title: mod.manifest.title || appId,
+          icon: mod.manifest.icon || '📦',
+          status: 'installed',
+          plan: null,
+          messages: [],
+          module: { manifest: mod.manifest, js: mod.js, css: mod.css },
+          createdAt: Date.now(),
+          migrated: true,
+        };
+        migrated = true;
+      }
+    }
+    if (migrated) await this._saveJobs();
     this._render();
     this._processQueue();
   }
@@ -292,10 +314,19 @@ class AppBuilder extends HTMLElement {
       }
     } catch (err) {
       clearInterval(this._loadingTimer);
-      this._convo.push({ role: 'ai', text: `❌ ${err.message}` });
+      const msg = this._backendErrMsg(err);
+      this._convo.push({ role: 'ai', text: msg });
       this._phase = 'idle';
     }
     this._render();
+  }
+
+  _backendErrMsg(err) {
+    const m = err.message || '';
+    if (m.includes('65s') || m.includes('timed out') || m.includes('prompt string')) {
+      return `❌ Build App needs a backend update. Please run \`coho deploy\` from the \`codehooks/\` directory, then try again.\n\nDetails: ${m}`;
+    }
+    return `❌ ${m}`;
   }
 
   _answer(optIdx) {

@@ -1,0 +1,12 @@
+{
+  "appId": "notes",
+  "tag": "app-notes",
+  "entry": "/modules/notes/index.js",
+  "title": "Notes",
+  "icon": "📝",
+  "defaultSize": { "w": 760, "h": 560 },
+  "singleton": true,
+  "resizable": true,
+  "minSize": { "w": 520, "h": 380 },
+  "dataCollections": ["notes"]
+}

@@ -4,7 +4,7 @@ import { getSessionUser, sendUnauth } from '../lib/session.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-09-ai-timer-v1';
+const AI_BUILD = '2026-06-09-ai-text01-v1';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "Alpine OS Shell".
 Your task is to generate complete, working app modules for this shell.
@@ -153,12 +153,14 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
         'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'MiniMax-M3',
+        // MiniMax-Text-01 is the fast, non-reasoning model. MiniMax-M3 is a
+        // reasoning model that emits <think> blocks and is too slow for the
+        // Codehooks 30s handler limit.
+        model: 'MiniMax-Text-01',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: prompt },
         ],
-        response_format: { type: 'json_object' },
         max_tokens: 4096,
       }),
     });
@@ -174,8 +176,16 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
     const content = aiData.choices?.[0]?.message?.content;
     if (!content) { res.json({ error: 'Empty response from AI' }); return; }
 
-    // Strip markdown fences in case model wraps output despite instructions
-    const jsonStr = content.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    // Clean the model output before parsing: drop <think> reasoning blocks and
+    // markdown fences, then extract the outermost {...} so any stray prose can't
+    // break JSON.parse.
+    let cleaned = content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    const braceStart = cleaned.indexOf('{');
+    const braceEnd = cleaned.lastIndexOf('}');
+    const jsonStr = (braceStart !== -1 && braceEnd !== -1)
+      ? cleaned.slice(braceStart, braceEnd + 1)
+      : cleaned;
     let parsed;
     try {
       parsed = JSON.parse(jsonStr);

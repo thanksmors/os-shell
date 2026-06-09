@@ -6,6 +6,7 @@ let _springFn = null;
 export let inView = null;
 export let hover = null;
 export let press = null;
+export let stagger = null;
 
 (async () => {
   try {
@@ -15,6 +16,7 @@ export let press = null;
     inView = mod.inView;
     hover = mod.hover;
     press = mod.press;
+    stagger = mod.stagger;
   } catch(e) {
     console.warn('Motion library failed to load; animations disabled.', e);
   }
@@ -22,10 +24,11 @@ export let press = null;
 
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// vanilla Motion v11 spring takes { visualDuration, bounce }, not React's { stiffness, damping }
 export const spring = {
-  snappy: () => _springFn ? _springFn({ stiffness: 520, damping: 30 }) : 'ease-out',
-  smooth: () => _springFn ? _springFn({ stiffness: 280, damping: 30 }) : 'ease-in-out',
-  gentle: () => _springFn ? _springFn({ stiffness: 120, damping: 26 }) : 'ease-in-out',
+  snappy: () => _springFn ? _springFn({ visualDuration: 0.3, bounce: 0.35 }) : 'ease-out',
+  smooth: () => _springFn ? _springFn({ visualDuration: 0.5, bounce: 0.1 }) : 'ease-in-out',
+  gentle: () => _springFn ? _springFn({ visualDuration: 0.7, bounce: 0.05 }) : 'ease-in-out',
 };
 
 export function motion(el, keyframes, options = {}) {
@@ -34,5 +37,11 @@ export function motion(el, keyframes, options = {}) {
     Object.assign(el.style, last);
     return { finished: Promise.resolve() };
   }
-  return _animate(el, keyframes, options);
+  try {
+    return _animate(el, keyframes, options);
+  } catch (e) {
+    console.warn('motion() failed:', e);
+    Object.assign(el.style, last);
+    return { finished: Promise.resolve() };
+  }
 }

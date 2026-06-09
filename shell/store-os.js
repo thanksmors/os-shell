@@ -1,4 +1,4 @@
-import { motion, spring } from '/shell/motion.js';
+import { motion, spring, stagger } from '/shell/motion.js';
 import { iconUrl } from './icon.js';
 import { getInstances, saveInstances, subscribe, getData } from './api.js';
 
@@ -116,7 +116,7 @@ export function registerOsStore() {
       };
       this.windows.forEach(w => w.focused = false);
       win.focused = true;
-      this.windows.push(win);
+      this.windows = [...this.windows, win];
       // mount module after DOM updates
       await Alpine.nextTick();
       this._mount(win, config);
@@ -151,17 +151,34 @@ export function registerOsStore() {
     },
 
     focus(id) {
-      this.windows.forEach(w => w.focused = false);
       const win = this.windows.find(w => w.id === id);
       if (!win) return;
+      const wasMinimized = win.state === 'minimized';
+      this.windows.forEach(w => w.focused = false);
       win.focused = true;
       win.z = ++this.topZ;
-      if (win.state === 'minimized') win.state = 'normal';
+      if (wasMinimized) {
+        win.state = 'normal';
+        Alpine.nextTick(() => {
+          const winEl = win.hostEl?.closest('.os-window');
+          if (winEl) motion(winEl,
+            [{ opacity: 0, scale: 0.85, y: 20 }, { opacity: 1, scale: 1, y: 0 }],
+            { duration: 0.22, easing: spring.snappy() });
+        });
+      }
     },
 
-    minimize(id) {
+    async minimize(id) {
       const win = this.windows.find(w => w.id === id);
-      if (win) win.state = 'minimized';
+      if (!win) return;
+      const winEl = win.hostEl?.closest('.os-window');
+      if (winEl) {
+        await motion(winEl, { opacity: 0, scale: 0.85, y: 20 },
+          { duration: 0.18, easing: spring.smooth() }).finished;
+        winEl.style.opacity = '';
+        winEl.style.transform = '';
+      }
+      win.state = 'minimized';
     },
 
     toggleMaximize(id) {
@@ -175,6 +192,11 @@ export function registerOsStore() {
         win.prev = { x: win.x, y: win.y, w: win.w, h: win.h };
         win.state = 'maximized';
       }
+      Alpine.nextTick(() => {
+        const winEl = win.hostEl?.closest('.os-window');
+        if (winEl) motion(winEl, [{ scale: 0.97 }, { scale: 1 }],
+          { duration: 0.25, easing: spring.smooth() });
+      });
     },
 
     async close(id) {
@@ -182,8 +204,7 @@ export function registerOsStore() {
       if (!win) return;
       const winEl = win.hostEl?.closest('.os-window');
       if (winEl) await motion(winEl, { opacity: 0, scale: 0.95 }, { duration: 0.15 }).finished;
-      const idx = this.windows.findIndex(w => w.id === id);
-      if (idx !== -1) this.windows.splice(idx, 1);
+      this.windows = this.windows.filter(w => w.id !== id);
     },
 
     taskbarClick(id) {
@@ -198,10 +219,11 @@ export function registerOsStore() {
 
     notify(msg, type = 'info') {
       const id = Date.now();
-      this.toasts.push({ id, msg, type });
-      setTimeout(() => {
-        const i = this.toasts.findIndex(t => t.id === id);
-        if (i !== -1) this.toasts.splice(i, 1);
+      this.toasts = [...this.toasts, { id, msg, type }];
+      setTimeout(async () => {
+        const el = document.querySelector(`[data-toast-id="${id}"]`);
+        if (el) await motion(el, { opacity: 0, x: 16, scale: 0.95 }, { duration: 0.18 }).finished;
+        this.toasts = this.toasts.filter(t => t.id !== id);
       }, 3500);
     },
 
@@ -220,13 +242,26 @@ export function registerOsStore() {
       }
       const loaded = await getInstances();
       // Merge: preserve any instances created while the async fetch was in flight.
-      if (this.instances.length === 0) {
+      const isFirstLoad = this.instances.length === 0;
+      if (isFirstLoad) {
         this.instances = loaded;
+        this._staggerDesktopIcons();
       } else {
         const existingIds = new Set(this.instances.map(i => i.instanceId));
-        const merged = [...this.instances, ...loaded.filter(i => !existingIds.has(i.instanceId))];
-        this.instances = merged;
+        this.instances = [...this.instances, ...loaded.filter(i => !existingIds.has(i.instanceId))];
       }
+    },
+
+    _staggerDesktopIcons() {
+      Alpine.nextTick(() => {
+        const icons = document.querySelectorAll('.os-desktop-icon');
+        Array.from(icons).slice(0, 20).forEach((el, i) => {
+          motion(el,
+            [{ opacity: 0, y: 10, scale: 0.82 }, { opacity: 1, y: 0, scale: 1 }],
+            { duration: 0.28, delay: i * 0.045, easing: spring.snappy() }
+          );
+        });
+      });
     },
 
     async createInstance(appId, config = {}) {
@@ -274,7 +309,7 @@ export function registerOsStore() {
       };
       this.windows.forEach(w => w.focused = false);
       win.focused = true;
-      this.windows.push(win);
+      this.windows = [...this.windows, win];
       await Alpine.nextTick();
       this._mountInstance(win, instance);
     },

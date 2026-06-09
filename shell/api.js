@@ -153,18 +153,28 @@ export async function generateModule(prompt) {
     throw new Error('Backend required for AI generation — please log in first.');
   }
   const genUrl = `${BACKEND_URL}/w/${_workspaceId}/ai-generate?apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
-  const r = await fetch(genUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt }),
-  });
-  if (!r.ok) {
-    const raw = await r.text().catch(() => '');
-    let detail = raw.slice(0, 300);
-    try { const j = JSON.parse(raw); detail = j.error || JSON.stringify(j); } catch {}
-    throw new Error(`Server error ${r.status}${detail ? ': ' + detail : ''}`);
+  const ac = new AbortController();
+  const timeout = setTimeout(() => ac.abort(), 35000);
+  try {
+    const r = await fetch(genUrl, {
+      signal: ac.signal,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    if (!r.ok) {
+      const raw = await r.text().catch(() => '');
+      let detail = raw.slice(0, 300);
+      try { const j = JSON.parse(raw); detail = j.error || JSON.stringify(j); } catch {}
+      throw new Error(`Server error ${r.status}${detail ? ': ' + detail : ''}`);
+    }
+    return r.json();
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('No response from server after 35s — try again or redeploy the backend.');
+    throw err;
+  } finally {
+    clearTimeout(timeout);
   }
-  return r.json();
 }
 
 // ─── List helpers ──────────────────────────────────────────────────────────

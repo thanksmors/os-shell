@@ -5,9 +5,9 @@ import { renderAboutTab } from './tabs/about.js';
 import { renderWorkspaceTab } from './tabs/workspace.js';
 
 const TABS = [
-  { id: 'appearance', label: '🎨 Appearance', icon: '🎨' },
-  { id: 'workspace', label: '🏢 Workspace', icon: '🏢' },
-  { id: 'about', label: 'ℹ️ About', icon: 'ℹ️' },
+  { id: 'appearance', icon: '🎨', label: 'Appearance' },
+  { id: 'workspace', icon: '🏢', label: 'Workspace' },
+  { id: 'about', icon: 'ℹ️', label: 'About' },
 ];
 
 class AppSettings extends HTMLElement {
@@ -54,7 +54,7 @@ class AppSettings extends HTMLElement {
     for (const tab of TABS) {
       const btn = document.createElement('button');
       btn.className = `settings-tab-btn${this._activeTab === tab.id ? ' active' : ''}`;
-      btn.innerHTML = `<span>${tab.icon}</span><span>${tab.label.replace(/^.\s/, '')}</span>`;
+      btn.innerHTML = `<span>${tab.icon}</span><span>${tab.label}</span>`;
       btn.dataset.tab = tab.id;
       btn.addEventListener('click', () => {
         this._activeTab = tab.id;

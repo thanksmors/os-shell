@@ -33,6 +33,20 @@
     }
   </script>
 
+  <!-- Restore persisted appearance settings before first paint -->
+  <script>
+    (function() {
+      var sizes = ['87.5%','93.75%','100%','112.5%'];
+      var idx = parseInt(localStorage.getItem('os:font-size') ?? '2', 10);
+      if (idx >= 0 && idx < 4) document.documentElement.style.fontSize = sizes[idx];
+      var fonts = { system: 'system-ui,-apple-system,sans-serif', serif: 'Georgia,serif', mono: 'ui-monospace,monospace' };
+      var fam = localStorage.getItem('os:font-family');
+      if (fam && fonts[fam]) document.documentElement.style.fontFamily = fonts[fam];
+      var accent = localStorage.getItem('os:accent');
+      if (accent) document.documentElement.style.setProperty('--os-accent', accent);
+    })();
+  </script>
+
   <!-- Alpine Plugins (must load before Alpine core) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/focus@3/dist/cdn.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/anchor@3/dist/cdn.min.js"></script>

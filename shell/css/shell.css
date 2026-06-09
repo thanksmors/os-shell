@@ -1,4 +1,5 @@
 /* ===== SPECIAL OS CHROME STYLES ===== */
+:root { --os-accent: #3b82f6; }
 
 /* Taskbar */
 .os-taskbar {
@@ -50,7 +51,7 @@
   animation: taskbar-btn-in 150ms cubic-bezier(0.34,1.56,0.64,1) both;
 }
 .os-taskbar-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
-.os-taskbar-btn.active { background: rgba(255,255,255,0.18); color: #fff; border-bottom: 2px solid #60a5fa; }
+.os-taskbar-btn.active { background: rgba(255,255,255,0.18); color: #fff; border-bottom: 2px solid var(--os-accent, #3b82f6); }
 @keyframes taskbar-btn-in {
   from { opacity: 0; transform: translateY(6px) scale(0.85); }
   to   { opacity: 1; transform: translateY(0) scale(1); }

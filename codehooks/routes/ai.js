@@ -197,7 +197,7 @@ app.worker('ai-generate-worker', async (req, res) => {
   } catch (err) {
     await finish({ status: 'error', error: err.message || 'AI request failed' });
   }
-}, { timeout: 120000 });
+}, { timeout: 120000, workers: 1 });
 
 // POST — enqueue a generation job, return jobId immediately.
 app.post('/w/:workspaceId/ai-generate', async (req, res) => {

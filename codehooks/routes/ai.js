@@ -3,6 +3,9 @@ import { getSessionUser, sendUnauth } from '../lib/session.js';
 
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
+// Bump this string every time ai.js changes so /ai/ping proves which build is live.
+const AI_BUILD = '2026-06-09-ai-generate-v3';
+
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "Alpine OS Shell".
 Your task is to generate complete, working app modules for this shell.
 
@@ -108,7 +111,17 @@ JSON output:
 // ─── AI diagnostics ────────────────────────────────────────────────────────────
 
 app.get('/ai/ping', (req, res) => {
-  res.json({ ok: true, hasKey: !!process.env.MINIMAX_API_KEY });
+  // List every POST/GET route key the live manifest actually contains, so we can
+  // confirm whether "POST /w/:workspaceId/ai-generate" is really deployed.
+  let routeKeys = [];
+  try { routeKeys = Object.keys(app.routes || {}); } catch {}
+  res.json({
+    ok: true,
+    build: AI_BUILD,
+    hasKey: !!process.env.MINIMAX_API_KEY,
+    aiGenerateRegistered: routeKeys.includes('POST /w/:workspaceId/ai-generate'),
+    routes: routeKeys,
+  });
 });
 
 // ─── AI module generation ──────────────────────────────────────────────────────

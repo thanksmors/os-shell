@@ -45,10 +45,11 @@ export function registerOsStore() {
         if (!stored || typeof stored !== 'object') return;
         for (const [appId, mod] of Object.entries(stored)) {
           if (!mod?.manifest || !mod?.js) continue;
-          const blobUrl = URL.createObjectURL(
-            new Blob([mod.js], { type: 'application/javascript' })
-          );
-          this.registerApp({ ...mod.manifest, entry: blobUrl });
+          const blobUrl = URL.createObjectURL(new Blob([mod.js], { type: 'application/javascript' }));
+          const cssUrl = mod.css
+            ? URL.createObjectURL(new Blob([mod.css], { type: 'text/css' }))
+            : null;
+          this.registerApp({ ...mod.manifest, entry: blobUrl, ...(cssUrl && { cssUrl }) });
         }
       } catch(e) {
         console.warn('Could not load generated modules', e);

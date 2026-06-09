@@ -20,8 +20,12 @@ export class AppModuleBase extends HTMLElement {
     const shadow = this.attachShadow({ mode: 'open' });
     const styleEl = document.createElement('style');
     const moduleId = this._moduleId();
+    // Generated modules pass cssUrl on the manifest; read from Alpine store
+    // directly because this.api isn't set until after the tick wait below.
+    const cssUrl = window.Alpine?.store('os')?.apps?.[moduleId]?.cssUrl
+      || `/modules/${moduleId}/styles.css`;
     const [moduleCss, setupCss] = await Promise.all([
-      fetch(`/modules/${moduleId}/styles.css`).then(r => r.text()).catch(() => ''),
+      fetch(cssUrl).then(r => r.text()).catch(() => ''),
       fetch('/shell/setup-dialog.css').then(r => r.text()).catch(() => ''),
     ]);
     styleEl.textContent = moduleCss + '\n' + setupCss;

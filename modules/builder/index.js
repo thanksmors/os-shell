@@ -224,7 +224,8 @@ class AppBuilder extends HTMLElement {
       await setData(COLLECTION, INDEX_KEY, this._modules);
 
       const blobUrl = URL.createObjectURL(new Blob([js], { type: 'application/javascript' }));
-      this.api?.store?.registerApp({ ...manifest, entry: blobUrl });
+      const cssUrl = css ? URL.createObjectURL(new Blob([css], { type: 'text/css' })) : null;
+      this.api?.store?.registerApp({ ...manifest, entry: blobUrl, ...(cssUrl && { cssUrl }) });
 
       const msg = this._messages.find(m => m.preview?.manifest?.appId === manifest.appId);
       if (msg?.preview) msg.preview.installed = true;

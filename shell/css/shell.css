@@ -104,6 +104,58 @@
 }
 .dark .os-titlebar-title { color: #e5e7eb; }
 
+.os-titlebar-title-edit {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 0;
+  cursor: default;
+  caret-color: transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+.os-titlebar-title-edit:focus {
+  cursor: text;
+  caret-color: auto;
+  user-select: text;
+}
+.os-titlebar-instance-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s;
+  flex-shrink: 0;
+}
+.os-titlebar:hover .os-titlebar-instance-actions,
+.os-titlebar:has(.os-titlebar-title-edit:focus) .os-titlebar-instance-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.os-titlebar-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 5px;
+  border-radius: 5px;
+  opacity: .65;
+  color: inherit;
+  line-height: 1;
+  transition: opacity .15s, background .15s;
+}
+.os-titlebar-action-btn:hover { opacity: 1; background: rgba(120,120,128,.15); }
+.os-titlebar-action-btn--delete:hover { background: rgba(255,59,48,.15); }
+
 /* Window control group (upper right) */
 .os-win-controls {
   display: flex;
@@ -134,21 +186,20 @@
 /* Window content */
 .os-window-content {
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
   position: relative;
   display: flex;
   flex-direction: column;
 }
-/* Every module host fills the window so its internal scroll regions work.
-   (Some modules set this via :host, but not all — this guarantees it for all,
-   so windows scroll consistently regardless of the module.) */
+/* Module host fills the window; overflow: visible lets shadow content that grows
+   beyond window height escape into .os-window-content's scroll container. */
 .os-window-content > * {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   width: 100%;
-  overflow: auto;
+  overflow: visible;
 }
 
 /* Resize handle */
@@ -329,6 +380,9 @@
 }
 .os-desktop-icon:hover { background: rgba(255,255,255,0.15); }
 .os-desktop-icon:active { background: rgba(255,255,255,0.25); }
+.os-desktop-icon.icon-dragging { opacity: 0.4; transform: scale(0.95); }
+.os-desktop-icon.icon-drag-over { background: rgba(0,122,255,0.35) !important; transform: scale(1.08); box-shadow: 0 0 0 2px rgba(0,122,255,0.6); }
+.os-desktop-icon.icon-reorder-target { transform: scale(1.05); box-shadow: 0 0 0 2px rgba(255,255,255,0.5); }
 .os-desktop-icon-emoji { font-size: 2rem; line-height: 1; }
 .os-desktop-icon-label {
   font-size: 0.7rem;
@@ -408,6 +462,28 @@
   font-size: 14px;
 }
 
+/* ─── Shared emoji picker trigger button (used in module settings panels) ── */
+.icon-pick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 20px;
+  border: 1px solid rgba(0,0,0,0.15);
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  line-height: 1;
+}
+.icon-pick-btn:hover { border-color: #007aff; background: rgba(0,122,255,0.05); }
+.wrapper.dark .icon-pick-btn {
+  background: #2c2c2e;
+  border-color: rgba(255,255,255,0.15);
+  color: #f5f5f7;
+}
+.wrapper.dark .icon-pick-btn:hover { border-color: #007aff; }
+
 /* Alpine x-cloak */
 [x-cloak] { display: none !important; }
 
@@ -420,11 +496,9 @@
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
-@keyframes window-open {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
-}
 .animate-fade-in { animation: fade-in 200ms ease-out; }
 .animate-slide-up { animation: slide-up 200ms ease-out; }
-.animate-window-open { animation: window-open 200ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* workspace create form row — flex layout decoupled from x-show */
+.ws-create-row { display: flex; gap: 8px; align-items: center; }
 

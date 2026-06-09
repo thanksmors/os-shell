@@ -144,10 +144,13 @@ export function registerOsStore() {
         requestClose: () => Alpine.store('os').close(win.id),
         store: Alpine.store('os'),
       };
-      win.hostEl = hostEl;
       hostEl.appendChild(el);
       const winEl = hostEl.closest('.os-window');
       if (winEl) motion(winEl, { opacity: [0, 1], scale: [0.92, 1] }, { ...spring.snappy() });
+    },
+
+    _winEl(id) {
+      return document.querySelector(`[data-win-host="${id}"]`)?.closest('.os-window') || null;
     },
 
     focus(id) {
@@ -160,7 +163,7 @@ export function registerOsStore() {
       if (wasMinimized) {
         win.state = 'normal';
         Alpine.nextTick(() => {
-          const winEl = win.hostEl?.closest('.os-window');
+          const winEl = this._winEl(id);
           if (winEl) motion(winEl,
             { opacity: [0, 1], scale: [0.85, 1], y: [20, 0] },
             { ...spring.snappy() });
@@ -171,7 +174,7 @@ export function registerOsStore() {
     async minimize(id) {
       const win = this.windows.find(w => w.id === id);
       if (!win) return;
-      const winEl = win.hostEl?.closest('.os-window');
+      const winEl = this._winEl(id);
       if (winEl) {
         try {
           await motion(winEl, { opacity: [1, 0], scale: [1, 0.85], y: [0, 20] },
@@ -195,7 +198,7 @@ export function registerOsStore() {
         win.state = 'maximized';
       }
       Alpine.nextTick(() => {
-        const winEl = win.hostEl?.closest('.os-window');
+        const winEl = this._winEl(id);
         if (winEl) motion(winEl, { scale: [0.97, 1] },
           { ...spring.smooth() });
       });
@@ -204,7 +207,7 @@ export function registerOsStore() {
     async close(id) {
       const win = this.windows.find(w => w.id === id);
       if (!win) return;
-      const winEl = win.hostEl?.closest('.os-window');
+      const winEl = this._winEl(id);
       if (winEl) {
         try {
           await motion(winEl, { opacity: 0, scale: 0.95 }, { duration: 0.15 }).finished;
@@ -352,8 +355,6 @@ export function registerOsStore() {
         },
         store: Alpine.store('os'),
       };
-      win.moduleEl = el;
-      win.hostEl = hostEl;
       hostEl.appendChild(el);
       const winEl = hostEl.closest('.os-window');
       if (winEl) motion(winEl, { opacity: [0, 1], scale: [0.92, 1] }, { ...spring.snappy() });
@@ -449,8 +450,8 @@ export function registerOsStore() {
     },
 
     toggleWindowSettings(id) {
-      const win = this.windows.find(w => w.id === id);
-      win?.moduleEl?.dispatchEvent(new CustomEvent('os:toggle-settings'));
+      const hostEl = document.querySelector(`[data-win-host="${id}"]`);
+      hostEl?.firstElementChild?.dispatchEvent(new CustomEvent('os:toggle-settings'));
     },
 
     reorderInstance(dragId, targetId) {

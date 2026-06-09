@@ -12,7 +12,8 @@ export async function renderWorkspaceTab(host, content) {
   let members = [];
   try {
     const { fetchMembers } = await import('/shell/workspace.js');
-    members = await fetchMembers(ws.workspaceId, session) || [];
+    const raw = await fetchMembers(ws.workspaceId, session);
+    members = Array.isArray(raw) ? raw : [];
   } catch {}
 
   const memberRows = members.map(m => `

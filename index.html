@@ -172,7 +172,7 @@
 
   <!-- ===== WINDOWS LAYER ===== -->
   <template x-if="$store.os && $store.auth && $store.auth.screen === 'desktop'">
-    <template x-for="win in $store.os.windows" :key="win.id">
+    <template x-for="win in $store.os.windows.slice()" :key="win.id">
       <div
         x-show="win.state !== 'minimized'"
         class="os-window animate-window-open"
@@ -252,7 +252,7 @@
 
     <!-- Window Buttons -->
     <div class="os-taskbar-windows">
-      <template x-for="win in ($store.os ? $store.os.windows : [])" :key="win.id">
+      <template x-for="win in ($store.os ? $store.os.windows.slice() : [])" :key="win.id">
         <button
           class="os-taskbar-btn"
           x-transition:enter-active-class="taskbar-btn-in"

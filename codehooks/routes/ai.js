@@ -188,6 +188,8 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: prompt },
         ],
+        // Force structured JSON output — M2.7 otherwise drifts into chat replies.
+        response_format: { type: 'json_object' },
         max_tokens: 4096,
       }),
     });

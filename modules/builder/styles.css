@@ -145,7 +145,17 @@
   color: #f5f5f7;
 }
 
-.bubble.loading { color: #8e8e93; font-style: italic; }
+.bubble.loading {
+  font-family: monospace;
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 220px;
+  overflow-y: auto;
+  color: #3a3a3c;
+  line-height: 1.5;
+}
+.wrapper.dark .bubble.loading { color: #aeaeb2; }
 
 /* ── Preview card ────────────────────────────────────────── */
 

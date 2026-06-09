@@ -4,7 +4,7 @@ import { getSessionUser, sendUnauth } from '../lib/session.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-09-ai-generate-v3';
+const AI_BUILD = '2026-06-09-ai-streaming-v1';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "Alpine OS Shell".
 Your task is to generate complete, working app modules for this shell.
@@ -124,7 +124,7 @@ app.get('/ai/ping', (req, res) => {
   });
 });
 
-// ─── AI module generation ──────────────────────────────────────────────────────
+// ─── AI module generation (streaming) ─────────────────────────────────────────
 
 app.post('/w/:workspaceId/ai-generate', async (req, res) => {
   const authUser = await getSessionUser(req);
@@ -141,60 +141,87 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
     return;
   }
 
+  res.set('Content-Type', 'text/event-stream');
+  res.set('Cache-Control', 'no-cache');
+
+  const ac = new AbortController();
+  const timeout = setTimeout(() => ac.abort(), 25000);
+
   try {
-    const ac = new AbortController();
-    const timeout = setTimeout(() => ac.abort(), 25000); // 25s — under Codehooks 30s limit
-    let aiRes;
-    try {
-      aiRes = await fetch(MINIMAX_URL, {
-        signal: ac.signal,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'MiniMax-M3',
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: prompt },
-          ],
-          response_format: { type: 'json_object' },
-          max_tokens: 4096,
-        }),
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
+    const aiRes = await fetch(MINIMAX_URL, {
+      signal: ac.signal,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'MiniMax-M3',
+        stream: true,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 4096,
+      }),
+    });
+    clearTimeout(timeout);
 
     if (!aiRes.ok) {
       const errBody = await aiRes.text().catch(() => '');
-      res.json({ error: `MiniMax API error ${aiRes.status}: ${errBody.slice(0, 300)}` });
+      res.write(`data: ${JSON.stringify({ error: `MiniMax API error ${aiRes.status}: ${errBody.slice(0, 300)}` })}\n\n`);
       return;
     }
 
-    const aiData = await aiRes.json();
-    const content = aiData.choices?.[0]?.message?.content;
-    if (!content) { res.json({ error: 'Empty response from AI' }); return; }
+    // Stream token deltas to client; buffer full text for final JSON parse
+    let fullText = '';
+    const reader = aiRes.body.getReader();
+    const dec = new TextDecoder();
+    let lineBuf = '';
 
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      lineBuf += dec.decode(value, { stream: true });
+      const lines = lineBuf.split('\n');
+      lineBuf = lines.pop(); // keep incomplete trailing line
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if (raw === '[DONE]') continue;
+        try {
+          const obj = JSON.parse(raw);
+          const token = obj.choices?.[0]?.delta?.content || '';
+          if (token) {
+            fullText += token;
+            res.write(`data: ${JSON.stringify({ token })}\n\n`);
+          }
+        } catch {}
+      }
+    }
+
+    // Strip markdown fences in case model wraps output despite instructions
+    const jsonStr = fullText.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
     let parsed;
     try {
-      parsed = JSON.parse(content);
+      parsed = JSON.parse(jsonStr);
     } catch {
-      res.json({ error: 'AI returned invalid JSON', raw: content.slice(0, 500) });
+      res.write(`data: ${JSON.stringify({ error: 'AI returned invalid JSON', raw: jsonStr.slice(0, 300) })}\n\n`);
       return;
     }
 
     if (!parsed.manifest || !parsed.js) {
-      res.json({ error: 'AI response missing manifest or js fields', raw: content.slice(0, 500) });
+      res.write(`data: ${JSON.stringify({ error: 'AI response missing manifest or js fields', raw: jsonStr.slice(0, 300) })}\n\n`);
       return;
     }
 
-    res.json(parsed);
+    res.write(`data: ${JSON.stringify({ done: true, module: parsed })}\n\n`);
+
   } catch (err) {
+    clearTimeout(timeout);
     const msg = err.name === 'AbortError'
       ? 'MiniMax took too long (>25s). Try a shorter/simpler prompt.'
       : (err.message || 'AI request failed');
-    res.json({ error: msg });
+    res.write(`data: ${JSON.stringify({ error: msg })}\n\n`);
   }
 });

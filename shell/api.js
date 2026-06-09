@@ -146,25 +146,46 @@ export function subscribe(collection, id, callback) {
   return () => _subscribers.get(key)?.delete(callback);
 }
 
-// ─── AI module generation ──────────────────────────────────────────────────
+// ─── AI module generation (streaming) ─────────────────────────────────────────
 
-export async function generateModule(prompt) {
+export function streamModule(prompt, onToken, onDone, onError) {
   if (!useBackend() || !_workspaceId || !_session) {
-    throw new Error('Backend required for AI generation — please log in first.');
+    onError(new Error('Backend required for AI generation — please log in first.'));
+    return;
   }
   const genUrl = `${BACKEND_URL}/w/${_workspaceId}/ai-generate?apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
-  const r = await fetch(genUrl, {
+  fetch(genUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt }),
-  });
-  if (!r.ok) {
-    const raw = await r.text().catch(() => '');
-    let detail = raw.slice(0, 300);
-    try { const j = JSON.parse(raw); detail = j.error || JSON.stringify(j); } catch {}
-    throw new Error(`Server error ${r.status}${detail ? ': ' + detail : ''}`);
-  }
-  return r.json();
+  }).then(async r => {
+    if (!r.ok) {
+      const text = await r.text().catch(() => '');
+      let detail = text.slice(0, 300);
+      try { const j = JSON.parse(text); detail = j.error || JSON.stringify(j); } catch {}
+      onError(new Error(`Server error ${r.status}${detail ? ': ' + detail : ''}`));
+      return;
+    }
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop(); // keep incomplete trailing line
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const data = JSON.parse(line.slice(6));
+          if (data.error) { onError(new Error(data.error)); return; }
+          if (data.token) onToken(data.token);
+          if (data.done) onDone(data.module);
+        } catch {}
+      }
+    }
+  }).catch(onError);
 }
 
 // ─── List helpers ──────────────────────────────────────────────────────────

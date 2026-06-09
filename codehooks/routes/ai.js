@@ -4,7 +4,7 @@ import { getSessionUser, sendUnauth } from '../lib/session.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-09-ai-sync-m2.7-highspeed';
+const AI_BUILD = '2026-06-09-ai-sync-m2.7-16k';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "Alpine OS Shell".
 Your task is to generate complete, working app modules for this shell.
@@ -190,7 +190,7 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
         ],
         // Force structured JSON output — M2.7 otherwise drifts into chat replies.
         response_format: { type: 'json_object' },
-        max_tokens: 4096,
+        max_tokens: 16384,
       }),
     });
 
@@ -203,13 +203,22 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
 
     const aiData = await aiRes.json();
     const content = aiData.choices?.[0]?.message?.content;
+    const finishReason = aiData.choices?.[0]?.finish_reason;
     if (!content) { await finish({ status: 'error', error: 'Empty response from AI' }); res.json({ jobId }); return; }
 
     const jsonStr = extractModuleJson(content);
     let parsed;
     try { parsed = JSON.parse(jsonStr); }
     catch {
-      await finish({ status: 'error', error: 'AI returned invalid JSON', raw: jsonStr.slice(0, 300) });
+      // finish_reason 'length' means we hit max_tokens — the JSON is cut off.
+      const truncated = finishReason === 'length';
+      await finish({
+        status: 'error',
+        error: truncated
+          ? 'Module too large — the AI response was cut off at the token limit. Try a simpler/smaller app.'
+          : 'AI returned invalid JSON',
+        raw: jsonStr.slice(0, 800),
+      });
       res.json({ jobId });
       return;
     }

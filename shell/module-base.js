@@ -53,7 +53,7 @@ export class AppModuleBase extends HTMLElement {
     this._wrapper.style.opacity = '0';
     this._render();
     if (this.api) this.api.setTitle(this._getTitle());
-    motion(this._wrapper, [{ opacity: 0 }, { opacity: 1 }], { ...spring.smooth() });
+    motion(this._wrapper, { opacity: [0, 1] }, { ...spring.smooth() });
 
     // 7. Theme sync — use Alpine's reactive store so no DOM polling needed
     this._themeCleanup = Alpine.effect(() => {

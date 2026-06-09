@@ -147,7 +147,7 @@ export function registerOsStore() {
       win.hostEl = hostEl;
       hostEl.appendChild(el);
       const winEl = hostEl.closest('.os-window');
-      if (winEl) motion(winEl, [{ opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1 }], { ...spring.snappy() });
+      if (winEl) motion(winEl, { opacity: [0, 1], scale: [0.92, 1] }, { ...spring.snappy() });
     },
 
     focus(id) {
@@ -162,7 +162,7 @@ export function registerOsStore() {
         Alpine.nextTick(() => {
           const winEl = win.hostEl?.closest('.os-window');
           if (winEl) motion(winEl,
-            [{ opacity: 0, scale: 0.85, y: 20 }, { opacity: 1, scale: 1, y: 0 }],
+            { opacity: [0, 1], scale: [0.85, 1], y: [20, 0] },
             { ...spring.snappy() });
         });
       }
@@ -173,8 +173,10 @@ export function registerOsStore() {
       if (!win) return;
       const winEl = win.hostEl?.closest('.os-window');
       if (winEl) {
-        await motion(winEl, { opacity: 0, scale: 0.85, y: 20 },
-          { ...spring.smooth() }).finished;
+        try {
+          await motion(winEl, { opacity: [1, 0], scale: [1, 0.85], y: [0, 20] },
+            { ...spring.smooth() }).finished;
+        } catch(e) {}
         winEl.style.opacity = '';
         winEl.style.transform = '';
       }
@@ -194,7 +196,7 @@ export function registerOsStore() {
       }
       Alpine.nextTick(() => {
         const winEl = win.hostEl?.closest('.os-window');
-        if (winEl) motion(winEl, [{ scale: 0.97 }, { scale: 1 }],
+        if (winEl) motion(winEl, { scale: [0.97, 1] },
           { ...spring.smooth() });
       });
     },
@@ -203,7 +205,11 @@ export function registerOsStore() {
       const win = this.windows.find(w => w.id === id);
       if (!win) return;
       const winEl = win.hostEl?.closest('.os-window');
-      if (winEl) await motion(winEl, { opacity: 0, scale: 0.95 }, { duration: 0.15 }).finished;
+      if (winEl) {
+        try {
+          await motion(winEl, { opacity: 0, scale: 0.95 }, { duration: 0.15 }).finished;
+        } catch(e) {}
+      }
       this.windows = this.windows.filter(w => w.id !== id);
     },
 
@@ -257,7 +263,7 @@ export function registerOsStore() {
         const icons = document.querySelectorAll('.os-desktop-icon');
         Array.from(icons).slice(0, 20).forEach((el, i) => {
           motion(el,
-            [{ opacity: 0, y: 10, scale: 0.82 }, { opacity: 1, y: 0, scale: 1 }],
+            { opacity: [0, 1], y: [10, 0], scale: [0.82, 1] },
             { ...spring.snappy(), delay: i * 0.045 }
           );
         });
@@ -350,7 +356,7 @@ export function registerOsStore() {
       win.hostEl = hostEl;
       hostEl.appendChild(el);
       const winEl = hostEl.closest('.os-window');
-      if (winEl) motion(winEl, [{ opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1 }], { ...spring.snappy() });
+      if (winEl) motion(winEl, { opacity: [0, 1], scale: [0.92, 1] }, { ...spring.snappy() });
     },
 
     launchInstance(instanceId) {

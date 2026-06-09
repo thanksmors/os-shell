@@ -142,22 +142,30 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
   }
 
   try {
-    const aiRes = await fetch(MINIMAX_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'MiniMax-M3',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
-        ],
-        response_format: { type: 'json_object' },
-        max_tokens: 8192,
-      }),
-    });
+    const ac = new AbortController();
+    const timeout = setTimeout(() => ac.abort(), 25000); // 25s — under Codehooks 30s limit
+    let aiRes;
+    try {
+      aiRes = await fetch(MINIMAX_URL, {
+        signal: ac.signal,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'MiniMax-M3',
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: prompt },
+          ],
+          response_format: { type: 'json_object' },
+          max_tokens: 4096,
+        }),
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!aiRes.ok) {
       const errBody = await aiRes.text().catch(() => '');
@@ -184,6 +192,9 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
 
     res.json(parsed);
   } catch (err) {
-    res.json({ error: err.message || 'AI request failed' });
+    const msg = err.name === 'AbortError'
+      ? 'MiniMax took too long (>25s). Try a shorter/simpler prompt.'
+      : (err.message || 'AI request failed');
+    res.json({ error: msg });
   }
 });

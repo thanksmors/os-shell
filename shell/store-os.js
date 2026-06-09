@@ -147,7 +147,7 @@ export function registerOsStore() {
       win.hostEl = hostEl;
       hostEl.appendChild(el);
       const winEl = hostEl.closest('.os-window');
-      if (winEl) motion(winEl, [{ opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1 }], { duration: 0.2, easing: spring.snappy() });
+      if (winEl) motion(winEl, [{ opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1 }], { ...spring.snappy() });
     },
 
     focus(id) {
@@ -163,7 +163,7 @@ export function registerOsStore() {
           const winEl = win.hostEl?.closest('.os-window');
           if (winEl) motion(winEl,
             [{ opacity: 0, scale: 0.85, y: 20 }, { opacity: 1, scale: 1, y: 0 }],
-            { duration: 0.22, easing: spring.snappy() });
+            { ...spring.snappy() });
         });
       }
     },
@@ -174,7 +174,7 @@ export function registerOsStore() {
       const winEl = win.hostEl?.closest('.os-window');
       if (winEl) {
         await motion(winEl, { opacity: 0, scale: 0.85, y: 20 },
-          { duration: 0.18, easing: spring.smooth() }).finished;
+          { ...spring.smooth() }).finished;
         winEl.style.opacity = '';
         winEl.style.transform = '';
       }
@@ -195,7 +195,7 @@ export function registerOsStore() {
       Alpine.nextTick(() => {
         const winEl = win.hostEl?.closest('.os-window');
         if (winEl) motion(winEl, [{ scale: 0.97 }, { scale: 1 }],
-          { duration: 0.25, easing: spring.smooth() });
+          { ...spring.smooth() });
       });
     },
 
@@ -258,7 +258,7 @@ export function registerOsStore() {
         Array.from(icons).slice(0, 20).forEach((el, i) => {
           motion(el,
             [{ opacity: 0, y: 10, scale: 0.82 }, { opacity: 1, y: 0, scale: 1 }],
-            { duration: 0.28, delay: i * 0.045, easing: spring.snappy() }
+            { ...spring.snappy(), delay: i * 0.045 }
           );
         });
       });
@@ -350,7 +350,7 @@ export function registerOsStore() {
       win.hostEl = hostEl;
       hostEl.appendChild(el);
       const winEl = hostEl.closest('.os-window');
-      if (winEl) motion(winEl, [{ opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1 }], { duration: 0.2, easing: spring.snappy() });
+      if (winEl) motion(winEl, [{ opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1 }], { ...spring.snappy() });
     },
 
     launchInstance(instanceId) {

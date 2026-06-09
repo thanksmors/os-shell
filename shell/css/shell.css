@@ -518,3 +518,42 @@
 /* workspace create form row — flex layout decoupled from x-show */
 .ws-create-row { display: flex; gap: 8px; align-items: center; }
 
+
+/* ── Window loading skeleton ─────────────────────────────────────────────── */
+/* Overlays the content area (below the 38px titlebar) until win.ready. */
+.os-skeleton {
+  position: absolute;
+  top: 38px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 20px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  pointer-events: none;
+  z-index: 2;
+}
+.dark .os-skeleton { background: #1f2937; }
+.os-skeleton-bar,
+.os-skeleton-block {
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(0,0,0,0.06) 25%, rgba(0,0,0,0.11) 50%, rgba(0,0,0,0.06) 75%);
+  background-size: 200% 100%;
+  animation: os-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.dark .os-skeleton-bar,
+.dark .os-skeleton-block {
+  background: linear-gradient(90deg, rgba(255,255,255,0.07) 25%, rgba(255,255,255,0.13) 50%, rgba(255,255,255,0.07) 75%);
+  background-size: 200% 100%;
+}
+.os-skeleton-bar { height: 14px; }
+.os-skeleton-block { height: 96px; }
+@keyframes os-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .os-skeleton-bar, .os-skeleton-block { animation: none; }
+}

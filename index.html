@@ -260,6 +260,15 @@
           :data-win-host="win.id"
         ></div>
 
+        <!-- Loading skeleton (shown until the module's first render) -->
+        <div class="os-skeleton" x-show="!win.ready">
+          <div class="os-skeleton-bar" style="width:40%;"></div>
+          <div class="os-skeleton-bar" style="width:90%;"></div>
+          <div class="os-skeleton-bar" style="width:75%;"></div>
+          <div class="os-skeleton-block"></div>
+          <div class="os-skeleton-bar" style="width:60%;"></div>
+        </div>
+
         <!-- Resize Handles (all 8 edges/corners) -->
         <template x-if="win.resizable && win.state !== 'maximized'">
           <div>

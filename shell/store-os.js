@@ -113,6 +113,7 @@ export function registerOsStore() {
         focused: false,
         resizable: app.resizable !== false,
         minSize: app.minSize || { w: 240, h: 180 },
+        ready: false,
       };
       this.windows.forEach(w => w.focused = false);
       win.focused = true;
@@ -126,11 +127,16 @@ export function registerOsStore() {
       const hostEl = document.querySelector(`[data-win-host="${win.id}"]`);
       if (!hostEl) return;
       const app = this.apps[win.appId];
-      if (!app) return;
+      if (!app) { win.ready = true; return; }
 
-      // lazy import module
+      // Animate the window frame in immediately — before the module import —
+      // so the frame never paints fully visible and then restarts the animation.
+      const winEl = hostEl.closest('.os-window');
+      if (winEl) motion(winEl, { opacity: [0, 1], scale: [0.92, 1] }, { ...spring.snappy() });
+
+      // lazy import module (skeleton covers the content area meanwhile)
       if (!customElements.get(app.tag)) {
-        try { await import(app.entry); } catch(e) { console.error(e); return; }
+        try { await import(app.entry); } catch(e) { console.error(e); win.ready = true; return; }
       }
 
       const el = document.createElement(app.tag);
@@ -140,13 +146,24 @@ export function registerOsStore() {
         get mode() { return win.state === 'maximized' ? 'fullscreen' : 'windowed'; },
         get isDark() { return document.documentElement.classList.contains('dark'); },
         setTitle: (t) => { win.title = t; },
+        setReady: () => { win.ready = true; },
         notify: (msg, type) => Alpine.store('os').notify(msg, type),
         requestClose: () => Alpine.store('os').close(win.id),
         store: Alpine.store('os'),
       };
       hostEl.appendChild(el);
-      const winEl = hostEl.closest('.os-window');
-      if (winEl) motion(winEl, { opacity: [0, 1], scale: [0.92, 1] }, { ...spring.snappy() });
+      this._awaitModuleReady(win, el);
+    },
+
+    // AppModuleBase modules call api.setReady() after their first render;
+    // plain web components render synchronously, so mark them ready now.
+    // The timeout is a safety net so the skeleton can never get stuck.
+    _awaitModuleReady(win, el) {
+      if (typeof el._render !== 'function') {
+        win.ready = true;
+        return;
+      }
+      setTimeout(() => { win.ready = true; }, 5000);
     },
 
     _winEl(id) {
@@ -315,6 +332,7 @@ export function registerOsStore() {
         focused: false,
         resizable: app.resizable !== false,
         minSize: app.minSize || { w: 240, h: 180 },
+        ready: false,
       };
       this.windows.forEach(w => w.focused = false);
       win.focused = true;
@@ -327,9 +345,13 @@ export function registerOsStore() {
       const hostEl = document.querySelector(`[data-win-host="${win.id}"]`);
       if (!hostEl) return;
       const app = this.apps[instance.appId];
-      if (!app) return;
+      if (!app) { win.ready = true; return; }
+
+      const winEl = hostEl.closest('.os-window');
+      if (winEl) motion(winEl, { opacity: [0, 1], scale: [0.92, 1] }, { ...spring.snappy() });
+
       if (!customElements.get(app.tag)) {
-        try { await import(app.entry); } catch(e) { console.error(e); return; }
+        try { await import(app.entry); } catch(e) { console.error(e); win.ready = true; return; }
       }
       const self = this;
       const el = document.createElement(app.tag);
@@ -340,6 +362,7 @@ export function registerOsStore() {
         get mode() { return win.state === 'maximized' ? 'fullscreen' : 'windowed'; },
         get isDark() { return document.documentElement.classList.contains('dark'); },
         setTitle: (t) => { win.title = t; },
+        setReady: () => { win.ready = true; },
         notify: (msg, type) => Alpine.store('os').notify(msg, type),
         requestClose: () => Alpine.store('os').close(win.id),
         updateInstance: async (name, icon) => {
@@ -356,8 +379,7 @@ export function registerOsStore() {
         store: Alpine.store('os'),
       };
       hostEl.appendChild(el);
-      const winEl = hostEl.closest('.os-window');
-      if (winEl) motion(winEl, { opacity: [0, 1], scale: [0.92, 1] }, { ...spring.snappy() });
+      this._awaitModuleReady(win, el);
     },
 
     launchInstance(instanceId) {

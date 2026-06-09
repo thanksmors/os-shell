@@ -53,6 +53,7 @@ export class AppModuleBase extends HTMLElement {
     this._wrapper.style.opacity = '0';
     this._render();
     if (this.api) this.api.setTitle(this._getTitle());
+    this.api?.setReady?.();
     motion(this._wrapper, { opacity: [0, 1] }, { ...spring.smooth() });
 
     // 7. Theme sync — use Alpine's reactive store so no DOM polling needed
@@ -118,6 +119,7 @@ export class AppModuleBase extends HTMLElement {
 
   _showSetupDialog(items, existing) {
     return new Promise(resolve => {
+      this.api?.setReady?.(); // dialog replaces content — hide the shell skeleton
       this._applyTheme();
       const existingNames = Object.keys(existing);
 

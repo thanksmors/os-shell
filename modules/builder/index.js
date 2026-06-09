@@ -1,5 +1,5 @@
 import { adoptTailwind } from '/shell/shadow-tailwind.js';
-import { getData, setData, streamModule } from '/shell/api.js';
+import { getData, setData, generateModule } from '/shell/api.js';
 
 const COLLECTION = 'generated-modules';
 const INDEX_KEY = 'index';
@@ -11,7 +11,8 @@ class AppBuilder extends HTMLElement {
     this._modules = {};
     this._activeTab = 'chat';
     this._loading = false;
-    this._streamText = '';
+    this._loadingTimer = null;
+    this._loadingStart = 0;
     this._wrapper = null;
     this._themeObserver = null;
   }
@@ -44,6 +45,7 @@ class AppBuilder extends HTMLElement {
 
   disconnectedCallback() {
     this._themeObserver?.disconnect();
+    clearInterval(this._loadingTimer);
   }
 
   _applyTheme() {
@@ -72,7 +74,7 @@ class AppBuilder extends HTMLElement {
     return `
       <div class="messages" id="messages">
         ${this._messages.map(m => this._renderMessage(m)).join('')}
-        ${this._loading ? `<div class="msg ai"><div class="bubble loading" id="stream-bubble">${this._streamText || 'Connecting…'}</div></div>` : ''}
+        ${this._loading ? `<div class="msg ai"><div class="bubble loading"><span class="loading-label">Asking AI</span><span class="loading-timer" id="loading-timer"></span></div></div>` : ''}
       </div>
       <div class="input-bar">
         <textarea class="chat-input" id="chat-input" placeholder="Describe the app you want to build…" rows="2"></textarea>
@@ -175,46 +177,44 @@ class AppBuilder extends HTMLElement {
 
   // ─── Actions ───────────────────────────────────────────────────────────────
 
-  _send(text) {
+  async _send(text) {
     text = text.trim();
     if (!text || this._loading) return;
 
     this._messages.push({ role: 'user', text });
-    this._streamText = '';
     this._loading = true;
+    this._loadingStart = Date.now();
     this._render();
 
-    streamModule(
-      text,
-      (token) => {
-        this._streamText += token;
-        const bubble = this._wrapper.querySelector('#stream-bubble');
-        if (bubble) bubble.textContent = this._streamText;
-      },
-      (module) => {
-        this._loading = false;
-        this._onModuleReady(module);
-      },
-      (err) => {
-        this._loading = false;
-        this._messages.push({ role: 'ai', text: `❌ ${err.message}` });
-        this._render();
-      }
-    );
-  }
+    // Tick the elapsed-time counter every second
+    this._loadingTimer = setInterval(() => {
+      const el = this._wrapper.querySelector('#loading-timer');
+      if (el) el.textContent = ` (${Math.floor((Date.now() - this._loadingStart) / 1000)}s)`;
+    }, 1000);
 
-  _onModuleReady(result) {
-    if (result.manifest && result.js) {
-      const msgIdx = this._messages.length;
-      const installed = !!this._modules[result.manifest.appId];
-      this._messages.push({
-        role: 'ai',
-        text: `Here's your ${result.manifest.icon} ${result.manifest.title} module! Review the code and click Install to add it to your desktop.`,
-        preview: { ...result, installed, msgIdx },
-      });
-    } else {
-      this._messages.push({ role: 'ai', text: '❌ Unexpected response. Try rephrasing your request.' });
+    try {
+      const result = await generateModule(text);
+      clearInterval(this._loadingTimer);
+
+      if (result.error) {
+        this._messages.push({ role: 'ai', text: `❌ ${result.error}` });
+      } else if (result.manifest && result.js) {
+        const msgIdx = this._messages.length;
+        const installed = !!this._modules[result.manifest.appId];
+        this._messages.push({
+          role: 'ai',
+          text: `Here's your ${result.manifest.icon} ${result.manifest.title} module! Review the code and click Install to add it to your desktop.`,
+          preview: { ...result, installed, msgIdx },
+        });
+      } else {
+        this._messages.push({ role: 'ai', text: '❌ Unexpected response. Try rephrasing your request.' });
+      }
+    } catch (err) {
+      clearInterval(this._loadingTimer);
+      this._messages.push({ role: 'ai', text: `❌ ${err.message}` });
     }
+
+    this._loading = false;
     this._render();
   }
 

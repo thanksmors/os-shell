@@ -4,7 +4,7 @@ import { getSessionUser, sendUnauth } from '../lib/session.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-09-ai-sync-m2.7-16k';
+const AI_BUILD = '2026-06-09-ai-singleton-lifecycle';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "Alpine OS Shell".
 Your task is to generate complete, working app modules for this shell.
@@ -93,6 +93,29 @@ JSON output:
   "css": ".wrapper { display:flex; flex-direction:column; min-height:100%; height:auto; align-items:center; justify-content:center; background:#f2f2f7; color:#1c1c1e; }\\n.wrapper.dark { background:#1c1c1e; color:#f5f5f7; }\\n.body { display:flex; flex-direction:column; align-items:center; gap:20px; }\\n.count { font-size:5rem; font-weight:700; }\\n.btns { display:flex; gap:8px; }\\n.btn { padding:10px 22px; border:none; border-radius:8px; background:#007aff; color:#fff; font-size:1rem; cursor:pointer; }\\n.btn:hover { opacity:.85; }\\n.rst { background:#8e8e93; }"
 }
 
+## EXAMPLE — Complete singleton module (one shared window)
+
+Singletons ALSO extend AppModuleBase. Set generator:false, singleton:true, NO contextMenu.
+If the app needs no saved data, just set this._state to a default object in _load().
+
+JSON output:
+{
+  "manifest": {
+    "appId": "clock",
+    "tag": "app-clock",
+    "entry": "/modules/placeholder/index.js",
+    "title": "Clock",
+    "icon": "🕐",
+    "defaultSize": { "w": 300, "h": 200 },
+    "minSize": { "w": 220, "h": 160 },
+    "singleton": true,
+    "generator": false,
+    "resizable": true
+  },
+  "js": "import { AppModuleBase } from '/shell/module-base.js';\\n\\nclass AppClock extends AppModuleBase {\\n  async _load() {\\n    this._state = { name: 'Clock', now: new Date().toLocaleTimeString() };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"body\\"><div class=\\"time\\">\${this._state.now}</div></div>\`;\\n    clearInterval(this._timer);\\n    this._timer = setInterval(() => {\\n      const t = this._wrapper.querySelector('.time');\\n      if (t) t.textContent = new Date().toLocaleTimeString();\\n    }, 1000);\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  disconnectedCallback() { super.disconnectedCallback(); clearInterval(this._timer); }\\n}\\n\\nif (!customElements.get('app-clock')) customElements.define('app-clock', AppClock);",
+  "css": ".wrapper { display:flex; align-items:center; justify-content:center; min-height:100%; height:auto; background:#f2f2f7; color:#1c1c1e; }\\n.wrapper.dark { background:#1c1c1e; color:#f5f5f7; }\\n.body { text-align:center; }\\n.time { font-size:3rem; font-weight:700; font-variant-numeric:tabular-nums; }"
+}
+
 ## Rules
 
 1. Output ONLY valid JSON — no markdown, no code fences, no extra text
@@ -106,7 +129,12 @@ JSON output:
 9. Dark mode: add .wrapper.dark selectors for every background/color rule
 10. Use this.api?.config?.name for the initial name when available
 11. The collection name in dataCollections must match what getData/setData use
-12. Keep JS and CSS as single-line strings with \\n for newlines (valid JSON string)`;
+12. Keep JS and CSS as single-line strings with \\n for newlines (valid JSON string)
+13. ALL modules (generator AND singleton) extend AppModuleBase. NEVER write your own constructor or connectedCallback — AppModuleBase already awaits _load() (which sets this._state) BEFORE calling _render(). Writing your own connectedCallback runs _render() before _state exists and crashes with "this._state is null".
+14. _load() MUST always assign this._state before it returns — to persisted data OR a default object. Use: this._state = await getData(coll, key) || { ...defaults }. Singletons with no saved data just do: this._state = { ...defaults };
+15. _render() may safely assume this._state is set. Always null-check elements from querySelector before using them.
+16. If you override disconnectedCallback (e.g. to clear a setInterval), call super.disconnectedCallback() first.
+17. Singletons have no per-instance id — persist with a fixed literal key, e.g. getData('myapp', 'data') / setData('myapp', 'data', this._state). Do NOT use this._appId for singleton persistence.`;
 
 // ─── AI diagnostics ────────────────────────────────────────────────────────────
 

@@ -4,7 +4,7 @@ import { getSessionUser, sendUnauth } from '../lib/session.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-09-ai-sync-m3-fallback';
+const AI_BUILD = '2026-06-09-ai-sync-m2.7-highspeed';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "Alpine OS Shell".
 Your task is to generate complete, working app modules for this shell.
@@ -183,7 +183,7 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}` },
       body: JSON.stringify({
-        model: 'MiniMax-M3',
+        model: 'MiniMax-M2.7-highspeed',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: prompt },
@@ -222,7 +222,7 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
     res.json({ jobId });
   } catch (err) {
     const msg = err.name === 'AbortError'
-      ? 'M3 reasoning took over 55s — try a simpler prompt, or retry (complex modules sometimes need a second attempt)'
+      ? 'AI took over 55s — try a simpler prompt, or retry (complex modules sometimes need a second attempt)'
       : (err.message || 'AI request failed');
     await finish({ status: 'error', error: msg });
     res.json({ jobId });

@@ -1,6 +1,7 @@
 import { adoptTailwind } from '/shell/shadow-tailwind.js';
 import { subscribe, getData, setData } from '/shell/api.js';
 import { getCollections, createCollection } from '/modules/data/api.js';
+import { motion, spring } from '/shell/motion.js';
 
 export class AppModuleBase extends HTMLElement {
   constructor() {
@@ -49,8 +50,10 @@ export class AppModuleBase extends HTMLElement {
 
     // 6. Render (subclass)
     this._applyTheme();
+    this._wrapper.style.opacity = '0';
     this._render();
     if (this.api) this.api.setTitle(this._getTitle());
+    motion(this._wrapper, [{ opacity: 0 }, { opacity: 1 }], { duration: 0.22, easing: spring.smooth() });
 
     // 7. Theme sync — use Alpine's reactive store so no DOM polling needed
     this._themeCleanup = Alpine.effect(() => {

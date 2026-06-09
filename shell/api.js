@@ -156,10 +156,12 @@ export async function generateModule(prompt) {
   }
   const auth = `apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
 
-  // 1. Start the job (with a 20s safety timeout so it can't hang forever)
+  // 1. Start the job. The backend runs M3 synchronously (up to 55s) and writes
+  // the result to ai_jobs before returning, so this request blocks for the full
+  // generation. Allow 65s before giving up (55s server budget + network overhead).
   const startUrl = `${BACKEND_URL}/w/${_workspaceId}/ai-generate?${auth}`;
   const ac = new AbortController();
-  const startTimeout = setTimeout(() => ac.abort(), 20000);
+  const startTimeout = setTimeout(() => ac.abort(), 65000);
   let startRes;
   try {
     startRes = await fetch(startUrl, {
@@ -169,7 +171,7 @@ export async function generateModule(prompt) {
       body: JSON.stringify({ prompt }),
     });
   } catch (err) {
-    if (err.name === 'AbortError') throw new Error('Server did not accept the job within 20s — check that the backend is deployed (build ai-async-v1).');
+    if (err.name === 'AbortError') throw new Error('Generation did not finish within 65s — try a simpler prompt or retry.');
     throw err;
   } finally {
     clearTimeout(startTimeout);

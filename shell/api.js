@@ -152,7 +152,7 @@ export async function generateModule(prompt) {
   if (!useBackend() || !_workspaceId || !_session) {
     throw new Error('Backend required for AI generation — please log in first.');
   }
-  const genUrl = `${BACKEND_URL}/w/${_workspaceId}/ai/generate?apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
+  const genUrl = `${BACKEND_URL}/w/${_workspaceId}/ai-generate?apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
   const r = await fetch(genUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

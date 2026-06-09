@@ -113,7 +113,7 @@ app.get('/ai/ping', (req, res) => {
 
 // ─── AI module generation ──────────────────────────────────────────────────────
 
-app.post('/w/:workspaceId/ai/generate', async (req, res) => {
+app.post('/w/:workspaceId/ai-generate', async (req, res) => {
   const authUser = await getSessionUser(req);
   if (!authUser) { sendUnauth(res); return; }
 

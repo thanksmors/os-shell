@@ -4,7 +4,7 @@ import { getSessionUser, sendUnauth } from '../lib/session.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-09-ai-async-v2-hotfix';
+const AI_BUILD = '2026-06-09-ai-async-v3-m3';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "Alpine OS Shell".
 Your task is to generate complete, working app modules for this shell.
@@ -143,13 +143,60 @@ function extractModuleJson(content) {
   return (braceStart !== -1 && braceEnd !== -1) ? cleaned.slice(braceStart, braceEnd + 1) : cleaned;
 }
 
-// Background worker — timeout set to 2 minutes (requires Codehooks paid plan).
-// HOTFIX: exits immediately to drain the retry queue; re-enable MiniMax call after plan upgrade.
+// Background worker — not bound by the HTTP 60s limit. Runs MiniMax-M3 (a
+// reasoning model that can take 40–90s) and writes the result back to ai_jobs.
+// Requires a Codehooks paid plan so the 120s worker timeout is honored.
 app.worker('ai-generate-worker', async (req, res) => {
-  const { jobId, workspaceId } = req.body.payload || {};
+  const { jobId, workspaceId, prompt } = req.body.payload || {};
   const conn = await datastore.open();
-  await conn.updateOne(AI_JOBS, { jobId, workspaceId }, { jobId, workspaceId, status: 'error', error: 'Generation paused — plan upgrade in progress. Please try again shortly.' }).catch(() => {});
-  res.end();
+  const finish = async (patch) => {
+    // Include identity fields so a replace-style updateOne still keeps the doc
+    // findable by the poll route.
+    await conn.updateOne(AI_JOBS, { jobId, workspaceId }, { jobId, workspaceId, ...patch }).catch(() => {});
+    res.end();
+  };
+
+  try {
+    const aiRes = await fetch(MINIMAX_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'MiniMax-M3',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 4096,
+      }),
+    });
+
+    if (!aiRes.ok) {
+      const errBody = await aiRes.text().catch(() => '');
+      await finish({ status: 'error', error: `MiniMax API error ${aiRes.status}: ${errBody.slice(0, 300)}` });
+      return;
+    }
+
+    const aiData = await aiRes.json();
+    const content = aiData.choices?.[0]?.message?.content;
+    if (!content) { await finish({ status: 'error', error: 'Empty response from AI' }); return; }
+
+    const jsonStr = extractModuleJson(content);
+    let parsed;
+    try { parsed = JSON.parse(jsonStr); }
+    catch { await finish({ status: 'error', error: 'AI returned invalid JSON', raw: jsonStr.slice(0, 300) }); return; }
+
+    if (!parsed.manifest || !parsed.js) {
+      await finish({ status: 'error', error: 'AI response missing manifest or js fields', raw: jsonStr.slice(0, 300) });
+      return;
+    }
+
+    await finish({ status: 'done', module: parsed });
+  } catch (err) {
+    await finish({ status: 'error', error: err.message || 'AI request failed' });
+  }
 }, { timeout: 120000 });
 
 // POST — enqueue a generation job, return jobId immediately.

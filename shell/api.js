@@ -55,10 +55,17 @@ function lsDel(collection, id) {
   try { localStorage.removeItem(lsKey(collection, id)); } catch {}
 }
 
+// Session-level negative cache: keys confirmed absent on the backend.
+// Without it, every open of a window with no saved data repeats the
+// backend round-trip just to learn "nothing there" again.
+const _missCache = new Set();
+
 export async function getData(collection, id) {
   if (!useBackend()) return lsGet(collection, id);
   const cached = lsGet(collection, id);
   if (cached != null) return cached;
+  const key = lsKey(collection, id);
+  if (_missCache.has(key)) return null;
   try {
     const r = await fetch(url(collection, id), { headers: headers() });
     if (r.ok) {
@@ -67,12 +74,14 @@ export async function getData(collection, id) {
         lsSet(collection, id, json);
         return json;
       }
+      _missCache.add(key);
     }
   } catch {}
   return null;
 }
 
 export async function setData(collection, id, data) {
+  _missCache.delete(lsKey(collection, id));
   lsSet(collection, id, data);
   if (!useBackend()) return data;
   try {
@@ -117,6 +126,7 @@ async function _poll() {
         const collection = key.slice(0, colonIdx);
         const id = key.slice(colonIdx + 1);
         lsDel(collection, id);
+        _missCache.delete(lsKey(collection, id));
         _subscribers.get(key)?.forEach(cb => cb());
       }
     }
@@ -151,14 +161,20 @@ export function subscribe(collection, id, callback) {
 // job, get a jobId, then poll until it's done/errored or we hit the cap.
 
 export async function generateModule(prompt) {
+  return aiRequest('build', { messages: [{ role: 'user', content: prompt }] });
+}
+
+// mode: 'clarify' | 'plan' | 'build' | 'revise'
+// payload: { messages, plan, existing } — see codehooks/routes/ai.js
+export async function aiRequest(mode, payload = {}) {
   if (!useBackend() || !_workspaceId || !_session) {
     throw new Error('Backend required for AI generation — please log in first.');
   }
   const auth = `apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
 
-  // 1. Start the job. The backend runs M3 synchronously (up to 55s) and writes
-  // the result to ai_jobs before returning, so this request blocks for the full
-  // generation. Allow 65s before giving up (55s server budget + network overhead).
+  // 1. Start the job. The backend runs the model synchronously (up to 55s) and
+  // writes the result to ai_jobs before returning, so this request blocks for the
+  // full generation. Allow 65s before giving up (55s server budget + overhead).
   const startUrl = `${BACKEND_URL}/w/${_workspaceId}/ai-generate?${auth}`;
   const ac = new AbortController();
   const startTimeout = setTimeout(() => ac.abort(), 65000);
@@ -168,7 +184,7 @@ export async function generateModule(prompt) {
       signal: ac.signal,
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ mode, ...payload }),
     });
   } catch (err) {
     if (err.name === 'AbortError') throw new Error('Generation did not finish within 65s — try a simpler prompt or retry.');

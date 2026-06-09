@@ -41,6 +41,22 @@ export function registerOsStore() {
       this.instances = [];
       this._loadInstances();
       this._loadGeneratedModules();
+      this._prefetchModules();
+    },
+
+    // Warm module JS + CSS during idle time so first launch skips the network
+    // (the import fetch is the biggest contributor to skeleton time).
+    _prefetchModules() {
+      const warm = async () => {
+        const { fetchCssCached } = await import('/shell/module-base.js');
+        for (const app of Object.values(this.apps)) {
+          if (!app.entry || app.entry.startsWith('blob:')) continue;
+          import(app.entry).catch(() => {});
+          fetchCssCached(app.cssUrl || `/modules/${app.appId}/styles.css`);
+        }
+      };
+      if ('requestIdleCallback' in window) requestIdleCallback(() => warm(), { timeout: 4000 });
+      else setTimeout(warm, 2000);
     },
 
     async _loadGeneratedModules() {

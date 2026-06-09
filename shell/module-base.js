@@ -3,6 +3,15 @@ import { subscribe, getData, setData } from '/shell/api.js';
 import { getCollections, createCollection } from '/modules/data/api.js';
 import { motion, spring } from '/shell/motion.js';
 
+// Session-level CSS text cache — re-opening a window type skips the network.
+const _cssCache = new Map();
+export async function fetchCssCached(url) {
+  if (_cssCache.has(url)) return _cssCache.get(url);
+  const text = await fetch(url).then(r => r.text()).catch(() => '');
+  _cssCache.set(url, text);
+  return text;
+}
+
 export class AppModuleBase extends HTMLElement {
   constructor() {
     super();
@@ -26,8 +35,8 @@ export class AppModuleBase extends HTMLElement {
     const cssUrl = window.Alpine?.store('os')?.apps?.[moduleId]?.cssUrl
       || `/modules/${moduleId}/styles.css`;
     const [moduleCss, setupCss] = await Promise.all([
-      fetch(cssUrl).then(r => r.text()).catch(() => ''),
-      fetch('/shell/setup-dialog.css').then(r => r.text()).catch(() => ''),
+      fetchCssCached(cssUrl),
+      fetchCssCached('/shell/setup-dialog.css'),
     ]);
     styleEl.textContent = moduleCss + '\n' + setupCss;
     this._wrapper = document.createElement('div');

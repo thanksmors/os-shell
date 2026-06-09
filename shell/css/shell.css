@@ -469,14 +469,16 @@
 .dark ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
 
 /* Module base */
+/* font-size in rem so the Settings font-size slider (which sets html font-size)
+   cascades into every module. No font-family here — it inherits across shadow
+   boundaries from html, where Settings writes the chosen family. */
 .module-root {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 /* ─── Shared emoji picker trigger button (used in module settings panels) ── */

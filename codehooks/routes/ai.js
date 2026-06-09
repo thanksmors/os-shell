@@ -4,7 +4,7 @@ import { getSessionUser, sendUnauth } from '../lib/session.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-09-library-refactor';
+const AI_BUILD = '2026-06-09-build-app-phases';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "Alpine OS Shell".
 Your task is to generate complete, working app modules for this shell.
@@ -90,7 +90,7 @@ JSON output:
     "contextMenu": [{ "label": "🔢 New Counter", "config": { "name": "Counter", "icon": "🔢" } }]
   },
   "js": "import { AppModuleBase } from '/shell/module-base.js';\\nimport { getData, setData } from '/shell/api.js';\\n\\nclass AppCounter extends AppModuleBase {\\n  async _load() {\\n    this._state = await getData('counters', this._appId) || { name: this.api?.config?.name || 'Counter', count: 0 };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"body\\"><div class=\\"count\\">\${this._state.count}</div><div class=\\"btns\\"><button class=\\"btn dec\\">−</button><button class=\\"btn rst\\">Reset</button><button class=\\"btn inc\\">+</button></div></div>\`;\\n    this._wrapper.querySelector('.dec').addEventListener('click', () => this._change(-1));\\n    this._wrapper.querySelector('.inc').addEventListener('click', () => this._change(1));\\n    this._wrapper.querySelector('.rst').addEventListener('click', () => this._change(0, true));\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  async _change(delta, reset = false) {\\n    if (reset) this._state.count = 0; else this._state.count += delta;\\n    await setData('counters', this._appId, this._state);\\n    this._render();\\n  }\\n}\\n\\nif (!customElements.get('app-counter')) customElements.define('app-counter', AppCounter);",
-  "css": ".wrapper { display:flex; flex-direction:column; min-height:100%; height:auto; align-items:center; justify-content:center; background:#f2f2f7; color:#1c1c1e; }\\n.wrapper.dark { background:#1c1c1e; color:#f5f5f7; }\\n.body { display:flex; flex-direction:column; align-items:center; gap:20px; }\\n.count { font-size:5rem; font-weight:700; }\\n.btns { display:flex; gap:8px; }\\n.btn { padding:10px 22px; border:none; border-radius:8px; background:#007aff; color:#fff; font-size:1rem; cursor:pointer; }\\n.btn:hover { opacity:.85; }\\n.rst { background:#8e8e93; }"
+  "css": ".wrapper { display:flex; flex-direction:column; min-height:100%; height:auto; align-items:center; justify-content:center; background:#f2f2f7; color:#1c1c1e; }\\n.wrapper.dark { background:#1c1c1e; color:#f5f5f7; }\\n.body { display:flex; flex-direction:column; align-items:center; gap:20px; }\\n.count { font-size:5rem; font-weight:700; }\\n.btns { display:flex; gap:8px; }\\n.btn { padding:10px 22px; border:none; border-radius:8px; background:var(--os-accent, #3b82f6); color:#fff; font-size:1rem; cursor:pointer; }\\n.btn:hover { opacity:.85; }\\n.rst { background:#8e8e93; }"
 }
 
 ## EXAMPLE — Complete singleton module (one shared window)
@@ -134,7 +134,73 @@ JSON output:
 14. _load() MUST always assign this._state before it returns — to persisted data OR a default object. Use: this._state = await getData(coll, key) || { ...defaults }. Singletons with no saved data just do: this._state = { ...defaults };
 15. _render() may safely assume this._state is set. Always null-check elements from querySelector before using them.
 16. If you override disconnectedCallback (e.g. to clear a setInterval), call super.disconnectedCallback() first.
-17. Singletons have no per-instance id — persist with a fixed literal key, e.g. getData('myapp', 'data') / setData('myapp', 'data', this._state). Do NOT use this._appId for singleton persistence.`;
+17. Singletons have no per-instance id — persist with a fixed literal key, e.g. getData('myapp', 'data') / setData('myapp', 'data', this._state). Do NOT use this._appId for singleton persistence.
+18. Font sizes in CSS must use rem units (the shell scales html font-size from user settings) — never px for text.
+19. Primary action colors must use var(--os-accent, #3b82f6) — the user picks the accent in OS settings.
+20. NEVER declare font-family in CSS — it inherits the user's chosen font from the shell.
+21. SINGLETON IS THE DEFAULT. Only produce a generator module if the approved plan's type is "generator". Follow the plan's "type" field EXACTLY.`;
+
+// ─── Phase prompts (clarify → plan → build/revise) ────────────────────────────
+
+const CLARIFY_PROMPT = `You are a requirements analyst for "Alpine OS Shell" app modules (Web Components, shadow DOM, localStorage/Codehooks persistence — the tech stack is FIXED, never ask about it).
+
+Given the conversation, decide if the request is clear enough to plan. Output ONLY valid JSON, one of:
+
+1. If genuinely ambiguous, ask 1-3 multiple-choice questions:
+{"questions":[{"id":"q1","question":"...","options":[{"label":"...","detail":"...","recommended":true},{"label":"...","detail":"...","recommended":false}]}]}
+- Max 3 questions, 2-4 options each, EXACTLY one option per question has recommended:true.
+- Ask only about product decisions: scope, key features, data to track, layout style.
+- NEVER ask about tech stack, frameworks, or persistence mechanics.
+- Do NOT ask whether the app should be single-window or multi-instance UNLESS the user's words hint at multiple named instances (e.g. "lists", "boards", "one per project"). The default is a single shared window (singleton).
+
+2. If the request is already clear (or after questions were answered):
+{"ready":true,"summary":"one-paragraph restatement of what will be built"}`;
+
+const PLAN_PROMPT = `You are a software planner for "Alpine OS Shell" app modules (Web Components + AppModuleBase, getData/setData persistence — tech stack is FIXED).
+
+Given the conversation (user request + any clarification answers), output ONLY valid JSON:
+
+{"plan":{
+  "title":"App Name",
+  "icon":"single emoji",
+  "appId":"kebab-case-id",
+  "type":"singleton",
+  "summary":"2-3 sentence description of what will be built",
+  "features":["feature 1","feature 2","..."],
+  "collections":["collection-name"],
+  "dataModel":"one-line description of the persisted state shape"
+}}
+
+CRITICAL RULE for "type": it MUST be "singleton" unless the user EXPLICITLY asked for multiple separately-named instances (e.g. "I want to create several boards", "one per project"). Vague or absent instance-model preference = "singleton". If you choose "generator", the summary MUST quote the user's exact words that demanded multiple instances.
+
+If the user asks to revise an existing app, keep its appId and title unless they asked to change them, and list only what changes under "features".`;
+
+const REVISE_SUFFIX = `
+
+## Revision mode
+
+You are REVISING an existing installed module. You will receive its current manifest, js, and css plus an approved change plan.
+- Keep the SAME appId and tag (user data is keyed by them).
+- Apply only the planned changes; preserve all other behavior and styling.
+- Output the COMPLETE updated module JSON (manifest + js + css), not a diff.`;
+
+// Enforce the approved plan's instance model — the model occasionally drifts.
+function enforcePlanType(parsed, planType) {
+  if (!parsed?.manifest) return null;
+  if (planType === 'generator') {
+    parsed.manifest.generator = true;
+    parsed.manifest.singleton = false;
+    if (!Array.isArray(parsed.manifest.contextMenu) || parsed.manifest.contextMenu.length === 0) {
+      return 'Generated generator module has no contextMenu entries — it would be unreachable. Retry the build.';
+    }
+  } else {
+    // singleton is the default for everything else
+    parsed.manifest.singleton = true;
+    parsed.manifest.generator = false;
+    delete parsed.manifest.contextMenu;
+  }
+  return null;
+}
 
 // ─── AI diagnostics ────────────────────────────────────────────────────────────
 
@@ -184,14 +250,38 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
   const authUser = await getSessionUser(req);
   if (!authUser) { sendUnauth(res); return; }
 
-  const { prompt } = req.body || {};
-  if (!prompt || typeof prompt !== 'string') {
-    res.json({ error: 'prompt string required' });
+  // mode: clarify | plan | build | revise. Legacy callers send only {prompt} → build.
+  const { prompt, messages, plan, existing } = req.body || {};
+  const mode = ['clarify', 'plan', 'build', 'revise'].includes(req.body?.mode) ? req.body.mode : 'build';
+
+  // Normalize conversation: prefer messages[], fall back to single prompt.
+  let convo = Array.isArray(messages)
+    ? messages.filter(m => m && typeof m.content === 'string' && ['user', 'assistant'].includes(m.role))
+    : [];
+  if (!convo.length && typeof prompt === 'string' && prompt.trim()) {
+    convo = [{ role: 'user', content: prompt }];
+  }
+  if (!convo.length) {
+    res.json({ error: 'messages array or prompt string required' });
     return;
   }
   if (!process.env.MINIMAX_API_KEY) {
     res.json({ error: 'MINIMAX_API_KEY not configured on server' });
     return;
+  }
+
+  // Select system prompt and append mode-specific context to the conversation.
+  let systemPrompt;
+  if (mode === 'clarify') systemPrompt = CLARIFY_PROMPT;
+  else if (mode === 'plan') systemPrompt = PLAN_PROMPT;
+  else if (mode === 'revise') systemPrompt = SYSTEM_PROMPT + REVISE_SUFFIX;
+  else systemPrompt = SYSTEM_PROMPT;
+
+  if ((mode === 'build' || mode === 'revise') && plan) {
+    convo = [...convo, { role: 'user', content: `APPROVED PLAN (follow "type" exactly):\n${JSON.stringify(plan)}` }];
+  }
+  if (mode === 'revise' && existing) {
+    convo = [...convo, { role: 'user', content: `EXISTING MODULE (keep appId/tag, apply only planned changes):\n${JSON.stringify(existing)}` }];
   }
 
   const workspaceId = req.params.workspaceId;
@@ -214,8 +304,8 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
       body: JSON.stringify({
         model: 'MiniMax-M2.7-highspeed',
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
+          { role: 'system', content: systemPrompt },
+          ...convo,
         ],
         // Force structured JSON output — M2.7 otherwise drifts into chat replies.
         response_format: { type: 'json_object' },
@@ -252,10 +342,33 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
       return;
     }
 
-    if (!parsed.manifest || !parsed.js) {
-      await finish({ status: 'error', error: 'AI response missing manifest or js fields', raw: jsonStr.slice(0, 300) });
-      res.json({ jobId });
-      return;
+    // Mode-specific shape validation
+    if (mode === 'clarify') {
+      if (!Array.isArray(parsed.questions) && parsed.ready !== true) {
+        await finish({ status: 'error', error: 'AI clarify response missing questions/ready', raw: jsonStr.slice(0, 300) });
+        res.json({ jobId });
+        return;
+      }
+    } else if (mode === 'plan') {
+      if (!parsed.plan?.title || !parsed.plan?.type) {
+        await finish({ status: 'error', error: 'AI plan response missing plan.title/type', raw: jsonStr.slice(0, 300) });
+        res.json({ jobId });
+        return;
+      }
+      // Singleton default: anything that isn't an explicit generator is singleton.
+      if (parsed.plan.type !== 'generator') parsed.plan.type = 'singleton';
+    } else {
+      if (!parsed.manifest || !parsed.js) {
+        await finish({ status: 'error', error: 'AI response missing manifest or js fields', raw: jsonStr.slice(0, 300) });
+        res.json({ jobId });
+        return;
+      }
+      const typeErr = enforcePlanType(parsed, plan?.type === 'generator' ? 'generator' : 'singleton');
+      if (typeErr) {
+        await finish({ status: 'error', error: typeErr });
+        res.json({ jobId });
+        return;
+      }
     }
 
     await finish({ status: 'done', module: parsed });

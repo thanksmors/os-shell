@@ -15,6 +15,7 @@ class AppBoilerplate extends AppModuleBase {
           <div class="title">🧩 Boilerplate App</div>
           <div class="sub">Copy this folder to start a new module.<br>Edit manifest.json, index.js, and styles.css.</div>
         </div>
+        <button class="primary-btn">Accent-colored action</button>
       </div>
     `;
   }

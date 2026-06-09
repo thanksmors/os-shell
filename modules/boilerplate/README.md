@@ -126,6 +126,16 @@ this.addEventListener('os:toggle-settings', () => this._toggleSettings());
 
 ---
 
+## Appearance integration
+
+Modules respond live to **Settings > Appearance** if styles.css follows three rules:
+
+1. **Font sizes in `rem`** — Settings scales `html { font-size }`; rem cascades into shadow DOM. Never `px` for text.
+2. **Primary actions use `var(--os-accent, #3b82f6)`** — Settings sets `--os-accent` on `:root`; custom properties inherit through shadow boundaries.
+3. **No `font-family` declarations** — the family Settings chose inherits from `html` automatically.
+
+---
+
 ## Dark mode
 
 `AppModuleBase` (and `adoptTailwind`) sync `.dark` to `this._wrapper` automatically.

@@ -1,5 +1,8 @@
 export const SETTINGS_CSS = `
-  .settings-root {
+  /* Double-class selector: the shell sheet arrives via adoptedStyleSheets which
+     cascades AFTER this <style> tag, so .module-root { flex-direction:column }
+     would win a single-class tie and stack the sidebar above the content. */
+  .module-root.settings-root {
     background: #ffffff;
     color: #111827;
     display: flex;

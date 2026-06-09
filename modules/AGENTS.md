@@ -131,6 +131,21 @@ _collection()    // Collection name for sync polling. Default: appId.
 
 ---
 
+### Appearance contract
+
+Module CSS must respond to Settings > Appearance:
+
+1. **Font sizes in `rem`** — Settings scales `html { font-size }`; rem cascades into shadow DOM. Never `px` for text.
+2. **Primary action colors use `var(--os-accent, #3b82f6)`** — set on `:root` by Settings; custom properties inherit through shadow boundaries.
+3. **No `font-family` declarations** — the family chosen in Settings inherits from `html`.
+
+`.module-root` (shell.css) provides the rem base size. Note: shell CSS arrives in
+shadow roots via `adoptedStyleSheets`, which cascade AFTER the module's own
+`<style>` tag — to override a `.module-root` property, use a double-class
+selector (e.g. `.module-root.settings-root`).
+
+---
+
 ### Persistence — collection registry
 
 All reads/writes via `getData(collection, id)` / `setData(collection, id, data)` in
@@ -147,6 +162,8 @@ All reads/writes via `getData(collection, id)` / `setData(collection, id, data)`
 | `projects` | projects | `instanceId` |
 | `module-settings` | AppModuleBase | `instanceId` (slot resolutions for `requiredCollections`) |
 | `meta` | shell | `'instances'` (desktop instance registry) |
+| `generated-modules` | builder | `'index'` — `{ [appId]: { manifest, js, css } }` |
+| `build-jobs` | builder | `'index'` — `{ [jobId]: { status, plan, messages, module, … } }` |
 
 When adding a new collection: declare it in `manifest.dataCollections` and add a row here.
 
@@ -161,9 +178,25 @@ When adding a new collection: declare it in `manifest.dataCollections` and add a
 
 ---
 
-### Generated modules (`modules/builder/`)
+### Generated modules (`modules/builder/` — "Build App")
 
-The builder module lets users generate new app modules via AI and install them at runtime without touching the filesystem.
+The Build App module generates new app modules via AI and installs them at runtime
+without touching the filesystem. Flow: **clarify** (1-3 multiple-choice questions,
+one recommended, "🎲 Choose for me" auto-picks) → **plan** (card with title/type/
+features, user approves or requests changes) → **build** (queued job, sequential
+queue runner). Past jobs live in the `build-jobs` collection and can be **revised**:
+another clarify/plan round, then a `revise` build that keeps the same `appId` so
+user data survives; the revised code auto-reinstalls.
+
+**Singleton is the default.** The backend (`codehooks/routes/ai.js`) enforces
+`plan.type` after generation: anything not explicitly planned as `generator` is
+forced to `singleton: true, generator: false` with `contextMenu` removed.
+The `plan` prompt only allows `generator` when the user explicitly asked for
+multiple named instances.
+
+Backend modes: `POST /w/:ws/ai-generate` takes `{ mode: clarify|plan|build|revise,
+messages, plan, existing }` (frontend wrapper: `aiRequest(mode, payload)` in
+`shell/api.js`). Same job/poll mechanics for all modes.
 
 **Storage:** Generated module code lives in the `generated-modules` collection under the key `'index'`:
 ```js
@@ -229,8 +262,8 @@ others must be fully isolated, communicating only through `el.api` and `shell/ap
 | `emoji` | Singleton | Browse emojis by category or search, click to copy. CDN-backed. | none |
 | `notepad` | Singleton | Plain text editor. | `notepad` |
 | `files` | Plain | File browser. | none |
-| `settings` | Singleton | Theme and system settings. | none |
-| `about` | Singleton | App info. | none |
+| `settings` | Singleton | Appearance (theme/font/accent), workspace, about. | none |
+| `builder` | Singleton | "Build App" — AI module generation: clarify → plan → queued build, revise. | `generated-modules`, `build-jobs` |
 | `data` | (internal) | Shared collection management API for projects module. Not in registry. | — |
 | `boilerplate` | (template) | Not in `registry.json`. Starting point for new modules. | — |
 

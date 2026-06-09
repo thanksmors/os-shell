@@ -11,7 +11,6 @@ export function registerAuthStore() {
     inviteId: null,
     inviteInfo: null,
     error: null,
-    _savedWsId: Alpine.$persist(null).as('os-workspace'),
 
     async init() {
       // Capture invite link (if any) before we scrub the query string.
@@ -54,7 +53,8 @@ export function registerAuthStore() {
           this.inviteId = null;
         }
 
-        const savedWs = this._savedWsId && this.workspaces.find(w => w.workspaceId === this._savedWsId);
+        const savedWsId = localStorage.getItem('os-workspace');
+        const savedWs = savedWsId && this.workspaces.find(w => w.workspaceId === savedWsId);
         if (savedWs) {
           await this._activateWorkspace(savedWs, session);
         } else if (this.workspaces.length === 1) {
@@ -84,7 +84,7 @@ export function registerAuthStore() {
 
     async _activateWorkspace(ws, session) {
       this.workspace = ws;
-      this._savedWsId = ws.workspaceId;
+      localStorage.setItem('os-workspace', ws.workspaceId);
       setSession(session);
       setWorkspace(ws.workspaceId);
       resetPolling();

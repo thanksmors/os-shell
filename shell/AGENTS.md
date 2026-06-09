@@ -24,9 +24,11 @@ theme, toasts, and context menu.
 2. `_loadManifests()` — fetches `/registry.json`, then each `/modules/{id}/manifest.json`
 3. `loadWorkspaceData()` — called by auth-store after login; loads persisted instances
 
-**Theme persistence:** `theme` uses `Alpine.$persist('light').as('os-theme')`. An `Alpine.effect` in `init()` keeps `document.documentElement.classList` in sync — do NOT call `localStorage.setItem('os-theme', ...)` manually.
+**Theme persistence:** `theme` is initialised from `localStorage.getItem('os-theme')`. An `Alpine.effect` in `init()` keeps both `document.documentElement.classList` and `localStorage` in sync reactively — do NOT duplicate the `classList.toggle` or `localStorage.setItem` calls elsewhere (e.g. in `toggleTheme()`).
 
-**Desktop order persistence:** `desktopOrder` uses `Alpine.$persist([]).as('os:desktopOrder')`. Do NOT call `localStorage.setItem('os:desktopOrder', ...)` manually.
+**Desktop order persistence:** `desktopOrder` is initialised from `localStorage.getItem('os:desktopOrder')`. `reorderDesktop()` writes back to localStorage after updating the reactive property.
+
+**Why not `Alpine.$persist`:** `Alpine.$persist(value)` is only valid as a magic inside Alpine component `x-data` scopes (where `this.$persist` is injected). Calling `Alpine.$persist(...)` in a plain object literal passed to `Alpine.store()` throws `TypeError: Alpine.$persist is not a function` at runtime. Use `localStorage` directly for initial values + `Alpine.effect` for reactive persistence.
 
 **Window mount sequence:**
 ```

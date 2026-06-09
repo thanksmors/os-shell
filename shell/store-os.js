@@ -7,7 +7,7 @@ export function registerOsStore() {
     windows: [],
     apps: {},
     topZ: 100,
-    theme: Alpine.$persist('light').as('os-theme'),
+    theme: localStorage.getItem('os-theme') || 'light',
     isMobile: window.matchMedia('(max-width: 767px)').matches,
     toasts: [],
     contextMenu: { visible: false, x: 0, y: 0, items: [] },
@@ -16,11 +16,14 @@ export function registerOsStore() {
     dragOverFolderId: null,
     dragDesktopKey: null,
     dragOverDesktopKey: null,
-    desktopOrder: Alpine.$persist([]).as('os:desktopOrder'),
+    desktopOrder: JSON.parse(localStorage.getItem('os:desktopOrder') || '[]'),
 
     init() {
-      // keep <html class="dark"> in sync with reactive theme property
-      Alpine.effect(() => document.documentElement.classList.toggle('dark', this.theme === 'dark'));
+      // keep <html class="dark"> in sync with reactive theme, and persist it
+      Alpine.effect(() => {
+        document.documentElement.classList.toggle('dark', this.theme === 'dark');
+        localStorage.setItem('os-theme', this.theme);
+      });
       // mobile watch (only set up once)
       if (!this._mobileWatcher) {
         this._mobileWatcher = true;
@@ -391,6 +394,7 @@ export function registerOsStore() {
       const [moved] = current.splice(from, 1);
       current.splice(to, 0, moved);
       this.desktopOrder = current;
+      localStorage.setItem('os:desktopOrder', JSON.stringify(current));
     },
 
     renameInstance(instanceId, name) {

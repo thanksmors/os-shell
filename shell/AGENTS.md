@@ -106,8 +106,8 @@ needed. Declare `"dataCollections": ["name"]` in the manifest for cleanup.
 
 ### `module-base.js` — `AppModuleBase`
 
-Base class for generator modules. Extends `HTMLElement`. Handles the full lifecycle
-so subclasses only implement 3–4 methods.
+Base class for **all** modules (generator and singleton). Extends `HTMLElement`.
+Handles the full lifecycle so subclasses only implement 3–4 methods.
 
 **Lifecycle (in order):**
 1. Shadow DOM + styles (`modules/{id}/styles.css` + `setup-dialog.css`)
@@ -141,6 +141,16 @@ _collection()    // Collection name for sync polling. Default: this._manifestId(
 | `this._esc(str)` | HTML-escape a string for safe use in `innerHTML`. |
 | `this._applyTheme()` | Sync `.dark` class to `_wrapper`. Called automatically. |
 | `this._collectionFor(slot)` | Resolve a `requiredCollections` slot name to the actual collection name. |
+
+**CSS loading for generated modules:** `AppModuleBase` fetches styles from
+`/modules/{moduleId}/styles.css` by default. Generated modules have no filesystem
+path — pass `cssUrl` (a CSS blob URL) on the manifest and `AppModuleBase` reads it:
+```js
+// In connectedCallback, before fetching:
+const cssUrl = window.Alpine?.store('os')?.apps?.[moduleId]?.cssUrl
+  || `/modules/${moduleId}/styles.css`;
+```
+See `modules/AGENTS.md` → "Generated modules" for how to create the CSS blob URL.
 
 ---
 

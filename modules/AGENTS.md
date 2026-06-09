@@ -91,6 +91,12 @@ await new Promise(r => setTimeout(r, 0));
 
 ### `AppModuleBase` — lifecycle
 
+**ALL modules — generator AND singleton — must extend `AppModuleBase`.**
+Never write your own `constructor` or `connectedCallback`. `AppModuleBase`
+guarantees `_load()` (which sets `this._state`) completes before `_render()`
+is called. Writing your own `connectedCallback` that calls `_render()` directly
+crashes with `TypeError: this._state is null`.
+
 Generator modules extend `AppModuleBase` from `shell/module-base.js`. Ordered steps:
 
 1. Shadow DOM + styles (`modules/{id}/styles.css` + `setup-dialog.css`)
@@ -112,6 +118,12 @@ _render()        // Write DOM from this._state into this._wrapper.innerHTML.
 _getTitle()      // Return string for OS titlebar. Default: this._state?.name
 _collection()    // Collection name for sync polling. Default: appId.
 ```
+
+**Critical rules:**
+- `_load()` MUST always assign `this._state` before returning. Use: `this._state = await getData(col, key) || { ...defaults }`. Singletons with no saved data: `this._state = { ...defaults }`.
+- `_render()` may safely assume `this._state` is set. Always null-check `querySelector` results before using them.
+- If overriding `disconnectedCallback` (e.g. to clear a `setInterval`), call `super.disconnectedCallback()` first.
+- Singletons persist with a **fixed literal key**: `getData('myapp', 'data')` / `setData('myapp', 'data', ...)`. Do NOT use `this._appId` for singleton persistence — it is stable but semantically wrong for a shared single-instance resource.
 
 **Properties available in subclasses:** `this._state`, `this._appId`, `this._wrapper`, `this.api`, `this.shadowRoot`
 
@@ -146,6 +158,49 @@ When adding a new collection: declare it in `manifest.dataCollections` and add a
 |---|---|---|
 | `os:instances-changed` | on `window` | After any create/remove/move/reorder of instances |
 | `os:toggle-settings` | on module element | ⚙️ titlebar button clicked. Handle: `this.addEventListener('os:toggle-settings', () => this._toggleSettings())` |
+
+---
+
+### Generated modules (`modules/builder/`)
+
+The builder module lets users generate new app modules via AI and install them at runtime without touching the filesystem.
+
+**Storage:** Generated module code lives in the `generated-modules` collection under the key `'index'`:
+```js
+// shape: { [appId]: { manifest, js, css } }
+getData('generated-modules', 'index')
+```
+
+**Blob URL import rewriting — critical:** Generated JS contains imports like
+`import { AppModuleBase } from '/shell/module-base.js'`. Blob URLs have no origin,
+so the browser cannot resolve bare absolute paths from them. Before creating a blob,
+rewrite all absolute imports to full URLs:
+
+```js
+const origin = window.location.origin;
+const absoluteJs = js
+  .replace(/from '\/shell\//g, `from '${origin}/shell/`)
+  .replace(/from "\/shell\//g, `from "${origin}/shell/`)
+  .replace(/from '\/modules\//g, `from '${origin}/modules/`)
+  .replace(/from "\/modules\//g, `from "${origin}/modules/`);
+const blobUrl = URL.createObjectURL(new Blob([absoluteJs], { type: 'application/javascript' }));
+```
+
+This must be applied in **two places**: `modules/builder/index.js` (install) and
+`shell/store-os.js` (`_loadGeneratedModules`, page-load replay).
+
+**CSS blob URL:** Generated CSS is stored as a string and also turned into a blob
+URL, then passed as `cssUrl` on the manifest so `AppModuleBase` loads it:
+```js
+const cssUrl = css ? URL.createObjectURL(new Blob([css], { type: 'text/css' })) : null;
+this.api?.store?.registerApp({ ...manifest, entry: blobUrl, ...(cssUrl && { cssUrl }) });
+```
+`AppModuleBase` reads `store.apps[moduleId].cssUrl` and fetches it instead of
+the default `/modules/{id}/styles.css` path.
+
+**Registration on reload:** `shell/store-os.js._loadGeneratedModules()` runs at
+workspace load and re-registers all stored modules from the `generated-modules`
+collection. The rewrite + blob URL creation must happen here too.
 
 ---
 

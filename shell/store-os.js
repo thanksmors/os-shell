@@ -1,5 +1,5 @@
 import { iconUrl } from './icon.js';
-import { getInstances, saveInstances, subscribe } from './api.js';
+import { getInstances, saveInstances, subscribe, getData } from './api.js';
 
 export function registerOsStore() {
   Alpine.store('os', {
@@ -36,6 +36,23 @@ export function registerOsStore() {
     loadWorkspaceData() {
       this.instances = [];
       this._loadInstances();
+      this._loadGeneratedModules();
+    },
+
+    async _loadGeneratedModules() {
+      try {
+        const stored = await getData('generated-modules', 'index');
+        if (!stored || typeof stored !== 'object') return;
+        for (const [appId, mod] of Object.entries(stored)) {
+          if (!mod?.manifest || !mod?.js) continue;
+          const blobUrl = URL.createObjectURL(
+            new Blob([mod.js], { type: 'application/javascript' })
+          );
+          this.registerApp({ ...mod.manifest, entry: blobUrl });
+        }
+      } catch(e) {
+        console.warn('Could not load generated modules', e);
+      }
     },
 
     async _loadManifests() {
@@ -54,6 +71,11 @@ export function registerOsStore() {
 
     registerApp(manifest) {
       this.apps = { ...this.apps, [manifest.appId]: manifest };
+    },
+
+    unregisterApp(appId) {
+      const { [appId]: _, ...rest } = this.apps;
+      this.apps = rest;
     },
 
     async launch(appId, config = {}) {

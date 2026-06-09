@@ -146,6 +146,22 @@ export function subscribe(collection, id, callback) {
   return () => _subscribers.get(key)?.delete(callback);
 }
 
+// ─── AI module generation ──────────────────────────────────────────────────
+
+export async function generateModule(prompt) {
+  if (!useBackend() || !_workspaceId || !_session) {
+    throw new Error('Backend required for AI generation — please log in first.');
+  }
+  const genUrl = `${BACKEND_URL}/w/${_workspaceId}/ai/generate?apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
+  const r = await fetch(genUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  });
+  if (!r.ok) throw new Error(`Server error ${r.status}`);
+  return r.json();
+}
+
 // ─── List helpers ──────────────────────────────────────────────────────────
 
 export async function getList(appId) {

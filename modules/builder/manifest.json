@@ -1,0 +1,11 @@
+{
+  "appId": "builder",
+  "tag": "app-builder",
+  "entry": "/modules/builder/index.js",
+  "title": "Module Builder",
+  "icon": "🤖",
+  "defaultSize": { "w": 560, "h": 560 },
+  "singleton": true,
+  "resizable": true,
+  "minSize": { "w": 400, "h": 400 }
+}

@@ -13,5 +13,6 @@ import './routes/workspaces.js';
 import './routes/members.js';
 import './routes/invites.js';
 import './routes/data.js';
+import './routes/ai.js';
 
 export default app.init();

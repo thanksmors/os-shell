@@ -158,7 +158,11 @@ export async function generateModule(prompt) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt }),
   });
-  if (!r.ok) throw new Error(`Server error ${r.status}`);
+  if (!r.ok) {
+    let detail = '';
+    try { const j = await r.json(); detail = j.error || JSON.stringify(j); } catch {}
+    throw new Error(`Server error ${r.status}${detail ? ': ' + detail : ''}`);
+  }
   return r.json();
 }
 

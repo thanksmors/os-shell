@@ -1,11 +1,7 @@
 import { app } from 'codehooks-js';
-import OpenAI from 'openai';
 import { getSessionUser, sendUnauth } from '../lib/session.js';
 
-const ai = new OpenAI({
-  apiKey: process.env.MINIMAX_API_KEY,
-  baseURL: 'https://api.minimax.io/v1',
-});
+const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "Alpine OS Shell".
 Your task is to generate complete, working app modules for this shell.
@@ -127,17 +123,31 @@ app.post('/w/:workspaceId/ai/generate', async (req, res) => {
   }
 
   try {
-    const completion = await ai.chat.completions.create({
-      model: 'MiniMax-M3',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: prompt },
-      ],
-      response_format: { type: 'json_object' },
-      max_tokens: 8192,
+    const aiRes = await fetch(MINIMAX_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'MiniMax-M3',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 8192,
+      }),
     });
 
-    const content = completion.choices[0]?.message?.content;
+    if (!aiRes.ok) {
+      const errBody = await aiRes.text().catch(() => '');
+      res.json({ error: `MiniMax API error ${aiRes.status}: ${errBody.slice(0, 300)}` });
+      return;
+    }
+
+    const aiData = await aiRes.json();
+    const content = aiData.choices?.[0]?.message?.content;
     if (!content) { res.json({ error: 'Empty response from AI' }); return; }
 
     let parsed;

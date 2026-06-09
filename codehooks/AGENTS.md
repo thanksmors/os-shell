@@ -75,18 +75,15 @@ every request and surfaces as "CORS request did not succeed, status null".
 const data = await db.getOne(collection, { appId }).catch(() => null);
 ```
 
-**4. `upsertOne` may not exist**
+**4. `updateOne` with `{ upsert: true }` — use instead of get + insert/update**
 
-Use the explicit get → insert/update pattern:
+`dbUpsert` in `lib/db.js` now uses this pattern — one round-trip instead of two:
 
 ```js
-const existing = await db.getOne(collection, { appId }).catch(() => null);
-if (existing) {
-  await db.updateOne(collection, { appId }, record);
-} else {
-  await db.insertOne(collection, record);
-}
+await db.updateOne(collection, { appId }, record, {}, { upsert: true });
 ```
+
+The old get → insert/update pattern still works but wastes a read. Do not reintroduce it.
 
 **5. `res.json(null)` sends empty body**
 
@@ -98,6 +95,27 @@ throw on the client.
 
 Use `https://test-tp2u.api.codehooks.io/dev`. The `crunchy-universe-a06e.codehooks.io`
 alias does not work with the `/dev` path suffix.
+
+**7. HTTP status codes for auth errors**
+
+Permission errors must set the status code separately before calling `res.json()` (chaining crashes):
+```js
+res.status(403);
+res.json({ error: 'Insufficient permissions' });
+```
+`sendUnauth` in `lib/session.js` already does this correctly for 401. Apply the same pattern for 403 in route handlers.
+
+**8. KV store — use for ephemeral keys with TTL**
+
+Codehooks exposes `db.set(key, value, { ttl })` / `db.get(key)` on an opened datastore connection. TTL is in **seconds**. Expired keys auto-delete — no cleanup jobs needed.
+
+Use KV (not a collection) for:
+- **Sessions** (`lib/session.js`): `db.set(`session:${token}`, { userId }, { ttl: 30 * 24 * 60 * 60 })`
+- **Invites** (`routes/invites.js`): `db.set(`invite:${id}`, payload, { ttl: 7 * 24 * 60 * 60 })`
+- **AI jobs** (`routes/ai.js`): `db.set(`ai_job:${id}`, payload, { ttl: 10 * 60 })`
+- **Changes feed** (`lib/changes.js`): `db.set(`changes:${workspaceId}`, feed)` (no TTL — long-lived)
+
+Do NOT store these in collections — they accumulate stale records forever with no automatic cleanup.
 
 ---
 

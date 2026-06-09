@@ -20,9 +20,13 @@ Single source of truth for windows, app registry, desktop instances, drag state,
 theme, toasts, and context menu.
 
 **Init sequence:**
-1. `init()` — applies saved theme, starts mobile-breakpoint watcher
+1. `init()` — starts `Alpine.effect` for dark-mode class sync, starts mobile-breakpoint watcher
 2. `_loadManifests()` — fetches `/registry.json`, then each `/modules/{id}/manifest.json`
 3. `loadWorkspaceData()` — called by auth-store after login; loads persisted instances
+
+**Theme persistence:** `theme` uses `Alpine.$persist('light').as('os-theme')`. An `Alpine.effect` in `init()` keeps `document.documentElement.classList` in sync — do NOT call `localStorage.setItem('os-theme', ...)` manually.
+
+**Desktop order persistence:** `desktopOrder` uses `Alpine.$persist([]).as('os:desktopOrder')`. Do NOT call `localStorage.setItem('os:desktopOrder', ...)` manually.
 
 **Window mount sequence:**
 ```
@@ -32,8 +36,12 @@ launch() / createInstance()
   → _mount() / _mountInstance()
     → await import(app.entry)      ← lazy, first launch only
     → el.api = { ... }             ← attach shell API
+    → win.hostEl = hostEl          ← stored for close animation
     → shadow.host.appendChild(el)
+    → Motion scale-in animation on .os-window
 ```
+
+**Window close:** `close(id)` is `async` — it runs a 150ms Motion scale-out animation on the window element before splicing it from `windows[]`. Any code that closes a window must `await` or ignore the returned promise.
 
 **Instance lifecycle:**
 - `createInstance(appId, config)` — generates `instanceId = inst-{timestamp}`, adds desktop icon, opens window
@@ -118,8 +126,10 @@ Handles the full lifecycle so subclasses only implement 3–4 methods.
 6. `await _load()` — **subclass implements**
 7. `_applyTheme()` + `_render()` — **subclass implements**
 8. `api.setTitle(_getTitle())` — **subclass implements**
-9. `MutationObserver` on `document.documentElement` — keeps `.dark` class in sync
+9. `Alpine.effect()` watching `Alpine.store('os').theme` — keeps `.dark` class in sync reactively (replaces MutationObserver)
 10. `subscribe()` if `manifest.sync === true` — cross-device polling
+
+**Dark-mode sync:** Uses `Alpine.effect()` instead of a MutationObserver. The effect subscribes to `Alpine.store('os').theme` so updates are driven by Alpine's reactive graph, not DOM polling. `disconnectedCallback` calls `this._themeCleanup()` to stop the effect.
 
 **Hooks to override:**
 
@@ -195,11 +205,16 @@ export const API_KEY = '...';
 
 ### `motion.js`
 
-Thin wrapper around Motion 11. Dynamically imported from CDN on first use. Falls
-back gracefully if CDN is unavailable (final keyframe applied instantly). Respects
-`prefers-reduced-motion`.
+Thin wrapper around Motion 11. Imported by `store-os.js` so the CDN fetch fires at
+boot. Falls back gracefully if CDN is unavailable (final keyframe applied instantly).
+Respects `prefers-reduced-motion`.
 
-Spring presets: `snappy` (520/30), `smooth` (280/30), `gentle` (120/26).
+**Exports:**
+- `motion(el, keyframes, options)` — thin wrapper around `animate()`. Returns `{ finished: Promise }`.
+- `spring` — preset factory object. Call `spring.snappy()`, `spring.smooth()`, `spring.gentle()` as the `easing` option. They return Motion v11 spring easing functions. **Do not use as plain objects** — the old `{ type: 'spring', stiffness, damping }` shape is Framer Motion React syntax and is silently ignored by vanilla Motion v11.
+- `inView`, `hover`, `press` — re-exported from the CDN bundle. May be `null` before the async import resolves.
+
+Spring presets: `snappy` (stiffness 520 / damping 30), `smooth` (280/30), `gentle` (120/26).
 
 ---
 

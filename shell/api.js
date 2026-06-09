@@ -159,8 +159,9 @@ export async function generateModule(prompt) {
     body: JSON.stringify({ prompt }),
   });
   if (!r.ok) {
-    let detail = '';
-    try { const j = await r.json(); detail = j.error || JSON.stringify(j); } catch {}
+    const raw = await r.text().catch(() => '');
+    let detail = raw.slice(0, 300);
+    try { const j = JSON.parse(raw); detail = j.error || JSON.stringify(j); } catch {}
     throw new Error(`Server error ${r.status}${detail ? ': ' + detail : ''}`);
   }
   return r.json();

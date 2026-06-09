@@ -105,6 +105,12 @@ JSON output:
 11. The collection name in dataCollections must match what getData/setData use
 12. Keep JS and CSS as single-line strings with \\n for newlines (valid JSON string)`;
 
+// ─── AI diagnostics ────────────────────────────────────────────────────────────
+
+app.get('/ai/ping', (req, res) => {
+  res.json({ ok: true, hasKey: !!process.env.MINIMAX_API_KEY });
+});
+
 // ─── AI module generation ──────────────────────────────────────────────────────
 
 app.post('/w/:workspaceId/ai/generate', async (req, res) => {

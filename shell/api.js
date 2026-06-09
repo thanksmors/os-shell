@@ -195,7 +195,10 @@ export async function generateModule(prompt) {
       data = await pr.json();
     } catch { continue; } // transient network hiccup — keep polling
     if (data.status === 'done') return data.module;
-    if (data.status === 'error') throw new Error(data.error || 'Generation failed');
+    if (data.status === 'error') {
+      const msg = data.raw ? `${data.error || 'Generation failed'} — raw: ${data.raw}` : (data.error || 'Generation failed');
+      throw new Error(msg);
+    }
     // 'pending' or 'unknown' — keep waiting
   }
   throw new Error('Generation timed out after 2 minutes. Try a simpler prompt.');

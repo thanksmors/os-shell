@@ -4,7 +4,7 @@ import { getSessionUser, sendUnauth } from '../lib/session.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-09-ai-async-v3-m3';
+const AI_BUILD = '2026-06-09-ai-sync-m3-fallback';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "Alpine OS Shell".
 Your task is to generate complete, working app modules for this shell.
@@ -143,63 +143,14 @@ function extractModuleJson(content) {
   return (braceStart !== -1 && braceEnd !== -1) ? cleaned.slice(braceStart, braceEnd + 1) : cleaned;
 }
 
-// Background worker — not bound by the HTTP 60s limit. Runs MiniMax-M3 (a
-// reasoning model that can take 40–90s) and writes the result back to ai_jobs.
-// Requires a Codehooks paid plan so the 120s worker timeout is honored.
-app.worker('ai-generate-worker', async (req, res) => {
-  const { jobId, workspaceId, prompt } = req.body.payload || {};
-  const conn = await datastore.open();
-  const finish = async (patch) => {
-    // Include identity fields so a replace-style updateOne still keeps the doc
-    // findable by the poll route.
-    await conn.updateOne(AI_JOBS, { jobId, workspaceId }, { jobId, workspaceId, ...patch }).catch(() => {});
-    res.end();
-  };
+// Worker is a no-op stub — generation runs in the POST handler (sync, 55s budget).
+// Switch back to a real worker once the Codehooks PRO plan propagates correctly.
+app.worker('ai-generate-worker', async (req, res) => { res.end(); }, { timeout: 30000, workers: 1 });
 
-  try {
-    const aiRes = await fetch(MINIMAX_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'MiniMax-M3',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: prompt },
-        ],
-        max_tokens: 4096,
-      }),
-    });
-
-    if (!aiRes.ok) {
-      const errBody = await aiRes.text().catch(() => '');
-      await finish({ status: 'error', error: `MiniMax API error ${aiRes.status}: ${errBody.slice(0, 300)}` });
-      return;
-    }
-
-    const aiData = await aiRes.json();
-    const content = aiData.choices?.[0]?.message?.content;
-    if (!content) { await finish({ status: 'error', error: 'Empty response from AI' }); return; }
-
-    const jsonStr = extractModuleJson(content);
-    let parsed;
-    try { parsed = JSON.parse(jsonStr); }
-    catch { await finish({ status: 'error', error: 'AI returned invalid JSON', raw: jsonStr.slice(0, 300) }); return; }
-
-    if (!parsed.manifest || !parsed.js) {
-      await finish({ status: 'error', error: 'AI response missing manifest or js fields', raw: jsonStr.slice(0, 300) });
-      return;
-    }
-
-    await finish({ status: 'done', module: parsed });
-  } catch (err) {
-    await finish({ status: 'error', error: err.message || 'AI request failed' });
-  }
-}, { timeout: 120000, workers: 1 });
-
-// POST — enqueue a generation job, return jobId immediately.
+// POST — runs MiniMax-M3 synchronously within the 60s HTTP handler window.
+// Uses a 55s AbortController so we get a clean error instead of a hard cutoff.
+// The job/poll dance is kept so the frontend (generateModule in api.js) works unchanged:
+// we write the result to ai_jobs before returning, and the poll route reads it.
 app.post('/w/:workspaceId/ai-generate', async (req, res) => {
   const authUser = await getSessionUser(req);
   if (!authUser) { sendUnauth(res); return; }
@@ -218,8 +169,66 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
   const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const conn = await datastore.open();
   await conn.insertOne(AI_JOBS, { jobId, workspaceId, status: 'pending', createdAt: Date.now() });
-  await conn.enqueue('ai-generate-worker', { jobId, workspaceId, prompt });
-  res.json({ jobId });
+
+  const finish = async (patch) => {
+    await conn.updateOne(AI_JOBS, { jobId, workspaceId }, { jobId, workspaceId, ...patch }).catch(() => {});
+  };
+
+  // Run M3 synchronously — 55s budget keeps us under the 60s HTTP handler limit.
+  const ac = new AbortController();
+  const killTimer = setTimeout(() => ac.abort(), 55000);
+  try {
+    const aiRes = await fetch(MINIMAX_URL, {
+      signal: ac.signal,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}` },
+      body: JSON.stringify({
+        model: 'MiniMax-M3',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 4096,
+      }),
+    });
+
+    if (!aiRes.ok) {
+      const errBody = await aiRes.text().catch(() => '');
+      await finish({ status: 'error', error: `MiniMax API error ${aiRes.status}: ${errBody.slice(0, 300)}` });
+      res.json({ jobId });
+      return;
+    }
+
+    const aiData = await aiRes.json();
+    const content = aiData.choices?.[0]?.message?.content;
+    if (!content) { await finish({ status: 'error', error: 'Empty response from AI' }); res.json({ jobId }); return; }
+
+    const jsonStr = extractModuleJson(content);
+    let parsed;
+    try { parsed = JSON.parse(jsonStr); }
+    catch {
+      await finish({ status: 'error', error: 'AI returned invalid JSON', raw: jsonStr.slice(0, 300) });
+      res.json({ jobId });
+      return;
+    }
+
+    if (!parsed.manifest || !parsed.js) {
+      await finish({ status: 'error', error: 'AI response missing manifest or js fields', raw: jsonStr.slice(0, 300) });
+      res.json({ jobId });
+      return;
+    }
+
+    await finish({ status: 'done', module: parsed });
+    res.json({ jobId });
+  } catch (err) {
+    const msg = err.name === 'AbortError'
+      ? 'M3 reasoning took over 55s — try a simpler prompt, or retry (complex modules sometimes need a second attempt)'
+      : (err.message || 'AI request failed');
+    await finish({ status: 'error', error: msg });
+    res.json({ jobId });
+  } finally {
+    clearTimeout(killTimer);
+  }
 });
 
 // GET — poll job status. 3-segment path (`/w/:ws/ai-job`) avoids colliding with

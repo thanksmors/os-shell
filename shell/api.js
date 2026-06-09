@@ -156,13 +156,24 @@ export async function generateModule(prompt) {
   }
   const auth = `apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
 
-  // 1. Start the job
+  // 1. Start the job (with a 20s safety timeout so it can't hang forever)
   const startUrl = `${BACKEND_URL}/w/${_workspaceId}/ai-generate?${auth}`;
-  const startRes = await fetch(startUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt }),
-  });
+  const ac = new AbortController();
+  const startTimeout = setTimeout(() => ac.abort(), 20000);
+  let startRes;
+  try {
+    startRes = await fetch(startUrl, {
+      signal: ac.signal,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('Server did not accept the job within 20s — check that the backend is deployed (build ai-async-v1).');
+    throw err;
+  } finally {
+    clearTimeout(startTimeout);
+  }
   if (!startRes.ok) {
     const raw = await startRes.text().catch(() => '');
     let detail = raw.slice(0, 300);

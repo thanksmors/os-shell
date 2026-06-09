@@ -25,7 +25,7 @@ app.put('/workspaces/:workspaceId/members/:userId', async (req, res) => {
   if (!membersDoc) { res.json({ error: 'Workspace not found' }); return; }
 
   const me = membersDoc?.members?.find(m => m.userId === authUser.userId);
-  if (!me || !['owner', 'admin'].includes(me.role)) { res.json({ error: 'Insufficient permissions' }); return; }
+  if (!me || !['owner', 'admin'].includes(me.role)) { res.status(403); res.json({ error: 'Insufficient permissions' }); return; }
 
   const newRole = req.body.role;
   if (!['owner', 'admin', 'member'].includes(newRole)) { res.json({ error: 'Invalid role' }); return; }
@@ -55,7 +55,7 @@ app.delete('/workspaces/:workspaceId/members/:userId', async (req, res) => {
 
   const me = membersDoc?.members?.find(m => m.userId === authUser.userId);
   const isSelf = userId === authUser.userId;
-  if (!isSelf && !['owner', 'admin'].includes(me?.role)) { res.json({ error: 'Insufficient permissions' }); return; }
+  if (!isSelf && !['owner', 'admin'].includes(me?.role)) { res.status(403); res.json({ error: 'Insufficient permissions' }); return; }
 
   membersDoc.members = membersDoc.members.filter(m => m.userId !== userId);
   await dbUpsert('ws_members', workspaceId, membersDoc);

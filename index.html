@@ -117,7 +117,7 @@
           <!-- Create new workspace -->
           <div class="os-ws-create" x-data="{ open: false, name: '', icon: '🏢' }">
             <button class="os-ws-create-btn" @click="open = !open">＋ New Workspace</button>
-            <div x-show="open" x-transition style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+            <div x-show="open" x-collapse class="ws-create-row" style="margin-top:12px;">
               <input class="os-auth-input" style="width:60px;" maxlength="4" x-model="icon" placeholder="🏢" />
               <input class="os-auth-input" style="flex:1;" x-model="name" placeholder="Workspace name…" @keydown.enter="name.trim() && $store.auth.createWorkspace(name.trim(), icon)" />
               <button class="os-ws-create-go" @click="name.trim() && $store.auth.createWorkspace(name.trim(), icon)">Create</button>
@@ -195,7 +195,7 @@
     <template x-for="win in $store.os.windows" :key="win.id">
       <div
         x-show="win.state !== 'minimized'"
-        class="os-window animate-window-open"
+        class="os-window"
         :class="{
           'focused': win.focused,
           'maximized': win.state === 'maximized'

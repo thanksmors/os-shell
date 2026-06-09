@@ -1,15 +1,16 @@
+import { datastore } from 'codehooks-js';
 import { GOOGLE_CLIENT_ID } from './config.js';
 import { dbGet, dbUpsert, dbInsert, genId } from './db.js';
 
 // ─── Session auth ─────────────────────────────────────────────────────────────
-// All user-facing routes validate a session token from ?session= query param.
-// Sessions are stored in the datastore and expire after 30 days.
+// Sessions stored in KV with 30-day TTL — expired entries auto-delete.
 
 export async function getSessionUser(req) {
   const sessionToken = req.query?.session;
   if (!sessionToken) return null;
-  const session = await dbGet('sessions', sessionToken);
-  if (!session || session.expiresAt < Date.now()) return null;
+  const db = await datastore.open();
+  const session = await db.get(`session:${sessionToken}`).catch(() => null);
+  if (!session) return null;
   return { userId: session.userId };
 }
 
@@ -27,13 +28,8 @@ export async function bootstrapSession(gData) {
   await dbUpsert('users', userId, { userId, email, name: name || email, picture: picture || '' });
 
   const sessionToken = genId('sess');
-  await dbInsert('sessions', {
-    appId: sessionToken,
-    sessionToken,
-    userId,
-    createdAt: Date.now(),
-    expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-  });
+  const db = await datastore.open();
+  await db.set(`session:${sessionToken}`, { sessionToken, userId }, { ttl: 30 * 24 * 60 * 60 });
 
   const userWs = await dbGet('user_workspaces', userId) || { workspaceIds: [] };
   if (!userWs.workspaceIds?.length) {

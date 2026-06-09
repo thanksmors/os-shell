@@ -42,9 +42,7 @@ app.put('/w/:workspaceId/:collection/:id', async (req, res) => {
   const { workspaceId, collection, id } = req.params;
   const db = await datastore.open();
   const record = { ...req.body, workspaceId, appId: id };
-  const existing = await db.getOne(collection, { workspaceId, appId: id }).catch(() => null);
-  if (existing) { await db.updateOne(collection, { workspaceId, appId: id }, record); }
-  else { await db.insertOne(collection, record); }
+  await db.updateOne(collection, { workspaceId, appId: id }, record, {}, { upsert: true });
   await recordChange(workspaceId, collection, id);
   res.json(record);
 });

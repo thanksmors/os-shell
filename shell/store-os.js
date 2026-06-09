@@ -1,3 +1,4 @@
+import { motion, spring } from '/shell/motion.js';
 import { iconUrl } from './icon.js';
 import { getInstances, saveInstances, subscribe, getData } from './api.js';
 
@@ -6,7 +7,7 @@ export function registerOsStore() {
     windows: [],
     apps: {},
     topZ: 100,
-    theme: localStorage.getItem('os-theme') || 'light',
+    theme: Alpine.$persist('light').as('os-theme'),
     isMobile: window.matchMedia('(max-width: 767px)').matches,
     toasts: [],
     contextMenu: { visible: false, x: 0, y: 0, items: [] },
@@ -15,11 +16,11 @@ export function registerOsStore() {
     dragOverFolderId: null,
     dragDesktopKey: null,
     dragOverDesktopKey: null,
-    desktopOrder: JSON.parse(localStorage.getItem('os:desktopOrder') || '[]'),
+    desktopOrder: Alpine.$persist([]).as('os:desktopOrder'),
 
     init() {
-      // apply saved theme
-      document.documentElement.classList.toggle('dark', this.theme === 'dark');
+      // keep <html class="dark"> in sync with reactive theme property
+      Alpine.effect(() => document.documentElement.classList.toggle('dark', this.theme === 'dark'));
       // mobile watch (only set up once)
       if (!this._mobileWatcher) {
         this._mobileWatcher = true;
@@ -140,7 +141,10 @@ export function registerOsStore() {
         requestClose: () => Alpine.store('os').close(win.id),
         store: Alpine.store('os'),
       };
+      win.hostEl = hostEl;
       hostEl.appendChild(el);
+      const winEl = hostEl.closest('.os-window');
+      if (winEl) motion(winEl, [{ opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1 }], { duration: 0.2, easing: spring.snappy() });
     },
 
     focus(id) {
@@ -170,7 +174,11 @@ export function registerOsStore() {
       }
     },
 
-    close(id) {
+    async close(id) {
+      const win = this.windows.find(w => w.id === id);
+      if (!win) return;
+      const winEl = win.hostEl?.closest('.os-window');
+      if (winEl) await motion(winEl, { opacity: 0, scale: 0.95 }, { duration: 0.15 }).finished;
       const idx = this.windows.findIndex(w => w.id === id);
       if (idx !== -1) this.windows.splice(idx, 1);
     },
@@ -301,7 +309,10 @@ export function registerOsStore() {
         store: Alpine.store('os'),
       };
       win.moduleEl = el;
+      win.hostEl = hostEl;
       hostEl.appendChild(el);
+      const winEl = hostEl.closest('.os-window');
+      if (winEl) motion(winEl, [{ opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1 }], { duration: 0.2, easing: spring.snappy() });
     },
 
     launchInstance(instanceId) {
@@ -380,7 +391,6 @@ export function registerOsStore() {
       const [moved] = current.splice(from, 1);
       current.splice(to, 0, moved);
       this.desktopOrder = current;
-      localStorage.setItem('os:desktopOrder', JSON.stringify(current));
     },
 
     renameInstance(instanceId, name) {
@@ -450,8 +460,6 @@ export function registerOsStore() {
 
     toggleTheme() {
       this.theme = this.theme === 'light' ? 'dark' : 'light';
-      document.documentElement.classList.toggle('dark', this.theme === 'dark');
-      localStorage.setItem('os-theme', this.theme);
     },
 
     iconUrl(emoji) { return iconUrl(emoji); },

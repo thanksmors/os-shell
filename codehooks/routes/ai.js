@@ -4,7 +4,7 @@ import { getSessionUser, sendUnauth } from '../lib/session.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-09-ai-singleton-lifecycle';
+const AI_BUILD = '2026-06-09-library-refactor';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "Alpine OS Shell".
 Your task is to generate complete, working app modules for this shell.
@@ -159,7 +159,8 @@ app.get('/ai/ping', (req, res) => {
 // configurable, longer timeout). The POST route enqueues a job and returns a
 // jobId instantly; the GET route polls job status. Results live in `ai_jobs`.
 
-const AI_JOBS = 'ai_jobs';
+// AI job TTL: 10 minutes — frontend polls max ~2min, so jobs always outlive polling.
+const AI_JOB_TTL = 10 * 60;
 
 // Shared cleaner: strip <think> reasoning blocks + markdown fences, then extract
 // the outermost {...} so stray prose can't break JSON.parse.
@@ -196,10 +197,10 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
   const workspaceId = req.params.workspaceId;
   const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const conn = await datastore.open();
-  await conn.insertOne(AI_JOBS, { jobId, workspaceId, status: 'pending', createdAt: Date.now() });
+  await conn.set(`ai_job:${jobId}`, { jobId, workspaceId, status: 'pending', createdAt: Date.now() }, { ttl: AI_JOB_TTL });
 
   const finish = async (patch) => {
-    await conn.updateOne(AI_JOBS, { jobId, workspaceId }, { jobId, workspaceId, ...patch }).catch(() => {});
+    await conn.set(`ai_job:${jobId}`, { jobId, workspaceId, ...patch }, { ttl: AI_JOB_TTL }).catch(() => {});
   };
 
   // Run M3 synchronously — 55s budget keeps us under the 60s HTTP handler limit.
@@ -281,7 +282,7 @@ app.get('/w/:workspaceId/ai-job', async (req, res) => {
   if (!jobId) { res.json({ status: 'error', error: 'job query param required' }); return; }
 
   const conn = await datastore.open();
-  const job = await conn.getOne(AI_JOBS, { jobId, workspaceId }).catch(() => null);
+  const job = await conn.get(`ai_job:${jobId}`).catch(() => null);
   if (!job) { res.json({ status: 'unknown' }); return; }
   res.json({ status: job.status, module: job.module, error: job.error, raw: job.raw });
 });

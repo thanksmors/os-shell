@@ -1,8 +1,9 @@
-import { app } from 'codehooks-js';
-import { dbGet, dbUpsert, dbInsert, genId } from '../lib/db.js';
+import { app, datastore } from 'codehooks-js';
+import { dbGet, dbUpsert, genId } from '../lib/db.js';
 import { getSessionUser, sendUnauth } from '../lib/session.js';
 
 // ─── Invites ──────────────────────────────────────────────────────────────────
+// Invites stored in KV with 7-day TTL — expired entries auto-delete.
 
 app.post('/workspaces/:workspaceId/invites', async (req, res) => {
   const authUser = await getSessionUser(req);
@@ -11,16 +12,18 @@ app.post('/workspaces/:workspaceId/invites', async (req, res) => {
   const { workspaceId } = req.params;
   const membersDoc = await dbGet('ws_members', workspaceId);
   const me = membersDoc?.members?.find(m => m.userId === authUser.userId);
-  if (!me || !['owner', 'admin'].includes(me.role)) { res.json({ error: 'Insufficient permissions' }); return; }
+  if (!me || !['owner', 'admin'].includes(me.role)) { res.status(403); res.json({ error: 'Insufficient permissions' }); return; }
 
   const inviteId = genId('inv');
-  const invite = { appId: inviteId, inviteId, workspaceId, role: req.body.role || 'member', invitedBy: authUser.userId, createdAt: Date.now(), expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 };
-  await dbInsert('invites', invite);
-  res.json(invite);
+  const invite = { inviteId, workspaceId, role: req.body.role || 'member', invitedBy: authUser.userId, createdAt: Date.now() };
+  const db = await datastore.open();
+  await db.set(`invite:${inviteId}`, invite, { ttl: 7 * 24 * 60 * 60 });
+  res.json({ ...invite, expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 });
 });
 
 app.get('/invites/:inviteId', async (req, res) => {
-  const invite = await dbGet('invites', req.params.inviteId);
+  const db = await datastore.open();
+  const invite = await db.get(`invite:${req.params.inviteId}`).catch(() => null);
   if (!invite) { res.json({}); return; }
   const ws = await dbGet('workspaces', invite.workspaceId);
   const inviter = await dbGet('users', invite.invitedBy);
@@ -31,9 +34,9 @@ app.post('/invites/:inviteId/accept', async (req, res) => {
   const authUser = await getSessionUser(req);
   if (!authUser) { sendUnauth(res); return; }
 
-  const invite = await dbGet('invites', req.params.inviteId);
+  const db = await datastore.open();
+  const invite = await db.get(`invite:${req.params.inviteId}`).catch(() => null);
   if (!invite) { res.json({ error: 'Invite not found' }); return; }
-  if (invite.expiresAt < Date.now()) { res.json({ error: 'Invite expired' }); return; }
 
   const membersDoc = await dbGet('ws_members', invite.workspaceId);
   const user = await dbGet('users', authUser.userId);

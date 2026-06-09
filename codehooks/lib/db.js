@@ -9,10 +9,8 @@ export async function dbGet(collection, appId) {
 
 export async function dbUpsert(collection, appId, record) {
   const db = await datastore.open();
-  const existing = await db.getOne(collection, { appId }).catch(() => null);
   const doc = { ...record, appId };
-  if (existing) { await db.updateOne(collection, { appId }, doc); }
-  else { await db.insertOne(collection, doc); }
+  await db.updateOne(collection, { appId }, doc, {}, { upsert: true });
   return doc;
 }
 

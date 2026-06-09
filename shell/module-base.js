@@ -8,7 +8,7 @@ export class AppModuleBase extends HTMLElement {
     this._state = null;
     this._appId = null;
     this._wrapper = null;
-    this._themeObserver = null;
+    this._themeCleanup = null;
     this._unsub = null;
     this._slots = {}; // resolved slot → collection name
   }
@@ -52,9 +52,11 @@ export class AppModuleBase extends HTMLElement {
     this._render();
     if (this.api) this.api.setTitle(this._getTitle());
 
-    // 7. Theme observer
-    this._themeObserver = new MutationObserver(() => this._applyTheme());
-    this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    // 7. Theme sync — use Alpine's reactive store so no DOM polling needed
+    this._themeCleanup = Alpine.effect(() => {
+      Alpine.store('os').theme; // subscribe to reactive value
+      this._applyTheme();
+    });
 
     // 8. Cross-client sync — only if manifest declares sync:true
     const manifest = this.api?.store?.apps?.[this._manifestId()];
@@ -69,7 +71,7 @@ export class AppModuleBase extends HTMLElement {
   }
 
   disconnectedCallback() {
-    this._themeObserver?.disconnect();
+    this._themeCleanup?.();
     this._unsub?.();
   }
 

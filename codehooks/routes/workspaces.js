@@ -45,7 +45,7 @@ app.put('/workspaces/:workspaceId', async (req, res) => {
   const { workspaceId } = req.params;
   const membersDoc = await dbGet('ws_members', workspaceId);
   const me = membersDoc?.members?.find(m => m.userId === authUser.userId);
-  if (!me || !['owner', 'admin'].includes(me.role)) { res.json({ error: 'Insufficient permissions' }); return; }
+  if (!me || !['owner', 'admin'].includes(me.role)) { res.status(403); res.json({ error: 'Insufficient permissions' }); return; }
 
   const ws = await dbGet('workspaces', workspaceId);
   if (!ws) { res.json({}); return; }
@@ -64,7 +64,7 @@ app.delete('/workspaces/:workspaceId', async (req, res) => {
   const { workspaceId } = req.params;
   const ws = await dbGet('workspaces', workspaceId);
   if (!ws) { res.json({ error: 'Not found' }); return; }
-  if (ws.ownerId !== authUser.userId) { res.json({ error: 'Only the owner can delete a workspace' }); return; }
+  if (ws.ownerId !== authUser.userId) { res.status(403); res.json({ error: 'Only the owner can delete a workspace' }); return; }
 
   // Remove workspace from every member's user_workspaces list
   const membersDoc = await dbGet('ws_members', workspaceId);

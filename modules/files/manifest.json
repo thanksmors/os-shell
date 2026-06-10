@@ -4,8 +4,9 @@
   "entry": "/modules/files/index.js",
   "title": "Files",
   "icon": "📁",
-  "defaultSize": { "w": 640, "h": 480 },
-  "singleton": false,
+  "defaultSize": { "w": 760, "h": 520 },
+  "singleton": true,
   "resizable": true,
-  "minSize": { "w": 320, "h": 240 }
+  "minSize": { "w": 560, "h": 400 },
+  "dataCollections": ["files-meta", "files-data"]
 }

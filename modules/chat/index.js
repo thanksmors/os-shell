@@ -149,8 +149,8 @@ class AppChat extends HTMLElement {
           </div>
           <div class="channel-list" id="channel-list"></div>
           <div class="sidebar-user">
-            <div class="user-avatar">${this._esc((this._user?.displayName || '?')[0].toUpperCase())}</div>
-            <span class="user-name">${this._esc(this._user?.displayName || 'Anonymous')}</span>
+            <div class="user-avatar">${this._esc((this._user?.name || '?')[0].toUpperCase())}</div>
+            <span class="user-name">${this._esc(this._user?.name || 'Anonymous')}</span>
           </div>
         </aside>
         <div class="main">
@@ -349,7 +349,7 @@ class AppChat extends HTMLElement {
     const msg = {
       id:        `msg-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
       userId:    this._user?.userId   || 'anon',
-      userName:  this._user?.displayName || 'Anonymous',
+      userName:  this._user?.name || 'Anonymous',
       text,
       timestamp: Date.now(),
     };

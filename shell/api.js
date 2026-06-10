@@ -3,16 +3,23 @@ import { BACKEND_URL, API_KEY } from './config.js';
 const useBackend = () => Boolean(BACKEND_URL);
 
 // ─── Session + workspace context ──────────────────────────────────────────────
-// Set by auth store after login + workspace selection.
 
 let _session = null;
 let _workspaceId = null;
 
-export function setSession(token) { _session = token; }
+export const CLIENT_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+export function setSession(token) {
+  _session = token;
+  // Rewrite any queued outbox entries that still carry the old session
+  if (token) {
+    const q = _loadOutbox();
+    if (q.length) { _saveOutbox(q.map(e => ({ ...e, session: token }))); }
+  }
+}
 export function setWorkspace(wsId) { _workspaceId = wsId; }
 
 function lsKey(collection, id) {
-  // Namespace by workspaceId when active so different workspaces don't share cache
   const prefix = _workspaceId ? `os:${_workspaceId}:${collection}:${id}` : `os:${collection}:${id}`;
   return prefix;
 }
@@ -21,17 +28,29 @@ function headers() {
   return { 'Content-Type': 'application/json' };
 }
 
+// Build URL using current globals (for reads)
 function url(collection, id) {
-  // When workspace is active, use workspace-scoped routes with session auth.
-  // Fall back to legacy API-key-only routes (dev/offline mode).
   if (_workspaceId && _session) {
     if (collection === 'meta' && id === 'instances') {
-      return `${BACKEND_URL}/w/${_workspaceId}/instances?apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
+      return `${BACKEND_URL}/w/${_workspaceId}/instances?apikey=${API_KEY}&session=${encodeURIComponent(_session)}&client=${CLIENT_ID}`;
     }
-    return `${BACKEND_URL}/w/${_workspaceId}/${collection}/${encodeURIComponent(id)}?apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
+    return `${BACKEND_URL}/w/${_workspaceId}/${collection}/${encodeURIComponent(id)}?apikey=${API_KEY}&session=${encodeURIComponent(_session)}&client=${CLIENT_ID}`;
   }
   const base = `${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`;
-  return API_KEY ? `${base}?apikey=${API_KEY}` : base;
+  return API_KEY ? `${base}?apikey=${API_KEY}&client=${CLIENT_ID}` : base;
+}
+
+// Build URL from outbox entry's snapshotted context (for writes)
+function _urlFor(entry) {
+  const { wsId, session, collection, id } = entry;
+  if (wsId && session) {
+    if (collection === 'meta' && id === 'instances') {
+      return `${BACKEND_URL}/w/${wsId}/instances?apikey=${API_KEY}&session=${encodeURIComponent(session)}&client=${CLIENT_ID}`;
+    }
+    return `${BACKEND_URL}/w/${wsId}/${collection}/${encodeURIComponent(id)}?apikey=${API_KEY}&session=${encodeURIComponent(session)}&client=${CLIENT_ID}`;
+  }
+  const base = `${BACKEND_URL}/${collection}/${encodeURIComponent(id)}`;
+  return API_KEY ? `${base}?apikey=${API_KEY}&client=${CLIENT_ID}` : base;
 }
 
 // ─── Generic CRUD ──────────────────────────────────────────────────────────
@@ -55,9 +74,6 @@ function lsDel(collection, id) {
   try { localStorage.removeItem(lsKey(collection, id)); } catch {}
 }
 
-// Session-level negative cache: keys confirmed absent on the backend.
-// Without it, every open of a window with no saved data repeats the
-// backend round-trip just to learn "nothing there" again.
 const _missCache = new Set();
 
 export async function getData(collection, id) {
@@ -80,37 +96,109 @@ export async function getData(collection, id) {
   return null;
 }
 
-export async function setData(collection, id, data) {
+// setData: writes localStorage immediately, queues network PUT in background.
+// Returns instantly — callers get back their data without waiting for the network.
+export function setData(collection, id, data) {
   _missCache.delete(lsKey(collection, id));
   lsSet(collection, id, data);
-  if (!useBackend()) return data;
-  try {
-    const r = await fetch(url(collection, id), {
-      method: 'PUT',
-      headers: headers(),
-      body: JSON.stringify(data),
-    });
-    return await safeJson(r) ?? data;
-  } catch { return data; }
+  _enqueue({ op: 'put', collection, id, data });
+  return data;
 }
 
-export async function deleteData(collection, id) {
+export function deleteData(collection, id) {
   _missCache.add(lsKey(collection, id));
   lsDel(collection, id);
-  if (!useBackend()) return;
-  try {
-    await fetch(url(collection, id), { method: 'DELETE', headers: headers() });
-  } catch {}
+  _enqueue({ op: 'delete', collection, id, data: null });
 }
 
-// Like getData but always bypasses the localStorage cache — use for polling.
+// Like getData but always bypasses the localStorage cache — use when you need
+// the freshest server state (e.g. before appending to a shared array).
 export async function forceGetData(collection, id) {
   lsDel(collection, id);
   _missCache.delete(lsKey(collection, id));
   return getData(collection, id);
 }
 
-// ─── Cross-client sync (polling) ───────────────────────────────────────────
+// ─── Persistent outbox ────────────────────────────────────────────────────────
+// Writes go here first (instant local), then drain to the backend in the
+// background. The queue survives page reload (stored in localStorage).
+// Coalesces by collection:id — last write wins per key; delete supersedes put.
+
+const OUTBOX_KEY = 'os:outbox';
+
+function _loadOutbox() {
+  try { return JSON.parse(localStorage.getItem(OUTBOX_KEY)) || []; } catch { return []; }
+}
+
+function _saveOutbox(q) {
+  try { localStorage.setItem(OUTBOX_KEY, JSON.stringify(q)); } catch {}
+}
+
+function _enqueue(entry) {
+  if (!useBackend()) return;
+  const key = `${entry.collection}:${entry.id}`;
+  const full = { ...entry, wsId: _workspaceId, session: _session, ts: Date.now() };
+  const q = _loadOutbox();
+  const i = q.findIndex(e => `${e.collection}:${e.id}` === key);
+  if (i >= 0) {
+    // Coalesce: replace existing entry for this key (last write wins).
+    // A delete always supersedes a pending put.
+    if (entry.op === 'delete' || q[i].op !== 'delete') {
+      q[i] = full;
+    }
+  } else {
+    q.push(full);
+  }
+  _saveOutbox(q);
+  _flushOutbox();
+}
+
+let _flushing = false;
+let _backoff = 1000;
+
+async function _flushOutbox() {
+  if (_flushing || !useBackend()) return;
+  if (!navigator.onLine) return;
+  _flushing = true;
+  try {
+    while (true) {
+      const q = _loadOutbox();
+      if (!q.length) break;
+      const e = q[0];
+      if (!e.wsId || !e.session) { // no auth context yet — skip until after login
+        const q2 = _loadOutbox(); q2.shift(); _saveOutbox(q2); // drop invalid entry
+        continue;
+      }
+      let r;
+      try {
+        r = await fetch(_urlFor(e), e.op === 'put'
+          ? { method: 'PUT', headers: headers(), body: JSON.stringify(e.data) }
+          : { method: 'DELETE', headers: headers() });
+      } catch {
+        // Network failure — back off and retry later
+        setTimeout(_flushOutbox, _backoff = Math.min(_backoff * 2, 60000));
+        return;
+      }
+      if (r.ok || (r.status >= 400 && r.status !== 401 && r.status !== 429)) {
+        // Permanent result (success or permanent client error) — drop head
+        // only if still the same ts (a newer coalesced write must still be sent)
+        const q2 = _loadOutbox();
+        if (q2[0]?.ts === e.ts) { q2.shift(); _saveOutbox(q2); }
+        _backoff = 1000;
+      } else {
+        // 401 (session expired) or 429 (rate limit) — back off
+        setTimeout(_flushOutbox, _backoff = Math.min(_backoff * 2, 60000));
+        return;
+      }
+    }
+  } finally {
+    _flushing = false;
+  }
+}
+
+window.addEventListener('online', () => { _backoff = 1000; _flushOutbox(); });
+
+// ─── Cross-client sync: polling (fallback) + SSE (primary) ────────────────────
 
 const _subscribers = new Map(); // "collection:id" → Set<callback>
 let _lastSeen = {};
@@ -154,13 +242,17 @@ function _startPolling() {
   if (_pollTimer || !useBackend()) return;
   _poll();
   _pollTimer = setInterval(_poll, 5 * 60 * 1000);
+  _startSSE(); // SSE is the primary path; polling remains as fallback
 }
 
 export function resetPolling() {
   if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
   _initialized = false;
   _lastSeen = {};
+  // Close any existing SSE connection (workspace may have changed)
+  if (_es) { _es.close(); _es = null; }
   _startPolling();
+  _flushOutbox(); // Drain any queued writes from before/during login
 }
 
 export function subscribe(collection, id, callback) {
@@ -172,25 +264,77 @@ export function subscribe(collection, id, callback) {
   return () => _subscribers.get(key)?.delete(callback);
 }
 
-// ─── AI module generation (async job + polling) ───────────────────────────────
-// The backend runs generation in a background worker (no 30s limit). We start a
-// job, get a jobId, then poll until it's done/errored or we hit the cap.
+// ─── SSE (Codehooks Realtime) ─────────────────────────────────────────────────
+
+let _es = null;
+let _esBackoff = 2000;
+
+async function _getListenerId() {
+  if (!_workspaceId || !_session) return null;
+  const cacheKey = `os:${_workspaceId}:sse-listener`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) return cached;
+  try {
+    const r = await fetch(
+      `${BACKEND_URL}/w/${_workspaceId}/sse-listener?apikey=${API_KEY}&session=${encodeURIComponent(_session)}`,
+      { method: 'POST', headers: headers() }
+    );
+    if (!r.ok) return null;
+    const { listenerId } = await safeJson(r) || {};
+    if (listenerId) { localStorage.setItem(cacheKey, listenerId); }
+    return listenerId || null;
+  } catch { return null; }
+}
+
+async function _startSSE() {
+  if (_es || !useBackend() || !_workspaceId || !_session) return;
+  const listenerId = await _getListenerId();
+  if (!listenerId) {
+    setTimeout(_startSSE, _esBackoff = Math.min(_esBackoff * 2, 60000));
+    return;
+  }
+  _esBackoff = 2000;
+  _es = new EventSource(`${BACKEND_URL}/sync/${listenerId}?apikey=${API_KEY}`);
+
+  _es.onmessage = (ev) => {
+    let payload;
+    try { payload = JSON.parse(ev.data); } catch { return; }
+    // Codehooks wraps published data: { channel, data, query, timestamp }
+    const evt = payload?.data ?? payload;
+    if (!evt?.collection) return;
+    if (evt.workspaceId && evt.workspaceId !== _workspaceId) return;
+    if (evt.clientId && evt.clientId === CLIENT_ID) return; // own echo — cache already fresh
+
+    lsDel(evt.collection, evt.id);
+    _missCache.delete(lsKey(evt.collection, evt.id));
+    // Keep fallback poll from double-firing for this key
+    _lastSeen[`${evt.collection}:${evt.id}`] = evt.ts || Date.now();
+    _subscribers.get(`${evt.collection}:${evt.id}`)?.forEach(cb => cb());
+  };
+
+  _es.onerror = () => {
+    // EventSource auto-reconnects on transient errors; only act when CLOSED
+    if (_es && _es.readyState === EventSource.CLOSED) {
+      _es = null;
+      // Drop cached listener id — it may have expired server-side
+      localStorage.removeItem(`os:${_workspaceId}:sse-listener`);
+      setTimeout(_startSSE, _esBackoff = Math.min(_esBackoff * 2, 60000));
+    }
+  };
+}
+
+// ─── AI module generation ─────────────────────────────────────────────────────
 
 export async function generateModule(prompt) {
   return aiRequest('build', { messages: [{ role: 'user', content: prompt }] });
 }
 
-// mode: 'clarify' | 'plan' | 'build' | 'revise'
-// payload: { messages, plan, existing } — see codehooks/routes/ai.js
 export async function aiRequest(mode, payload = {}) {
   if (!useBackend() || !_workspaceId || !_session) {
     throw new Error('Backend required for AI generation — please log in first.');
   }
   const auth = `apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
 
-  // 1. Start the job. The backend runs the model synchronously (up to 55s) and
-  // writes the result to ai_jobs before returning, so this request blocks for the
-  // full generation. Allow 65s before giving up (55s server budget + overhead).
   const startUrl = `${BACKEND_URL}/w/${_workspaceId}/ai-generate?${auth}`;
   const ac = new AbortController();
   const startTimeout = setTimeout(() => ac.abort(), 65000);
@@ -218,22 +362,20 @@ export async function aiRequest(mode, payload = {}) {
   if (startData.error) throw new Error(startData.error);
   if (!startData.jobId) throw new Error('Server did not return a job id');
 
-  // 2. Poll for the result
   const pollUrl = `${BACKEND_URL}/w/${_workspaceId}/ai-job?job=${encodeURIComponent(startData.jobId)}&${auth}`;
-  const deadline = Date.now() + 120000; // 2 min cap
+  const deadline = Date.now() + 120000;
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 2000));
     let data;
     try {
       const pr = await fetch(pollUrl);
       data = await pr.json();
-    } catch { continue; } // transient network hiccup — keep polling
+    } catch { continue; }
     if (data.status === 'done') return data.module;
     if (data.status === 'error') {
       const msg = data.raw ? `${data.error || 'Generation failed'} — raw: ${data.raw}` : (data.error || 'Generation failed');
       throw new Error(msg);
     }
-    // 'pending' or 'unknown' — keep waiting
   }
   throw new Error('Generation timed out after 2 minutes. Try a simpler prompt.');
 }
@@ -320,10 +462,6 @@ export async function saveTierList(id, data) {
 // ─── Instance registry ─────────────────────────────────────────────────────
 
 export async function getInstances() {
-  if (useBackend() && _workspaceId && _session) {
-    const data = await getData('meta', 'instances');
-    return data?.list || [];
-  }
   const data = await getData('meta', 'instances');
   return data?.list || [];
 }

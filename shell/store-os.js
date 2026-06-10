@@ -57,15 +57,22 @@ export function registerOsStore() {
         const user = JSON.parse(userStr);
         const userId = user?.userId;
         if (!userId) return;
-        const channelsData = await getData('chat', 'channels');
+
+        // Wave 1: channels list + read state in parallel
+        const [channelsData, lastRead] = await Promise.all([
+          getData('chat', 'channels'),
+          getData('chat-read', userId),
+        ]);
         const channels = channelsData?.channels || [];
         if (!channels.length) return;
-        const lastRead = (await getData('chat-read', userId)) || {};
+        const readState = lastRead || {};
+
+        // Wave 2: all channel message counts in parallel
+        const allMsgs = await Promise.all(channels.map(ch => getData('chat-messages', ch.id)));
         let total = 0;
-        for (const ch of channels) {
-          const msgData = await getData('chat-messages', ch.id);
-          const messages = msgData?.messages || [];
-          const since = lastRead[ch.id] || 0;
+        for (let i = 0; i < channels.length; i++) {
+          const messages = allMsgs[i]?.messages || [];
+          const since = readState[channels[i].id] || 0;
           total += messages.filter(m => m.timestamp > since).length;
         }
         this.setAppBadge('chat', total);

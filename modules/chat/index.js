@@ -1,12 +1,11 @@
 import { adoptTailwind } from '/shell/shadow-tailwind.js';
-import { getData, setData, deleteData, forceGetData } from '/shell/api.js';
+import { getData, setData, deleteData, forceGetData, subscribe } from '/shell/api.js';
 
 const CHAT_COL     = 'chat';
 const MESSAGES_COL = 'chat-messages';
 const READ_COL     = 'chat-read';
 const CHANNELS_KEY = 'channels';
 const MAX_MESSAGES = 100;
-const POLL_MS      = 15000;
 
 const GENERAL = { id: 'ch-general', name: 'general', system: true, createdAt: 0 };
 
@@ -19,7 +18,7 @@ class AppChat extends HTMLElement {
     this._channelMessages = {}; // channelId → messages[] for unread counts
     this._lastRead        = {}; // channelId → timestamp
     this._user            = null;
-    this._pollTimer       = null;
+    this._unsubs          = [];
     this._sending         = false;
     this._addingChannel   = false;
     this._themeObserver   = null;
@@ -47,12 +46,13 @@ class AppChat extends HTMLElement {
     await this._load();
     this._render();
     this.api?.setReady?.();
-    this._pollTimer = setInterval(() => this._poll(), POLL_MS);
+    this._setupSubscriptions();
   }
 
   disconnectedCallback() {
     this._themeObserver?.disconnect();
-    clearInterval(this._pollTimer);
+    this._unsubs.forEach(u => u());
+    this._unsubs = [];
   }
 
   _applyTheme() {
@@ -66,30 +66,33 @@ class AppChat extends HTMLElement {
   // ─── Load ──────────────────────────────────────────────────────────────────
 
   async _load() {
+    const userId = this._user?.userId || 'anon';
+
+    // Parallel fetch: channels, active-channel messages, read state
+    const [savedChannels, msgData, readData] = await Promise.all([
+      getData(CHAT_COL, CHANNELS_KEY),
+      getData(MESSAGES_COL, this._activeChannelId),
+      getData(READ_COL, userId),
+    ]);
+
     // Channels
-    const saved = await getData(CHAT_COL, CHANNELS_KEY);
-    if (!saved?.channels?.length) {
+    if (!savedChannels?.channels?.length) {
       this._channels = [{ ...GENERAL, createdAt: Date.now() }];
-      await setData(CHAT_COL, CHANNELS_KEY, { channels: this._channels });
+      setData(CHAT_COL, CHANNELS_KEY, { channels: this._channels });
     } else {
-      this._channels = saved.channels;
+      this._channels = savedChannels.channels;
       if (!this._channels.find(c => c.id === 'ch-general')) {
         this._channels = [{ ...GENERAL, createdAt: Date.now() }, ...this._channels];
-        await setData(CHAT_COL, CHANNELS_KEY, { channels: this._channels });
+        setData(CHAT_COL, CHANNELS_KEY, { channels: this._channels });
       }
     }
 
-    // Messages for active channel
-    const msgData = await getData(MESSAGES_COL, this._activeChannelId);
+    // Messages + read state
     this._messages = msgData?.messages || [];
     this._channelMessages[this._activeChannelId] = this._messages;
-
-    // Read state
-    const userId = this._user?.userId || 'anon';
-    const readData = await getData(READ_COL, userId);
     this._lastRead = readData || {};
 
-    // Mark active as read now
+    // Mark active channel as read
     await this._markRead(this._activeChannelId);
   }
 
@@ -114,27 +117,44 @@ class AppChat extends HTMLElement {
     this.api?.store?.setAppBadge?.('chat', total);
   }
 
-  // ─── Poll ──────────────────────────────────────────────────────────────────
+  // ─── SSE-driven subscriptions (replaces 15s poll) ─────────────────────────
 
-  async _poll() {
-    // Refresh active channel
-    const fresh = await forceGetData(MESSAGES_COL, this._activeChannelId);
-    const newMsgs = fresh?.messages || [];
-    if (JSON.stringify(newMsgs) !== JSON.stringify(this._messages)) {
-      this._messages = newMsgs;
-      this._channelMessages[this._activeChannelId] = newMsgs;
-      this._renderMessages();
-      await this._markRead(this._activeChannelId);
-    }
+  _setupSubscriptions() {
+    // Subscribe to the channels list (new channels created by other users)
+    this._unsubs.push(subscribe(CHAT_COL, CHANNELS_KEY, async () => {
+      const d = await getData(CHAT_COL, CHANNELS_KEY);
+      if (!d?.channels) return;
+      this._channels = d.channels;
+      // Re-subscribe to any new channels
+      this._subscribeToAllChannels();
+      this._renderChannelList();
+    }));
 
-    // Refresh other channels for unread counts
+    this._subscribeToAllChannels();
+  }
+
+  _subscribeToAllChannels() {
+    // Subscribe to messages for every channel
     for (const ch of this._channels) {
-      if (ch.id === this._activeChannelId) continue;
-      const d = await forceGetData(MESSAGES_COL, ch.id);
-      this._channelMessages[ch.id] = d?.messages || [];
+      const channelId = ch.id;
+      // Avoid double-subscribing the same channel
+      if (this._unsubs.find(u => u._channelId === channelId)) continue;
+      const unsub = subscribe(MESSAGES_COL, channelId, async () => {
+        const d = await getData(MESSAGES_COL, channelId);
+        const msgs = d?.messages || [];
+        this._channelMessages[channelId] = msgs;
+
+        if (channelId === this._activeChannelId) {
+          this._messages = msgs;
+          this._renderMessages();
+          await this._markRead(channelId);
+        }
+        this._updateBadge();
+        this._renderChannelList();
+      });
+      unsub._channelId = channelId;
+      this._unsubs.push(unsub);
     }
-    this._updateBadge();
-    this._renderChannelList(); // refresh unread dots in sidebar
   }
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -342,8 +362,8 @@ class AppChat extends HTMLElement {
     const input = this._wrapper.querySelector('#msg-input');
     if (input) input.value = '';
 
-    // Fetch latest to minimise lost-update races
-    const fresh = await forceGetData(MESSAGES_COL, this._activeChannelId);
+    // Fetch latest from server to minimise lost-update races (skip when offline)
+    const fresh = navigator.onLine ? await forceGetData(MESSAGES_COL, this._activeChannelId) : null;
     const base  = fresh?.messages || this._messages;
 
     const msg = {

@@ -362,8 +362,9 @@ export async function aiRequest(mode, payload = {}) {
   if (startData.error) throw new Error(startData.error);
   if (!startData.jobId) throw new Error('Server did not return a job id');
 
+  // Build/revise run in a backend worker with a 110s budget — allow 150s total.
   const pollUrl = `${BACKEND_URL}/w/${_workspaceId}/ai-job?job=${encodeURIComponent(startData.jobId)}&${auth}`;
-  const deadline = Date.now() + 120000;
+  const deadline = Date.now() + 150000;
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 2000));
     let data;
@@ -377,7 +378,7 @@ export async function aiRequest(mode, payload = {}) {
       throw new Error(msg);
     }
   }
-  throw new Error('Generation timed out after 2 minutes. Try a simpler prompt.');
+  throw new Error('Generation timed out after 2.5 minutes. Try a simpler prompt.');
 }
 
 // ─── List helpers ──────────────────────────────────────────────────────────

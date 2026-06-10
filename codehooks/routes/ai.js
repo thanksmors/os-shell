@@ -4,7 +4,7 @@ import { getSessionUser, sendUnauth } from '../lib/session.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-09-build-app-phases';
+const AI_BUILD = '2026-06-10-m3-worker';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "Alpine OS Shell".
 Your task is to generate complete, working app modules for this shell.
@@ -213,6 +213,7 @@ app.get('/ai/ping', (req, res) => {
     ok: true,
     build: AI_BUILD,
     hasKey: !!process.env.MINIMAX_API_KEY,
+    workerMode: true,
     aiGenerateRegistered: routeKeys.includes('POST /w/:workspaceId/ai-generate'),
     routes: routeKeys,
   });
@@ -220,16 +221,18 @@ app.get('/ai/ping', (req, res) => {
 
 // ─── AI module generation (async job + polling) ───────────────────────────────
 //
-// MiniMax reasoning models (M3) can take 40–90s — far past the Codehooks ~30s
-// HTTP handler limit. So generation runs in a background WORKER (which has a
-// configurable, longer timeout). The POST route enqueues a job and returns a
-// jobId instantly; the GET route polls job status. Results live in `ai_jobs`.
+// Two execution paths by mode:
+// - clarify/plan: fast (~5-10s), run synchronously in the POST handler on
+//   MiniMax-M2.7-highspeed. Result is in ai_jobs before the POST returns.
+// - build/revise: slow (M3 takes 40-90s), run in a background WORKER with a
+//   110s budget (PRO plan worker timeout is 120s). POST enqueues and returns
+//   the jobId instantly; the frontend polls.
 
-// AI job TTL: 10 minutes — frontend polls max ~2min, so jobs always outlive polling.
+// AI job TTL: 10 minutes — frontend polls max ~2.5min, so jobs always outlive polling.
 const AI_JOB_TTL = 10 * 60;
 
 // Shared cleaner: strip <think> reasoning blocks + markdown fences, then extract
-// the outermost {...} so stray prose can't break JSON.parse.
+// the outermost {...} so stray prose can't break JSON.parse. (M3 emits <think>.)
 function extractModuleJson(content) {
   let cleaned = String(content || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
   cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
@@ -238,14 +241,93 @@ function extractModuleJson(content) {
   return (braceStart !== -1 && braceEnd !== -1) ? cleaned.slice(braceStart, braceEnd + 1) : cleaned;
 }
 
-// Worker is a no-op stub — generation runs in the POST handler (sync, 55s budget).
-// Switch back to a real worker once the Codehooks PRO plan propagates correctly.
-app.worker('ai-generate-worker', async (req, res) => { res.end(); }, { timeout: 30000, workers: 1 });
+// Shared MiniMax call + JSON extraction. Returns { parsed, finishReason } or
+// throws with a user-facing message.
+async function runMiniMax({ model, systemPrompt, convo, maxTokens, budgetMs }) {
+  const ac = new AbortController();
+  const killTimer = setTimeout(() => ac.abort(), budgetMs);
+  try {
+    const aiRes = await fetch(MINIMAX_URL, {
+      signal: ac.signal,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'system', content: systemPrompt }, ...convo],
+        max_tokens: maxTokens,
+      }),
+    });
+    if (!aiRes.ok) {
+      const errBody = await aiRes.text().catch(() => '');
+      throw new Error(`MiniMax API error ${aiRes.status}: ${errBody.slice(0, 300)}`);
+    }
+    const aiData = await aiRes.json();
+    const content = aiData.choices?.[0]?.message?.content;
+    if (!content) throw new Error('Empty response from AI');
+    return { jsonStr: extractModuleJson(content), finishReason: aiData.choices?.[0]?.finish_reason };
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error(`AI took over ${Math.round(budgetMs / 1000)}s — try a simpler prompt, or retry (complex modules sometimes need a second attempt)`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(killTimer);
+  }
+}
 
-// POST — runs MiniMax-M3 synchronously within the 60s HTTP handler window.
-// Uses a 55s AbortController so we get a clean error instead of a hard cutoff.
-// The job/poll dance is kept so the frontend (generateModule in api.js) works unchanged:
-// we write the result to ai_jobs before returning, and the poll route reads it.
+// Validate + finalize a build/revise result. Returns an error string or null.
+function validateBuildResult(parsed, planType) {
+  if (!parsed.manifest || !parsed.js) return 'AI response missing manifest or js fields';
+  return enforcePlanType(parsed, planType === 'generator' ? 'generator' : 'singleton');
+}
+
+// ─── Worker: build/revise on MiniMax-M3 (110s budget under the 120s PRO limit) ─
+
+app.worker('ai-generate-worker', async (req, res) => {
+  const { jobId, workspaceId, mode, convo, planType, maxTokens, model } = req.body.payload || {};
+  const conn = await datastore.open();
+  const finish = (patch) =>
+    conn.set(`ai_job:${jobId}`, { jobId, workspaceId, ...patch }, { ttl: AI_JOB_TTL }).catch(() => {});
+
+  if (!jobId || !Array.isArray(convo)) { res.end(); return; }
+
+  try {
+    const systemPrompt = mode === 'revise' ? SYSTEM_PROMPT + REVISE_SUFFIX : SYSTEM_PROMPT;
+    const { jsonStr, finishReason } = await runMiniMax({
+      model: model || 'MiniMax-M3',
+      systemPrompt,
+      convo,
+      maxTokens: maxTokens || 16384,
+      budgetMs: 110000,
+    });
+
+    let parsed;
+    try { parsed = JSON.parse(jsonStr); }
+    catch {
+      const truncated = finishReason === 'length';
+      await finish({
+        status: 'error',
+        error: truncated
+          ? 'Module too large — the AI response was cut off at the token limit. Try a simpler/smaller app.'
+          : 'AI returned invalid JSON',
+        raw: jsonStr.slice(0, 800),
+      });
+      res.end();
+      return;
+    }
+
+    const typeErr = validateBuildResult(parsed, planType);
+    if (typeErr) { await finish({ status: 'error', error: typeErr }); res.end(); return; }
+
+    await finish({ status: 'done', module: parsed });
+  } catch (err) {
+    await finish({ status: 'error', error: err.message || 'AI request failed' });
+  }
+  res.end();
+}, { timeout: 120000, workers: 1 });
+
+// ─── POST: clarify/plan run inline; build/revise enqueue to the worker ────────
+
 app.post('/w/:workspaceId/ai-generate', async (req, res) => {
   const authUser = await getSessionUser(req);
   if (!authUser) { sendUnauth(res); return; }
@@ -270,13 +352,6 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
     return;
   }
 
-  // Select system prompt and append mode-specific context to the conversation.
-  let systemPrompt;
-  if (mode === 'clarify') systemPrompt = CLARIFY_PROMPT;
-  else if (mode === 'plan') systemPrompt = PLAN_PROMPT;
-  else if (mode === 'revise') systemPrompt = SYSTEM_PROMPT + REVISE_SUFFIX;
-  else systemPrompt = SYSTEM_PROMPT;
-
   if ((mode === 'build' || mode === 'revise') && plan) {
     convo = [...convo, { role: 'user', content: `APPROVED PLAN (follow "type" exactly):\n${JSON.stringify(plan)}` }];
   }
@@ -293,61 +368,46 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
     await conn.set(`ai_job:${jobId}`, { jobId, workspaceId, ...patch }, { ttl: AI_JOB_TTL }).catch(() => {});
   };
 
-  // Run M3 synchronously — 55s budget keeps us under the 60s HTTP handler limit.
-  const ac = new AbortController();
-  const killTimer = setTimeout(() => ac.abort(), 55000);
+  // ── build/revise: hand off to the worker (M3, 110s budget) and return now ──
+  if (mode === 'build' || mode === 'revise') {
+    await conn.enqueue('ai-generate-worker', {
+      jobId,
+      workspaceId,
+      mode,
+      convo,
+      planType: plan?.type === 'generator' ? 'generator' : 'singleton',
+      maxTokens: 16384,
+      model: 'MiniMax-M3',
+    });
+    res.json({ jobId });
+    return;
+  }
+
+  // ── clarify/plan: fast modes, run inline on the highspeed model ────────────
   try {
-    const aiRes = await fetch(MINIMAX_URL, {
-      signal: ac.signal,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}` },
-      body: JSON.stringify({
-        model: 'MiniMax-M2.7-highspeed',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...convo,
-        ],
-        max_tokens: (mode === 'clarify') ? 1024 : (mode === 'plan') ? 2048 : 16384,
-      }),
+    const { jsonStr } = await runMiniMax({
+      model: 'MiniMax-M2.7-highspeed',
+      systemPrompt: mode === 'clarify' ? CLARIFY_PROMPT : PLAN_PROMPT,
+      convo,
+      maxTokens: mode === 'clarify' ? 1024 : 2048,
+      budgetMs: 55000,
     });
 
-    if (!aiRes.ok) {
-      const errBody = await aiRes.text().catch(() => '');
-      await finish({ status: 'error', error: `MiniMax API error ${aiRes.status}: ${errBody.slice(0, 300)}` });
-      res.json({ jobId });
-      return;
-    }
-
-    const aiData = await aiRes.json();
-    const content = aiData.choices?.[0]?.message?.content;
-    const finishReason = aiData.choices?.[0]?.finish_reason;
-    if (!content) { await finish({ status: 'error', error: 'Empty response from AI' }); res.json({ jobId }); return; }
-
-    const jsonStr = extractModuleJson(content);
     let parsed;
     try { parsed = JSON.parse(jsonStr); }
     catch {
-      // finish_reason 'length' means we hit max_tokens — the JSON is cut off.
-      const truncated = finishReason === 'length';
-      await finish({
-        status: 'error',
-        error: truncated
-          ? 'Module too large — the AI response was cut off at the token limit. Try a simpler/smaller app.'
-          : 'AI returned invalid JSON',
-        raw: jsonStr.slice(0, 800),
-      });
+      await finish({ status: 'error', error: 'AI returned invalid JSON', raw: jsonStr.slice(0, 800) });
       res.json({ jobId });
       return;
     }
 
-    // Mode-specific shape validation
     if (mode === 'clarify') {
       if (!Array.isArray(parsed.questions) && parsed.ready !== true) {
         await finish({ status: 'error', error: 'AI clarify response missing questions/ready', raw: jsonStr.slice(0, 300) });
         res.json({ jobId });
         return;
       }
-    } else if (mode === 'plan') {
+    } else {
       if (!parsed.plan?.title || !parsed.plan?.type) {
         await finish({ status: 'error', error: 'AI plan response missing plan.title/type', raw: jsonStr.slice(0, 300) });
         res.json({ jobId });
@@ -355,30 +415,13 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
       }
       // Singleton default: anything that isn't an explicit generator is singleton.
       if (parsed.plan.type !== 'generator') parsed.plan.type = 'singleton';
-    } else {
-      if (!parsed.manifest || !parsed.js) {
-        await finish({ status: 'error', error: 'AI response missing manifest or js fields', raw: jsonStr.slice(0, 300) });
-        res.json({ jobId });
-        return;
-      }
-      const typeErr = enforcePlanType(parsed, plan?.type === 'generator' ? 'generator' : 'singleton');
-      if (typeErr) {
-        await finish({ status: 'error', error: typeErr });
-        res.json({ jobId });
-        return;
-      }
     }
 
     await finish({ status: 'done', module: parsed });
     res.json({ jobId });
   } catch (err) {
-    const msg = err.name === 'AbortError'
-      ? 'AI took over 55s — try a simpler prompt, or retry (complex modules sometimes need a second attempt)'
-      : (err.message || 'AI request failed');
-    await finish({ status: 'error', error: msg });
+    await finish({ status: 'error', error: err.message || 'AI request failed' });
     res.json({ jobId });
-  } finally {
-    clearTimeout(killTimer);
   }
 });
 

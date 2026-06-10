@@ -34,15 +34,15 @@ generic `/:collection/:id` route handles it automatically.
 | POST | `/w/:workspaceId/ai-generate` | Runs MiniMax synchronously, writes result to `ai_jobs`, returns `{ jobId }`. Blocks until done (~10–55s). |
 | GET | `/w/:workspaceId/ai-job?job=` | Poll job status. Returns `{ status, module, error, raw }`. |
 
-**AI generation architecture:**
-- POST handler calls MiniMax **synchronously** inside the HTTP handler with a 55s `AbortController` (just under Codehooks' 60s HTTP limit).
-- The job/poll pattern is preserved: result is written to the `ai_jobs` collection before the POST returns; the frontend polls and finds it done on the first check.
-- Worker definition (`app.worker`) is a no-op stub — it exists to satisfy the `conn.enqueue` call shape but does nothing. The real work happens in the POST handler.
-- **On Codehooks PRO plan** with the 120s worker timeout working: move the MiniMax call back into the worker body and call `conn.enqueue` from the POST route. This removes the 60s ceiling and enables MiniMax-M3 (the higher-quality reasoning model).
+**AI generation architecture (PRO plan, worker mode):**
+- `clarify`/`plan` modes run **synchronously** in the POST handler on `MiniMax-M2.7-highspeed` with a 55s `AbortController` — fast interactive modes, result written to the `ai_job:` KV before the POST returns.
+- `build`/`revise` modes are **enqueued to the real worker** (`ai-generate-worker`, `{ timeout: 120000, workers: 1 }`) which runs `MiniMax-M3` with a 110s `AbortController`. POST returns the jobId instantly; the frontend polls (`aiRequest` in `shell/api.js`, 150s cap).
+- Worker payload: `{ jobId, workspaceId, mode, convo, planType, maxTokens, model }` read from `req.body.payload`. The worker writes `done`/`error` to `ai_job:{jobId}` and calls `res.end()`.
+- The job/poll contract is unchanged: `POST → { jobId }`, `GET /w/:ws/ai-job?job= → { status, module, error, raw }`.
 
 **Route path rule:** AI routes use 3-segment paths (`/w/:ws/ai-generate`, `/w/:ws/ai-job`). A 4-segment path like `/w/:ws/ai/generate` collides with the generic data route `/w/:ws/:collection/:id` — never use 4 segments for AI routes.
 
-**Model:** `MiniMax-M2.7-highspeed` with `response_format: { type: 'json_object' }` and `max_tokens: 16384`. `response_format` is required — without it the model replies conversationally instead of emitting JSON. MiniMax-M3 is higher quality but takes 40–90s and only works reliably on the PRO plan (120s worker timeout).
+**Models:** `MiniMax-M2.7-highspeed` for clarify/plan (max_tokens 1024/2048); `MiniMax-M3` for build/revise (max_tokens 16384, runs in the worker — M3 takes 40–90s and emits `<think>` blocks, which `extractModuleJson` strips). No `response_format` param — it caused request hangs; JSON extraction is handled by `extractModuleJson` instead.
 
 ---
 

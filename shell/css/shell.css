@@ -69,7 +69,28 @@
   inset: 0;
   bottom: 48px;
   overflow: hidden;
-  background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+  background: #0c0c16; /* fallback under the wallpaper layer */
+}
+
+/* Wallpaper gradient derived from the user's accent color — changing the
+   accent in Settings re-tints the desktop live (no JS, pure CSS var). */
+.os-desktop-wallpaper {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--os-accent, #3b82f6) 22%, #0c0a20) 0%,
+    color-mix(in srgb, var(--os-accent, #3b82f6) 42%, #1a1838) 50%,
+    color-mix(in srgb, var(--os-accent, #3b82f6) 18%, #14122c) 100%);
+}
+
+.os-desktop-texture {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 20% 30%, color-mix(in srgb, var(--os-accent, #3b82f6) 10%, transparent) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 70%, color-mix(in srgb, var(--os-accent, #3b82f6) 8%, transparent) 0%, transparent 60%);
 }
 
 /* Window */

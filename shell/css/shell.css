@@ -379,6 +379,7 @@
 
 /* Desktop icon */
 .os-desktop-icon {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -401,6 +402,24 @@
 .os-desktop-icon.icon-drag-over { background: rgba(0,122,255,0.35) !important; transform: scale(1.08); box-shadow: 0 0 0 2px rgba(0,122,255,0.6); }
 .os-desktop-icon.icon-reorder-target { transform: scale(1.05); box-shadow: 0 0 0 2px rgba(255,255,255,0.5); }
 .os-desktop-icon-emoji { font-size: 2rem; line-height: 1; }
+
+.os-desktop-icon-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #ff3b30;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,.4);
+}
 .os-desktop-icon-label {
   font-size: 0.7rem;
   font-weight: 500;

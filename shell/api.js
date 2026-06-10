@@ -103,6 +103,13 @@ export async function deleteData(collection, id) {
   } catch {}
 }
 
+// Like getData but always bypasses the localStorage cache — use for polling.
+export async function forceGetData(collection, id) {
+  lsDel(collection, id);
+  _missCache.delete(lsKey(collection, id));
+  return getData(collection, id);
+}
+
 // ─── Cross-client sync (polling) ───────────────────────────────────────────
 
 const _subscribers = new Map(); // "collection:id" → Set<callback>

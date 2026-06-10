@@ -12,6 +12,7 @@ export function registerOsStore() {
     toasts: [],
     contextMenu: { visible: false, x: 0, y: 0, items: [] },
     instances: [],
+    appBadges: {},
     dragInstanceId: null,
     dragOverFolderId: null,
     dragDesktopKey: null,
@@ -36,12 +37,39 @@ export function registerOsStore() {
       // instances are loaded by auth store after workspace is selected
     },
 
+    setAppBadge(appId, count) {
+      this.appBadges = { ...this.appBadges, [appId]: count > 0 ? count : 0 };
+    },
+
     // Called by auth store after workspace is activated
     loadWorkspaceData() {
       this.instances = [];
       this._loadInstances();
       this._loadGeneratedModules();
       this._prefetchModules();
+      this._checkChatBadge();
+    },
+
+    async _checkChatBadge() {
+      try {
+        const userStr = localStorage.getItem('os-user');
+        if (!userStr) return;
+        const user = JSON.parse(userStr);
+        const userId = user?.userId;
+        if (!userId) return;
+        const channelsData = await getData('chat', 'channels');
+        const channels = channelsData?.channels || [];
+        if (!channels.length) return;
+        const lastRead = (await getData('chat-read', userId)) || {};
+        let total = 0;
+        for (const ch of channels) {
+          const msgData = await getData('chat-messages', ch.id);
+          const messages = msgData?.messages || [];
+          const since = lastRead[ch.id] || 0;
+          total += messages.filter(m => m.timestamp > since).length;
+        }
+        this.setAppBadge('chat', total);
+      } catch {}
     },
 
     // Warm module JS + CSS during idle time so first launch skips the network

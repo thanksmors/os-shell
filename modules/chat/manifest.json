@@ -1,0 +1,12 @@
+{
+  "appId": "chat",
+  "tag": "app-chat",
+  "entry": "/modules/chat/index.js",
+  "title": "Chat",
+  "icon": "💬",
+  "defaultSize": { "w": 700, "h": 520 },
+  "singleton": true,
+  "resizable": true,
+  "minSize": { "w": 480, "h": 360 },
+  "dataCollections": ["chat", "chat-messages", "chat-read"]
+}

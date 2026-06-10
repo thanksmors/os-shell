@@ -194,6 +194,9 @@
           >
             <span class="os-desktop-icon-emoji" x-text="item.icon"></span>
             <span class="os-desktop-icon-label" x-text="item.label"></span>
+            <template x-if="$store.os.appBadges[item.id] > 0">
+              <span class="os-desktop-icon-badge" x-text="$store.os.appBadges[item.id] > 99 ? '99+' : $store.os.appBadges[item.id]"></span>
+            </template>
           </button>
         </template>
       </template>

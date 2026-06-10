@@ -260,8 +260,10 @@ others must be fully isolated, communicating only through `el.api` and `shell/ap
 | `projects` | Generator | Project management board. Links to Data module via `requiredCollections`. | `projects` |
 | `folder` | Generator | Container for other instances. `acceptsDroppedInstances: true`. | none |
 | `emoji` | Singleton | Browse emojis by category or search, click to copy. CDN-backed. | none |
-| `notepad` | Singleton | Plain text editor. | `notepad` |
-| `files` | Plain | File browser. | none |
+| `notes` | Singleton | Markdown notes with folders, preview, image/YouTube embeds. | `notes` |
+| `chat` | Singleton | Channels + messages, unread badge, SSE-driven sync. | `chat`, `chat-messages`, `chat-read` |
+| `files` | Singleton | Drive-style file manager: folders, base64 upload/download, in-app preview (images, PDF, text, MD, HTML, CSV, DOCX/XLSX via lazy CDN libs). | `files-meta`, `files-data` |
+| `about` | Singleton | About/info page. | none |
 | `settings` | Singleton | Appearance (theme/font/accent), workspace, about. | none |
 | `builder` | Singleton | "Build App" — AI module generation: clarify → plan → queued build, revise. | `generated-modules`, `build-jobs` |
 | `data` | (internal) | Shared collection management API for projects module. Not in registry. | — |

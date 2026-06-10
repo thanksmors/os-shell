@@ -11,6 +11,11 @@ function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// Local-timezone ISO date — toISOString() shifts a day in UTC+ timezones
+function fmtISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function autoColor(id) {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
@@ -39,14 +44,23 @@ class AppLoad extends AppModuleBase {
       const qStart = new Date(today.getFullYear(), Math.floor(today.getMonth() / 3) * 3, 1);
       this._state = {
         name: cfg.name || 'Load Plan',
-        viewStart: qStart.toISOString().slice(0, 10),
+        viewStart: fmtISO(qStart),
         viewMonths: 9,
         peopleInstanceId: null,
         members: [],
         tasks: []
       };
     } else {
-      this._state = saved;
+      // Repair tasks saved by an earlier version with malformed dates (e.g. 'YYYY-MM-DD-01')
+      const tasks = (saved.tasks || []).map(t => {
+        const m = String(t.startDate).match(/^(\d{4})-(\d{2})/);
+        const e = String(t.endDate).match(/^(\d{4})-(\d{2})/);
+        if (!m || !e) return null;
+        const startDate = /^\d{4}-\d{2}-\d{2}$/.test(t.startDate) ? t.startDate : `${m[1]}-${m[2]}-01`;
+        const endDate = /^\d{4}-\d{2}-\d{2}$/.test(t.endDate) ? t.endDate : fmtISO(new Date(Number(e[1]), Number(e[2]), 0));
+        return { ...t, startDate, endDate };
+      }).filter(Boolean);
+      this._state = { ...saved, tasks };
     }
   }
 
@@ -64,7 +78,7 @@ class AppLoad extends AppModuleBase {
   _addMonthISO(iso, n) {
     const d = new Date(iso + 'T00:00:00');
     d.setMonth(d.getMonth() + n);
-    return d.toISOString().slice(0, 10);
+    return fmtISO(d);
   }
   _monthsBetween(a, b) {
     const from = new Date(a + 'T00:00:00'), to = new Date(b + 'T00:00:00');
@@ -79,11 +93,11 @@ class AppLoad extends AppModuleBase {
       d.setMonth(d.getMonth() + i);
       arr.push({ year: d.getFullYear(), month: d.getMonth(),
         label: MONTH_NAMES[d.getMonth()], isQS: d.getMonth() % 3 === 0,
-        iso: d.toISOString().slice(0, 7) });
+        iso: fmtISO(d).slice(0, 7) });
     }
     return arr;
   }
-  _todayISO() { return new Date().toISOString().slice(0, 10); }
+  _todayISO() { return fmtISO(new Date()); }
 
   // --- Capacity ---
   _monthLoad(memberId, monthIndex) {
@@ -180,17 +194,34 @@ class AppLoad extends AppModuleBase {
           </div>`;
         });
 
-        // Task bars (absolutely positioned)
+        // Task bars — greedy lane assignment so overlapping tasks stack
+        const sorted = [...memberTasks].sort((a, b) =>
+          a.startDate.localeCompare(b.startDate) || a.endDate.localeCompare(b.endDate));
+        const laneEnds = [];
+        const laneOf = {};
+        sorted.forEach(t => {
+          let lane = laneEnds.findIndex(end => t.startDate > end);
+          if (lane === -1) { lane = laneEnds.length; laneEnds.push(t.endDate); }
+          else laneEnds[lane] = t.endDate;
+          laneOf[t.id] = lane;
+        });
+        const laneCount = Math.max(1, laneEnds.length);
+        const barGap = 2;
+        const barH = Math.max(8, Math.floor((30 - (laneCount - 1) * barGap) / laneCount));
+
         let bars = '';
-        memberTasks.forEach(t => {
+        sorted.forEach(t => {
           const left = this._monthsBetween(viewStart, t.startDate) * MONTH_W;
-          const right = this._monthsBetween(viewStart, t.endDate) * MONTH_W + MONTH_W;
+          // endDate is the last day of its month — bar ends at the start of the next month
+          const endNext = this._addMonthISO(t.endDate.slice(0, 7) + '-01', 1);
+          const right = this._monthsBetween(viewStart, endNext) * MONTH_W;
           const width = right - left;
           if (left >= totalW || right <= 0 || width <= 0) return;
           const clampedLeft = Math.max(0, left);
-          const clampedWidth = Math.min(width, totalW - clampedLeft) - (left < 0 ? 0 : 0);
-          bars += `<div class="task-bar" data-task="${esc(t.id)}"
-            style="left:${clampedLeft}px;width:${Math.max(clampedWidth, 4)}px;background:${esc(t.color)}"
+          const clampedWidth = Math.min(right, totalW) - clampedLeft;
+          const top = 4 + laneOf[t.id] * (barH + barGap);
+          bars += `<div class="task-bar${barH < 16 ? ' slim' : ''}" data-task="${esc(t.id)}"
+            style="left:${clampedLeft}px;width:${Math.max(clampedWidth, 4)}px;top:${top}px;height:${barH}px;background:${esc(t.color)}"
             title="${esc(t.name)} (${t.pct}%)">
             <span>${esc(t.name)} ${t.pct}%</span>
           </div>`;
@@ -294,11 +325,12 @@ class AppLoad extends AppModuleBase {
       // Build month+year options for start/end
       const monthOpts = (sel) => {
         let opts = '';
-        for (let i = 0; i < this._state.viewMonths; i++) {
+        for (let i = -3; i < this._state.viewMonths + 3; i++) {
           const iso = this._addMonthISO(this._state.viewStart, i);
+          const ym = iso.slice(0, 7);
           const d = new Date(iso + 'T00:00:00');
           const label = `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
-          opts += `<option value="${iso}" ${sel === iso ? 'selected' : ''}>${label}</option>`;
+          opts += `<option value="${ym}" ${sel === ym ? 'selected' : ''}>${label}</option>`;
         }
         return opts;
       };
@@ -469,7 +501,7 @@ class AppLoad extends AppModuleBase {
       await this._save(); this._render();
     } else if (action === 'today') {
       const qs = this._quarterStart(this._todayISO());
-      this._state = { ...this._state, viewStart: qs.toISOString().slice(0, 10) };
+      this._state = { ...this._state, viewStart: fmtISO(qs) };
       await this._save(); this._render();
     } else if (action === 'add-task') {
       this._modal = { type: 'task', data: null, memberId: dataset.member };
@@ -508,10 +540,12 @@ class AppLoad extends AppModuleBase {
     const startMonth = w.querySelector('#m-start')?.value; // YYYY-MM
     const endMonth = w.querySelector('#m-end')?.value;
     const pct = Number(w.querySelector('#m-pct')?.value || 50);
-    const startDate = (startMonth || this._state.viewStart.slice(0, 7)) + '-01';
+    const startYM = startMonth || this._state.viewStart.slice(0, 7);
+    const endYM = (endMonth && endMonth >= startYM) ? endMonth : startYM;
+    const startDate = startYM + '-01';
     // end = last day of end month
-    const [ey, em] = (endMonth || this._state.viewStart.slice(0, 7)).split('-').map(Number);
-    const endDate = new Date(ey, em, 0).toISOString().slice(0, 10);
+    const [ey, em] = endYM.split('-').map(Number);
+    const endDate = fmtISO(new Date(ey, em, 0));
     const memberId = this._modal.memberId || this._modal.data?.memberId;
 
     const existing = this._modal.data?.id;

@@ -238,8 +238,6 @@
 /* Task bars */
 .task-bar {
   position: absolute;
-  top: 6px;
-  height: 26px;
   border-radius: 5px;
   cursor: pointer;
   overflow: hidden;
@@ -251,6 +249,8 @@
   min-width: 4px;
 }
 .task-bar:hover { filter: brightness(1.1); }
+.task-bar.slim { padding: 0 2px; }
+.task-bar.slim span { font-size: 0.6rem; }
 .task-bar span {
   color: #fff;
   font-size: 0.72rem;

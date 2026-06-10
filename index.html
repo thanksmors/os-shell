@@ -315,8 +315,6 @@
       <template x-for="win in ($store.os ? $store.os.windows : [])" :key="win.id">
         <button
           class="os-taskbar-btn"
-          x-transition:enter-active-class="taskbar-btn-in"
-          x-transition:leave-active-class="taskbar-btn-out"
           :class="{ active: win.focused && win.state !== 'minimized' }"
           @click.stop="$store.os.taskbarClick(win.id)"
         >

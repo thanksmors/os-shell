@@ -1,4 +1,9 @@
-import { app } from 'codehooks-js';
+import { app, realtime } from 'codehooks-js';
+
+// Realtime pub/sub channel — must be created at deploy time (before routes).
+// Clients connect via EventSource: GET /sync/:clientID?apikey=...
+// Server publishes on every data mutation via realtime.publishEvent('/sync', ...).
+realtime.createChannel('/sync');
 
 // Google's OAuth endpoints are hit by the *browser* (the login redirect) and by
 // Google's servers (the callback), neither of which can carry the codehooks API

@@ -94,6 +94,15 @@ export async function setData(collection, id, data) {
   } catch { return data; }
 }
 
+export async function deleteData(collection, id) {
+  _missCache.add(lsKey(collection, id));
+  lsDel(collection, id);
+  if (!useBackend()) return;
+  try {
+    await fetch(url(collection, id), { method: 'DELETE', headers: headers() });
+  } catch {}
+}
+
 // ─── Cross-client sync (polling) ───────────────────────────────────────────
 
 const _subscribers = new Map(); // "collection:id" → Set<callback>

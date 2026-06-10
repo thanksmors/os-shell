@@ -1,6 +1,6 @@
 import { motion, spring, stagger } from '/shell/motion.js';
 import { iconUrl } from './icon.js';
-import { getInstances, saveInstances, subscribe, getData } from './api.js';
+import { getInstances, saveInstances, subscribe, getData, deleteData } from './api.js';
 
 export function registerOsStore() {
   Alpine.store('os', {
@@ -420,10 +420,10 @@ export function registerOsStore() {
       this.instances = this.instances.filter(i => i.instanceId !== instanceId);
       window.dispatchEvent(new CustomEvent('os:instances-changed'));
       saveInstances(this.instances); // fire-and-forget
-      // Clean up stored data using manifest.dataCollections (no hardcoding)
-      (app?.dataCollections || []).forEach(col => {
-        localStorage.removeItem(`os:${col}:${instanceId}`);
-      });
+      // Clean up stored data — deleteData handles workspace-scoped keys + backend
+      for (const col of (app?.dataCollections || [])) {
+        deleteData(col, instanceId); // fire-and-forget
+      }
     },
 
     buildInstanceContextMenu(x, y, item) {

@@ -1,5 +1,5 @@
 import { adoptTailwind } from '/shell/shadow-tailwind.js';
-import { getData, setData, aiRequest } from '/shell/api.js';
+import { getData, setData, deleteData, aiRequest } from '/shell/api.js';
 
 const MODULES_COLLECTION = 'generated-modules';
 const JOBS_COLLECTION = 'build-jobs';
@@ -486,10 +486,30 @@ class AppBuilder extends HTMLElement {
   }
 
   async _deleteInstalled(job) {
-    if (job.appId && this._modules[job.appId]) {
-      delete this._modules[job.appId];
+    const { appId } = job;
+    const manifest = job.module?.manifest || this._modules[appId]?.manifest;
+
+    if (appId && this.api?.store) {
+      // Remove all desktop instances of this app. Must happen before unregisterApp
+      // so the store can still resolve dataCollections from the manifest.
+      const instances = (this.api.store.instances || []).filter(i => i.appId === appId);
+      for (const inst of instances) {
+        await this.api.store.removeInstance(inst.instanceId);
+      }
+      // For singletons the data key is a fixed string, not an instanceId.
+      // Clean the two common patterns the AI prompt instructs: (col, 'data') and (col, appId).
+      if (manifest?.singleton !== false && Array.isArray(manifest?.dataCollections)) {
+        for (const col of manifest.dataCollections) {
+          deleteData(col, 'data');
+          deleteData(col, appId);
+        }
+      }
+    }
+
+    if (appId && this._modules[appId]) {
+      delete this._modules[appId];
       await setData(MODULES_COLLECTION, INDEX_KEY, this._modules);
-      this.api?.store?.unregisterApp(job.appId);
+      this.api?.store?.unregisterApp(appId);
     }
     delete this._jobs[job.jobId];
     await this._saveJobs();

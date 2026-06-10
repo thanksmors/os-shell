@@ -1,0 +1,18 @@
+{
+  "appId": "load",
+  "tag": "app-load",
+  "entry": "/modules/load/index.js",
+  "title": "Load",
+  "icon": "📊",
+  "defaultSize": { "w": 960, "h": 580 },
+  "singleton": false,
+  "generator": true,
+  "hasSettings": true,
+  "resizable": true,
+  "minSize": { "w": 600, "h": 400 },
+  "sync": true,
+  "dataCollections": ["load-plans"],
+  "contextMenu": [
+    { "label": "📊 New Load Plan", "config": { "name": "Load Plan", "icon": "📊" } }
+  ]
+}

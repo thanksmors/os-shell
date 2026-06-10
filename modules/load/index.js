@@ -25,9 +25,11 @@ function autoColor(id) {
 class AppLoad extends AppModuleBase {
   constructor() {
     super();
-    this._modal = null;        // { type: 'task'|'member', data, memberId }
+    this._modal = null;
     this._settingsOpen = false;
     this._scrollTop = 0;
+    this._showBars = true;
+    this._showLoad = true;
     this.addEventListener('os:toggle-settings', () => {
       this._settingsOpen = !this._settingsOpen;
       this._render();
@@ -141,6 +143,8 @@ class AppLoad extends AppModuleBase {
   // --- Render ---
   _render() {
     const { members, tasks, viewStart, viewMonths, peopleInstanceId, name } = this._state;
+    const showBars = this._showBars;
+    const showLoad = this._showLoad;
     const months = this._monthsArray();
     const totalW = months.length * MONTH_W;
     const totalH = Math.max(members.length * ROW_H, ROW_H);
@@ -180,14 +184,15 @@ class AppLoad extends AppModuleBase {
         const initials = member.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
         const memberTasks = tasks.filter(t => t.memberId === member.id);
 
-        // Load cells
+        // Load cells (always computed for overload detection, only rendered if showLoad)
         let loadCells = '';
         let rowOverloaded = false;
         months.forEach((m, idx) => {
           const load = this._monthLoad(member.id, idx);
+          if (load >= 100) rowOverloaded = true;
+          if (!showLoad) return;
           const pct = Math.min(Math.round(load), 120);
           const cls = load >= 100 ? 'overload' : load >= 70 ? 'mid' : 'low';
-          if (load >= 100) rowOverloaded = true;
           loadCells += `<div class="load-cell${m.isQS ? ' qs' : ''}" style="width:${MONTH_W}px" title="${Math.round(load)}%">
             <div class="load-bar ${cls}" style="height:${Math.min(pct, 100) / 100 * 28}px"></div>
             <div class="load-label">${Math.round(load)}%</div>
@@ -210,7 +215,8 @@ class AppLoad extends AppModuleBase {
         const barH = Math.max(8, Math.floor((30 - (laneCount - 1) * barGap) / laneCount));
 
         let bars = '';
-        sorted.forEach(t => {
+        if (!showBars) { /* bars suppressed */ }
+        else sorted.forEach(t => {
           const left = this._monthsBetween(viewStart, t.startDate) * MONTH_W;
           // endDate is the last day of its month — bar ends at the start of the next month
           const endNext = this._addMonthISO(t.endDate.slice(0, 7) + '-01', 1);
@@ -225,7 +231,7 @@ class AppLoad extends AppModuleBase {
             title="${esc(t.name)} (${t.pct}%)">
             <span>${esc(t.name)} ${t.pct}%</span>
           </div>`;
-        });
+        }); // end showBars
 
         nameRows += `<div class="name-row${rowOverloaded ? ' overloaded' : ''}" data-member="${esc(member.id)}" style="height:${ROW_H}px">
           <div class="member-avatar" style="background:${esc(member.color)}">${esc(initials)}</div>
@@ -260,7 +266,7 @@ class AppLoad extends AppModuleBase {
       <div class="settings-row">
         <label>View span</label>
         <div class="span-btns">
-          ${[3,6,9,12].map(n => `<button class="span-btn${viewMonths === n ? ' active' : ''}" data-months="${n}">${n}mo</button>`).join('')}
+          ${[3,6,12,24,36,60].map(n => `<button class="span-btn${viewMonths === n ? ' active' : ''}" data-months="${n}">${n >= 24 ? (n/12)+'y' : n+'mo'}</button>`).join('')}
         </div>
       </div>
       <div class="settings-actions">
@@ -279,7 +285,10 @@ class AppLoad extends AppModuleBase {
           <button class="tb-btn" data-action="prev-q" title="Previous quarter">◀</button>
           <button class="tb-btn today-btn" data-action="today">Today</button>
           <button class="tb-btn" data-action="next-q" title="Next quarter">▶</button>
-          ${members.length > 0 ? `<button class="tb-btn add-member-btn" data-action="add-member">+ Member</button>` : ''}
+          <div class="tb-sep"></div>
+          <button class="tb-btn toggle-btn${this._showBars ? ' on' : ''}" data-action="toggle-bars" title="Toggle task bars">Bars</button>
+          <button class="tb-btn toggle-btn${this._showLoad ? ' on' : ''}" data-action="toggle-load" title="Toggle load indicators">Load</button>
+          ${members.length > 0 ? `<div class="tb-sep"></div><button class="tb-btn add-member-btn" data-action="add-member">+ Member</button>` : ''}
         </div>
       </div>
       ${settingsHtml}
@@ -325,7 +334,7 @@ class AppLoad extends AppModuleBase {
       // Build month+year options for start/end
       const monthOpts = (sel) => {
         let opts = '';
-        for (let i = -3; i < this._state.viewMonths + 3; i++) {
+        for (let i = -3; i < this._state.viewMonths + 6; i++) {
           const iso = this._addMonthISO(this._state.viewStart, i);
           const ym = iso.slice(0, 7);
           const d = new Date(iso + 'T00:00:00');
@@ -493,7 +502,11 @@ class AppLoad extends AppModuleBase {
   }
 
   async _handleAction(action, dataset) {
-    if (action === 'prev-q') {
+    if (action === 'toggle-bars') {
+      this._showBars = !this._showBars; this._render(); return;
+    } else if (action === 'toggle-load') {
+      this._showLoad = !this._showLoad; this._render(); return;
+    } else if (action === 'prev-q') {
       this._state = { ...this._state, viewStart: this._addMonthISO(this._state.viewStart, -3) };
       await this._save(); this._render();
     } else if (action === 'next-q') {

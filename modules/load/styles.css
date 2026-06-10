@@ -34,6 +34,9 @@
 }
 .tb-btn:hover { background: var(--os-hover, #f4f4f5); }
 .today-btn { font-size: 0.75rem; }
+.tb-sep { width: 1px; height: 18px; background: var(--os-border, #e4e4e7); margin: 0 2px; }
+.toggle-btn { opacity: 0.45; }
+.toggle-btn.on { opacity: 1; background: var(--os-hover, #f4f4f5); }
 .add-member-btn { background: var(--os-accent, #3b82f6); color: #fff; border-color: transparent; }
 .add-member-btn:hover { opacity: 0.9; }
 

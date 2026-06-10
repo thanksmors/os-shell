@@ -31,10 +31,11 @@ export async function getCollection(name) {
 
 // ─── Collection CRUD ───────────────────────────────────────────────────────
 
-export async function createCollection(name) {
+// owner: optional { instanceId, appId } — written into the collection so orphans can be detected.
+export async function createCollection(name, owner) {
   const all = await _all();
-  if (all[name]) return;
-  all[name] = { items: [] };
+  if (all[name]) return; // already exists — don't overwrite ownership of existing collection
+  all[name] = { items: [], ...(owner ? { _owner: owner } : {}) };
   await _save(all);
 }
 

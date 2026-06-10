@@ -57,11 +57,25 @@ class AppData extends AppModuleBase {
     this._bindEvents();
   }
 
+  _ownerBadge(col) {
+    const owner = col?._owner;
+    if (!owner?.instanceId) return '';
+    const instances = window.Alpine?.store('os')?.instances || [];
+    const alive = instances.some(i => i.instanceId === owner.instanceId);
+    if (alive) {
+      const app = window.Alpine?.store('os')?.apps?.[owner.appId];
+      const label = app?.title || owner.appId;
+      return `<span class="col-owner-badge" title="Created by ${this._esc(label)}">🔗 ${this._esc(label)}</span>`;
+    }
+    return `<span class="col-owner-badge col-owner-orphan" title="Owning instance was deleted">⚠️ orphaned</span>`;
+  }
+
   _renderCollection(name) {
     const col = this._collections[name];
     const items = col?.items || [];
     const open = this._expanded[name] !== false; // default open
     const pendingIcon = this._pendingIcon[name] || '📄';
+    const ownerBadge = this._ownerBadge(col);
 
     const itemRows = items.map(item => `
       <div class="item-row" data-item-id="${item.id}" data-col="${this._esc(name)}">
@@ -78,6 +92,7 @@ class AppData extends AppModuleBase {
           <span class="col-chevron ${open ? 'open' : ''}">▶</span>
           <input class="col-name-input" data-action="rename-col" data-col="${this._esc(name)}"
             value="${this._esc(name)}" placeholder="Collection name…" />
+          ${ownerBadge}
           <span class="col-count">${items.length}</span>
           <button class="col-del" data-action="del-col" data-col="${this._esc(name)}" title="Delete collection">✕</button>
         </div>

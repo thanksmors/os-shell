@@ -197,9 +197,19 @@ export class AppModuleBase extends HTMLElement {
       });
 
       shadow.querySelector('#setup-continue').addEventListener('click', async () => {
+        const owner = { instanceId: this._appId, appId: this._moduleId() };
+        const created = [];
+        // Snapshot existing names before creating so we know which are new.
+        const existingNames = new Set(Object.keys(existing));
         for (const { slot, name } of Object.values(choices)) {
-          await createCollection(name); // no-op if already exists
+          await createCollection(name, owner); // no-op + no owner stamp if collection already existed
           this._slots[slot] = name;
+          if (!existingNames.has(name)) created.push(name);
+        }
+        // Record newly created collections so removeInstance can clean them up.
+        if (created.length) {
+          const prev = this._slots._createdCollections || [];
+          this._slots._createdCollections = [...new Set([...prev, ...created])];
         }
         resolve();
       });

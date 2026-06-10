@@ -420,7 +420,28 @@ export function registerOsStore() {
       this.instances = this.instances.filter(i => i.instanceId !== instanceId);
       window.dispatchEvent(new CustomEvent('os:instances-changed'));
       saveInstances(this.instances); // fire-and-forget
-      // Clean up stored data — deleteData handles workspace-scoped keys + backend
+
+      // Clean up Data collections this instance created via requiredCollections.
+      // module-settings stores _createdCollections; only delete if the _owner stamp
+      // still points to this instance (guards against the user reassigning collections).
+      const modSettings = await getData('module-settings', instanceId).catch(() => null);
+      const createdCollections = modSettings?._createdCollections;
+      if (Array.isArray(createdCollections) && createdCollections.length) {
+        try {
+          const { deleteCollection, getCollections } = await import('/modules/data/api.js');
+          const all = await getCollections();
+          for (const name of createdCollections) {
+            const col = all[name];
+            if (col && (!col._owner || col._owner.instanceId === instanceId)) {
+              deleteCollection(name); // fire-and-forget
+            }
+          }
+        } catch {}
+      }
+      // Clean module-settings record (always, regardless of requiredCollections).
+      deleteData('module-settings', instanceId);
+
+      // Clean up declared dataCollections — deleteData handles workspace-scoped keys + backend
       for (const col of (app?.dataCollections || [])) {
         deleteData(col, instanceId); // fire-and-forget
       }

@@ -323,7 +323,7 @@ class AppBuilder extends HTMLElement {
 
   _backendErrMsg(err) {
     const m = err.message || '';
-    if (m.includes('65s') || m.includes('timed out') || m.includes('prompt string')) {
+    if (m.includes('prompt string')) {
       return `❌ Build App needs a backend update. Please run \`coho deploy\` from the \`codehooks/\` directory, then try again.\n\nDetails: ${m}`;
     }
     return `❌ ${m}`;

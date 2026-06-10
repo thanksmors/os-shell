@@ -307,9 +307,7 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
           { role: 'system', content: systemPrompt },
           ...convo,
         ],
-        // Force structured JSON output — M2.7 otherwise drifts into chat replies.
-        response_format: { type: 'json_object' },
-        max_tokens: 16384,
+        max_tokens: (mode === 'clarify') ? 1024 : (mode === 'plan') ? 2048 : 16384,
       }),
     });
 

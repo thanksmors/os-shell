@@ -1,0 +1,18 @@
+{
+  "appId": "people",
+  "tag": "app-people",
+  "entry": "/modules/people/index.js",
+  "title": "People",
+  "icon": "👥",
+  "defaultSize": { "w": 820, "h": 580 },
+  "singleton": false,
+  "generator": true,
+  "hasSettings": true,
+  "resizable": true,
+  "minSize": { "w": 500, "h": 380 },
+  "sync": true,
+  "dataCollections": ["people-charts"],
+  "contextMenu": [
+    { "label": "👥 New People Chart", "config": { "name": "People", "icon": "👥" } }
+  ]
+}

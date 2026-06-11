@@ -11,6 +11,9 @@ export function registerAuthStore() {
     inviteId: null,
     inviteInfo: null,
     error: null,
+    managingWs: null,
+    members: [],
+    membersLoading: false,
 
     async init() {
       // Capture invite link (if any) before we scrub the query string.
@@ -78,8 +81,37 @@ export function registerAuthStore() {
     async selectWorkspace(workspaceId) {
       const ws = this.workspaces.find(w => w.workspaceId === workspaceId);
       if (!ws) return;
+      this.managingWs = null;
       const session = getSavedSession();
       await this._activateWorkspace(ws, session);
+    },
+
+    async openManage(workspaceId) {
+      this.managingWs = workspaceId;
+      this.membersLoading = true;
+      this.members = [];
+      const { fetchMembers } = await import('./workspace.js');
+      this.members = await fetchMembers(workspaceId, getSavedSession());
+      this.membersLoading = false;
+    },
+
+    closeManage() {
+      this.managingWs = null;
+      this.members = [];
+    },
+
+    async generateInvite() {
+      const { createInvite } = await import('./workspace.js');
+      const inv = await createInvite(this.managingWs, 'member', getSavedSession());
+      const url = `${location.origin}${location.pathname}?invite=${inv.inviteId}`;
+      await navigator.clipboard.writeText(url);
+      Alpine.store('os').toast('Invite link copied! Valid for 7 days.');
+    },
+
+    async removeMemberFromPanel(userId) {
+      const { removeMember } = await import('./workspace.js');
+      await removeMember(this.managingWs, userId, getSavedSession());
+      this.members = this.members.filter(m => m.userId !== userId);
     },
 
     async _activateWorkspace(ws, session) {
@@ -108,6 +140,8 @@ export function registerAuthStore() {
       this.user = null;
       this.workspaces = [];
       this.workspace = null;
+      this.managingWs = null;
+      this.members = [];
       this.screen = 'login';
       Alpine.store('os').windows = [];
       Alpine.store('os').instances = [];

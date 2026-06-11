@@ -103,36 +103,87 @@
       <!-- Workspace Select -->
       <template x-if="$store.auth && $store.auth.screen === 'workspace-select'">
         <div class="os-auth-card os-auth-card--wide">
-          <div class="os-auth-header">
+
+          <!-- === LIST VIEW === -->
+          <template x-if="!$store.auth.managingWs">
             <div>
-              <div class="os-auth-title" style="font-size:1.1rem;">Choose a Workspace</div>
-              <div class="os-auth-subtitle" x-text="'Signed in as ' + ($store.auth.user?.email || '')"></div>
-            </div>
-            <button class="os-auth-signout" @click="$store.auth.signOut()">Sign out</button>
-          </div>
-
-          <div class="os-ws-list">
-            <template x-for="ws in $store.auth.workspaces" :key="ws.workspaceId">
-              <button class="os-ws-item" @click="$store.auth.selectWorkspace(ws.workspaceId)">
-                <span class="os-ws-icon" x-text="ws.icon"></span>
-                <div class="os-ws-info">
-                  <div class="os-ws-name" x-text="ws.name"></div>
-                  <div class="os-ws-role" x-text="ws.role"></div>
+              <div class="os-auth-header">
+                <div>
+                  <div class="os-auth-title" style="font-size:1.1rem;">Choose a Workspace</div>
+                  <div class="os-auth-subtitle" x-text="'Signed in as ' + ($store.auth.user?.email || '')"></div>
                 </div>
-                <span style="color:#9ca3af;font-size:1rem;">›</span>
-              </button>
-            </template>
-          </div>
+                <button class="os-auth-signout" @click="$store.auth.signOut()">Sign out</button>
+              </div>
 
-          <!-- Create new workspace -->
-          <div class="os-ws-create" x-data="{ open: false, name: '', icon: '🏢' }">
-            <button class="os-ws-create-btn" @click="open = !open">＋ New Workspace</button>
-            <div x-show="open" x-collapse class="ws-create-row" style="margin-top:12px;">
-              <input class="os-auth-input" style="width:60px;" maxlength="4" x-model="icon" placeholder="🏢" />
-              <input class="os-auth-input" style="flex:1;" x-model="name" placeholder="Workspace name…" @keydown.enter="name.trim() && $store.auth.createWorkspace(name.trim(), icon)" />
-              <button class="os-ws-create-go" @click="name.trim() && $store.auth.createWorkspace(name.trim(), icon)">Create</button>
+              <div class="os-ws-list">
+                <template x-for="ws in $store.auth.workspaces" :key="ws.workspaceId">
+                  <div class="os-ws-item-wrap">
+                    <button class="os-ws-item" @click="$store.auth.selectWorkspace(ws.workspaceId)">
+                      <span class="os-ws-icon" x-text="ws.icon"></span>
+                      <div class="os-ws-info">
+                        <div class="os-ws-name" x-text="ws.name"></div>
+                        <div class="os-ws-role" x-text="ws.role"></div>
+                      </div>
+                      <span style="color:#9ca3af;font-size:1rem;">›</span>
+                    </button>
+                    <button class="os-ws-manage-btn" @click.stop="$store.auth.openManage(ws.workspaceId)" title="Members &amp; invite">⚙</button>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Create new workspace -->
+              <div class="os-ws-create" x-data="{ open: false, name: '', icon: '🏢' }">
+                <button class="os-ws-create-btn" @click="open = !open">＋ New Workspace</button>
+                <div x-show="open" x-collapse class="ws-create-row" style="margin-top:12px;">
+                  <input class="os-auth-input" style="width:60px;" maxlength="4" x-model="icon" placeholder="🏢" />
+                  <input class="os-auth-input" style="flex:1;" x-model="name" placeholder="Workspace name…" @keydown.enter="name.trim() && $store.auth.createWorkspace(name.trim(), icon)" />
+                  <button class="os-ws-create-go" @click="name.trim() && $store.auth.createWorkspace(name.trim(), icon)">Create</button>
+                </div>
+              </div>
             </div>
-          </div>
+          </template>
+
+          <!-- === MANAGE VIEW === -->
+          <template x-if="$store.auth.managingWs">
+            <div>
+              <div class="os-auth-header">
+                <div>
+                  <button class="os-ws-back-btn" @click="$store.auth.closeManage()">← Back</button>
+                  <div class="os-auth-title" style="font-size:1rem;margin-top:6px;" x-text="($store.auth.workspaces.find(w => w.workspaceId === $store.auth.managingWs)?.name || '') + ' · Members'"></div>
+                </div>
+                <button class="os-auth-signout" @click="$store.auth.signOut()">Sign out</button>
+              </div>
+
+              <!-- Member list -->
+              <div class="os-member-list">
+                <div x-show="$store.auth.membersLoading" class="os-member-loading">Loading members…</div>
+                <template x-for="m in $store.auth.members" :key="m.userId">
+                  <div class="os-member-row">
+                    <div class="os-member-avatar" x-text="(m.name || m.email || '?')[0].toUpperCase()"></div>
+                    <div class="os-member-info">
+                      <div class="os-member-name" x-text="m.name || m.email"></div>
+                      <div class="os-member-email" x-show="m.name" x-text="m.email"></div>
+                    </div>
+                    <span class="os-member-role-badge" x-text="m.role"></span>
+                    <button
+                      x-show="['owner','admin'].includes($store.auth.workspaces.find(w => w.workspaceId === $store.auth.managingWs)?.role) && m.userId !== $store.auth.user?.userId"
+                      class="os-member-remove"
+                      @click="$store.auth.removeMemberFromPanel(m.userId)"
+                      title="Remove member"
+                    >✕</button>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Invite button (owner / admin only) -->
+              <button
+                x-show="['owner','admin'].includes($store.auth.workspaces.find(w => w.workspaceId === $store.auth.managingWs)?.role)"
+                class="os-share-invite-btn"
+                @click="$store.auth.generateInvite()"
+              >🔗 Copy invite link</button>
+            </div>
+          </template>
+
         </div>
       </template>
     </div>

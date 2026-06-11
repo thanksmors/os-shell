@@ -45,7 +45,7 @@ modules/your-id/
 | `hasSettings` | boolean | `false` | Shows ⚙️ in OS titlebar. Clicking fires `os:toggle-settings` on the module element. Module must listen for this event. |
 | `resizable` | boolean | `false` | Enables drag handle on bottom-right corner. |
 | `minSize` | `{w,h}` | `{w:240,h:180}` | Minimum dimensions enforced on resize. |
-| `sync` | boolean | `false` | `AppModuleBase` subscribes to cross-device sync polling when true. |
+| `sync` | boolean | `false` | `AppModuleBase` subscribes to cross-device sync when true — SSE-driven (~1–2s), with polling fallback. On a remote change it re-runs `_load()` + `_render()`. |
 | `dataCollections` | string[] | `[]` | Collection names owned by this module. `removeInstance()` deletes `os:{name}:{instanceId}` from localStorage for each. **Always declare** — omitting causes stale data accumulation. |
 | `acceptsDroppedInstances` | boolean | `false` | Makes this instance a drop container on the desktop. Set on the folder module only. |
 | `requiredCollections` | object[] | `[]` | Named collection slots needing user resolution on first launch. Shape: `{ slot, default, hint }`. `AppModuleBase._setupCollections()` shows a dialog. Projects module only. |
@@ -107,8 +107,8 @@ Generator modules extend `AppModuleBase` from `shell/module-base.js`. Ordered st
 6. `await _load()` — subclass implements: fetch state into `this._state`
 7. `_applyTheme()` + `_render()` — subclass implements: write DOM from `this._state`
 8. `api.setTitle(_getTitle())` — subclass implements
-9. `MutationObserver` on `<html>` — keeps `.dark` class in sync
-10. `subscribe()` if `manifest.sync === true` — cross-device polling
+9. `Alpine.effect()` watching `Alpine.store('os').theme` — keeps `.dark` class in sync reactively (replaces the old MutationObserver). `disconnectedCallback` calls `this._themeCleanup()`.
+10. `subscribe()` if `manifest.sync === true` — cross-device sync (SSE primary, polling fallback)
 
 **Hooks to override:**
 
@@ -164,10 +164,21 @@ All reads/writes via `getData(collection, id)` / `setData(collection, id, data)`
 | `load-plans` | load | `instanceId` |
 | `roadmaps` | roadmap | `instanceId` |
 | `pm-data` | pm | `instanceId` |
+| `notes` | notes | `'data'` (singleton) |
+| `chat` | chat | `'data'` — channel list (singleton) |
+| `chat-messages` | chat | `channelId` — per-channel messages |
+| `chat-read` | chat | `'data'` — per-channel read markers |
+| `files-meta` | files | `'data'` — folder/file tree (singleton) |
+| `files-data` | files | `fileId` — base64 file blobs |
 | `module-settings` | AppModuleBase | `instanceId` (slot resolutions for `requiredCollections`) |
 | `meta` | shell | `'instances'` (desktop instance registry) |
 | `generated-modules` | builder | `'index'` — `{ [appId]: { manifest, js, css } }` |
 | `build-jobs` | builder | `'index'` — `{ [jobId]: { status, plan, messages, module, … } }` |
+
+Collections backing **collaborative** modules (`load-plans`, `roadmaps`, `pm-data`,
+`boards`, `gantt`, `chat`, `chat-messages`) are registered in `TOP_ARRAYS` in
+`codehooks/lib/merge.js` for concurrent-edit merging. A new collaborative collection
+must be added there too — see `codehooks/AGENTS.md`.
 
 When adding a new collection: declare it in `manifest.dataCollections` and add a row here.
 

@@ -88,27 +88,64 @@ All reads/writes go through `getData(collection, id)` / `setData(collection, id,
 Nothing in modules touches `localStorage` or `fetch` directly.
 
 **Local-first strategy:**
-- `setData` writes localStorage synchronously, then fires a cloud PUT (fire-and-forget)
-- `getData` returns localStorage cache immediately; falls through to cloud only if cache is empty
+- `setData` writes localStorage synchronously and returns **instantly**, then queues
+  the cloud PUT in a persistent **outbox** (see below). Never `await` it for the
+  write to land — the local write is already done.
+- `getData` returns the localStorage cache immediately; falls through to cloud only
+  if the cache is empty.
 
 All cloud errors are silently caught — UI never breaks on network failure.
 
-**localStorage key format:** `os:{collection}:{id}`
+**`setData` stamps `_ts`:** every object payload gets `_ts: Date.now()` added before
+it is stored and queued. The server-side merge (`codehooks/lib/merge.js`) uses this
+timestamp to order concurrent writes from different members. **Do not strip `_ts`**
+or filter it out of payloads — losing it breaks concurrent-edit merging.
 
-**Special keys (no `os:` wrapper — raw localStorage):**
+**Persistent outbox (offline-durable writes):** `setData`/`deleteData` enqueue to an
+`os:outbox` localStorage queue, drained in the background:
+- Survives page reload — queued writes are replayed on next load.
+- Coalesces by `collection:id` (last write wins; a `delete` supersedes a pending `put`).
+- Exponential backoff on network failure / 401 / 429 (caps at 60s); resumes on the
+  `online` event.
+- Each entry snapshots its workspace + session context, so a write queued before
+  login is sent with the right auth once available.
+
+**Server-side merge, not last-write-wins:** the backend `PUT` merges the incoming doc
+with stored state rather than overwriting, so two members editing at once don't
+clobber each other. Details in `codehooks/AGENTS.md` → "Concurrent-edit merge".
+
+**`forceGetData(collection, id)`:** bypasses the localStorage cache and refetches from
+the server. Use before appending to a **shared array** so you build on the freshest
+state instead of a stale local copy.
+
+**localStorage key format:** workspace-scoped — `os:{workspaceId}:{collection}:{id}`
+(falls back to `os:{collection}:{id}` before a workspace is active).
+
+**Special keys (raw localStorage, not data records):**
+- `os:outbox` — pending write queue
 - `os:desktopOrder` — persisted icon order array
 - `os:emoji-recent` — recent emoji selections
 - `os-theme` — `'light'` or `'dark'`
+- `os:{workspaceId}:sse-listener` — cached SSE listener id
 
 **Auth:** API key sent as `?apikey=TOKEN` query param, not a request header. Custom
 headers trigger CORS preflight; Codehooks native CORS doesn't whitelist them — the
 browser blocks the request silently. Query param is a CORS "simple request".
 
-**Cross-client sync:** `subscribe(collection, id, callback)` polls every 5 minutes.
-`AppModuleBase` subscribes automatically when `manifest.sync === true`.
+**Cross-client sync — SSE primary, polling fallback:** `subscribe(collection, id,
+callback)` registers interest; `AppModuleBase` subscribes automatically when
+`manifest.sync === true`.
+- **SSE (primary):** an `EventSource` on the Codehooks `/sync` realtime channel. A
+  member's `PUT` publishes an event; other tabs clear that key's cache and fire the
+  subscriber callback in **~1–2s**. The writing tab suppresses its own echo via
+  `CLIENT_ID`.
+- **Polling (fallback):** the `/w/:ws/changes` feed is polled every 5 minutes in case
+  an SSE event is missed. Both paths converge on the same callback.
 
 **Adding a collection:** call `getData`/`setData` with a new name. No registration
-needed. Declare `"dataCollections": ["name"]` in the manifest for cleanup.
+needed. Declare `"dataCollections": ["name"]` in the manifest for cleanup. For a
+*collaborative* collection, also add it to `TOP_ARRAYS` in `codehooks/lib/merge.js`
+(see `codehooks/AGENTS.md`) or concurrent edits fall back to overwrite.
 
 **Active collection registry lives in `modules/AGENTS.md`.**
 

@@ -1,5 +1,5 @@
 import { app, datastore, realtime } from 'codehooks-js';
-import { dbGet, dbUpsert } from '../lib/db.js';
+import { dbGet, dbUpsert, kvGet } from '../lib/db.js';
 import { getSessionUser, sendUnauth } from '../lib/session.js';
 import { recordChange } from '../lib/changes.js';
 import { mergeDoc } from '../lib/merge.js';
@@ -47,8 +47,10 @@ app.put('/w/:workspaceId/instances', async (req, res) => {
 app.get('/w/:workspaceId/changes', async (req, res) => {
   const authUser = await getSessionUser(req);
   if (!authUser) { sendUnauth(res); return; }
-  const data = await dbGet('_changes', `ws:${req.params.workspaceId}:changes`);
-  res.json(data?.changes || {});
+  // Read the same KV feed `recordChange` writes to. (Previously read a `_changes`
+  // collection that nothing wrote — the polling fallback got nothing back.)
+  const feed = await kvGet(`changes:${req.params.workspaceId}`);
+  res.json(feed || {});
 });
 
 app.get('/w/:workspaceId/:collection/:id', async (req, res) => {

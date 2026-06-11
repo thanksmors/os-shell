@@ -75,6 +75,8 @@ localStorage entries.
 5. Codehooks `res` — no `.header()`, no `.sendStatus()`, no `.status().json()` chaining (detail: `codehooks/AGENTS.md`)
 6. Module data key — always `instanceId`, never `windowId` (see Local Contracts)
 7. Generator modules — must have a non-empty `contextMenu` array or they are completely unreachable
+8. Codehooks KV — never raw `db.set`/`db.get` for objects; it stores `"[object Object]"` and silently breaks reads. Always use `kvSet`/`kvGet` (detail: `codehooks/AGENTS.md`)
+9. Deploy verify — `coho deploy` ships *local* code, not git. `git pull` first, then confirm with a build probe (detail: `codehooks/AGENTS.md`)
 
 ## Verification
 
@@ -100,4 +102,4 @@ child AGENTS.md.
 
 - `shell/AGENTS.md` — runtime kernel: store, api, module-base, CSS pipeline, auth, motion, shortcuts
 - `modules/AGENTS.md` — module system: manifest spec, el.api, AppModuleBase lifecycle, collection registry, all modules, add-a-module checklist
-- `codehooks/AGENTS.md` — cloud backend: routes, Codehooks API constraints, data shapes, deploy
+- `codehooks/AGENTS.md` — cloud backend: routes, Codehooks API constraints (KV serialization, auth, `res`), role authority, concurrent-edit merge, deploy discipline, data shapes

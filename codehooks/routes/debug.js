@@ -2,6 +2,14 @@ import { app, datastore } from 'codehooks-js';
 import { dbGet } from '../lib/db.js';
 import { getSessionUser, sendUnauth } from '../lib/session.js';
 
+// Bumped on every debug change. Hit /debug/version after a deploy to confirm the
+// new code actually landed. If this number is stale, the deploy didn't ship it.
+const DEBUG_BUILD = 4;
+
+app.get('/debug/version', async (req, res) => {
+  res.json({ build: DEBUG_BUILD });
+});
+
 // Temporary debug endpoint — shows raw DB state for the calling user.
 app.get('/debug/me', async (req, res) => {
   // Dump the raw session record so we can see exactly what's stored (and whether
@@ -34,5 +42,5 @@ app.get('/debug/me', async (req, res) => {
     };
   }));
 
-  res.json({ resolvedUserId: userId, rawSession, user, workspaces });
+  res.json({ build: DEBUG_BUILD, resolvedUserId: userId, rawSession, user, workspaces });
 });

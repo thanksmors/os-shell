@@ -245,6 +245,7 @@ export const SETTINGS_CSS = `
     padding: 20px 0 24px;
   }
   .about-logo { font-size: 2.5rem; line-height: 1; margin-bottom: 8px; }
-  .about-title { font-size: 1.125rem; font-weight: 700; margin-bottom: 4px; }
+  .about-title { font-size: 1.125rem; font-weight: 700; margin-bottom: 2px; }
+  .about-subtitle { font-size: 0.8rem; color: #6b7280; margin-bottom: 4px; }
   .about-version { font-size: 0.75rem; color: #9ca3af; }
 `;

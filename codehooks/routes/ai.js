@@ -7,7 +7,7 @@ const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
 const AI_BUILD = '2026-06-10-m3-worker';
 
-const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "Alpine OS Shell".
+const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "Capsule".
 Your task is to generate complete, working app modules for this shell.
 
 ## Framework overview

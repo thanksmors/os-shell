@@ -1,5 +1,8 @@
 const FONT_SIZES   = ['87.5%', '93.75%', '100%', '112.5%'];
 const SIZE_LABELS  = ['XSmall', 'Small', 'Medium', 'Large'];
+const ICON_SIZES   = [56, 68, 80, 96];
+const ICON_EMOJIS  = ['1.5rem', '1.75rem', '2rem', '2.5rem'];
+const ICON_LABELS  = ['XSmall', 'Small', 'Medium', 'Large'];
 const FONT_FAMILIES = {
   system: { label: 'System UI',   value: 'system-ui,-apple-system,sans-serif' },
   serif:  { label: 'Serif',       value: 'Georgia,"Times New Roman",serif' },
@@ -17,8 +20,10 @@ const ACCENTS = [
 export function renderAppearanceTab(host, content) {
   const isDark      = document.documentElement.classList.contains('dark');
   const sizeIdx     = Math.min(3, Math.max(0, parseInt(localStorage.getItem('os:font-size') ?? '2', 10)));
+  const iconIdx     = Math.min(3, Math.max(0, parseInt(localStorage.getItem('os:icon-size') ?? '2', 10)));
   const savedFamily = localStorage.getItem('os:font-family') || 'system';
   const savedAccent = localStorage.getItem('os:accent') || '#3b82f6';
+  const animBg      = localStorage.getItem('os:animated-bg') === '1';
 
   content.innerHTML = `
     <div class="settings-section">
@@ -43,6 +48,22 @@ export function renderAppearanceTab(host, content) {
           <input type="range" class="settings-slider" id="font-slider" min="0" max="3" step="1" value="${sizeIdx}">
           <div class="settings-notches">
             ${SIZE_LABELS.map((l, i) => `<span class="settings-notch${i === sizeIdx ? ' active' : ''}">${l}</span>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">Icon Size</div>
+      <div class="settings-row settings-row--col">
+        <div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+          <div class="settings-row-label">Desktop &amp; Launcher Icons</div>
+          <span class="settings-badge" id="icon-badge">${ICON_LABELS[iconIdx]}</span>
+        </div>
+        <div class="settings-slider-wrap">
+          <input type="range" class="settings-slider" id="icon-slider" min="0" max="3" step="1" value="${iconIdx}">
+          <div class="settings-notches">
+            ${ICON_LABELS.map((l, i) => `<span class="settings-notch${i === iconIdx ? ' active' : ''}">${l}</span>`).join('')}
           </div>
         </div>
       </div>
@@ -79,6 +100,17 @@ export function renderAppearanceTab(host, content) {
         </div>
       </div>
     </div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">Desktop</div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Animated Background</div>
+          <div class="settings-row-desc">Subtle aurora animation on the desktop wallpaper</div>
+        </div>
+        <button class="settings-toggle${animBg ? ' on' : ''}" id="anim-bg-toggle"></button>
+      </div>
+    </div>
   `;
 
   // Dark mode
@@ -106,6 +138,36 @@ export function renderAppearanceTab(host, content) {
     badge.textContent = SIZE_LABELS[i];
     notches.forEach((n, j) => n.classList.toggle('active', j === i));
     updateSliderFill(i);
+  });
+
+  // Icon size
+  const iconSlider  = content.querySelector('#icon-slider');
+  const iconBadge   = content.querySelector('#icon-badge');
+  const iconNotches = content.querySelectorAll('.settings-notch');
+
+  function updateIconSliderFill(idx) {
+    const pct = (idx / 3) * 100;
+    iconSlider.style.backgroundSize = `${pct}% 100%`;
+  }
+  updateIconSliderFill(iconIdx);
+
+  iconSlider.addEventListener('input', () => {
+    const i = parseInt(iconSlider.value, 10);
+    document.documentElement.style.setProperty('--os-icon-size',  ICON_SIZES[i] + 'px');
+    document.documentElement.style.setProperty('--os-icon-emoji', ICON_EMOJIS[i]);
+    localStorage.setItem('os:icon-size', i);
+    iconBadge.textContent = ICON_LABELS[i];
+    iconNotches.forEach((n, j) => n.classList.toggle('active', j === i));
+    updateIconSliderFill(i);
+  });
+
+  // Animated background
+  const animBgToggle = content.querySelector('#anim-bg-toggle');
+  animBgToggle.addEventListener('click', () => {
+    host.api.store.toggleAnimatedBg();
+    animBgToggle.classList.toggle('on', host.api.store.animatedBg);
+    const wallpaper = document.querySelector('.os-desktop-wallpaper');
+    if (wallpaper) wallpaper.classList.toggle('animated', host.api.store.animatedBg);
   });
 
   // Font family

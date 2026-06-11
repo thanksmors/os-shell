@@ -137,6 +137,9 @@ export function registerAuthStore() {
       this.screen = 'desktop';
       await Alpine.nextTick();
       Alpine.store('os').loadWorkspaceData();
+      const seen   = localStorage.getItem('os:onboarding-seen');
+      const always = localStorage.getItem('os:onboarding-show-always') === '1';
+      if (!seen || always) Alpine.store('os').openOnboarding();
     },
 
     async createWorkspace(name, icon) {

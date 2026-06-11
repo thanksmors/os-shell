@@ -18,6 +18,8 @@ export function registerOsStore() {
     dragDesktopKey: null,
     dragOverDesktopKey: null,
     desktopOrder: JSON.parse(localStorage.getItem('os:desktopOrder') || '[]'),
+    showOnboarding: false,
+    animatedBg: localStorage.getItem('os:animated-bg') === '1',
 
     init() {
       // keep <html class="dark"> in sync with reactive theme, and persist it
@@ -39,6 +41,19 @@ export function registerOsStore() {
 
     setAppBadge(appId, count) {
       this.appBadges = { ...this.appBadges, [appId]: count > 0 ? count : 0 };
+    },
+
+    openOnboarding() { this.showOnboarding = true; },
+
+    closeOnboarding(showAlways) {
+      this.showOnboarding = false;
+      if (showAlways) localStorage.removeItem('os:onboarding-seen');
+      else            localStorage.setItem('os:onboarding-seen', '1');
+    },
+
+    toggleAnimatedBg() {
+      this.animatedBg = !this.animatedBg;
+      localStorage.setItem('os:animated-bg', this.animatedBg ? '1' : '');
     },
 
     // Called by auth store after workspace is activated
@@ -229,6 +244,7 @@ export function registerOsStore() {
       const win = this.windows.find(w => w.id === id);
       if (!win) return;
       const wasMinimized = win.state === 'minimized';
+      const wasFocused   = win.focused;
       this.windows.forEach(w => w.focused = false);
       win.focused = true;
       win.z = ++this.topZ;
@@ -239,6 +255,11 @@ export function registerOsStore() {
           if (winEl) motion(winEl,
             { opacity: [0, 1], scale: [0.85, 1], y: [20, 0] },
             { ...spring.snappy() });
+        });
+      } else if (!wasFocused) {
+        Alpine.nextTick(() => {
+          const winEl = this._winEl(id);
+          if (winEl) motion(winEl, { scale: [1, 1.007, 1] }, { ...spring.snappy() });
         });
       }
     },
@@ -600,8 +621,26 @@ export function registerOsStore() {
       }
       if (items.length) items.push({ separator: true });
       items.push({ label: '🎨 Change Theme', action: () => this.toggleTheme() });
-      items.push({ label: '🏔️ About', action: () => this.launch('about') });
+      items.push({ label: '💊 About', action: () => this.launch('about') });
       this.showContextMenu(x, y, items);
+    },
+
+    staggerLauncherTiles() {
+      Alpine.nextTick(() => {
+        const tiles = document.querySelectorAll('.os-app-tile');
+        Array.from(tiles).slice(0, 32).forEach((el, i) => {
+          motion(el,
+            { opacity: [0, 1], y: [10, 0], scale: [0.92, 1] },
+            { ...spring.snappy(), delay: i * 0.035 }
+          );
+        });
+      });
+    },
+
+    clickDesktopIcon(iconEl, item) {
+      motion(iconEl, { scale: [1, 0.84, 1.1, 1], y: [0, -6, 0] }, { ...spring.snappy() });
+      if (item.type === 'app') this.launch(item.id);
+      else this.launchInstance(item.id);
     },
 
     toggleTheme() {

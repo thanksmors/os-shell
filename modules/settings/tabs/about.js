@@ -1,8 +1,9 @@
 export function renderAboutTab(host, content) {
   content.innerHTML = `
     <div class="about-hero">
-      <div class="about-logo">🏔️</div>
-      <div class="about-title">Alpine Shell</div>
+      <div class="about-logo">💊</div>
+      <div class="about-title">Capsule</div>
+      <div class="about-subtitle">A shared workspace for your team.</div>
       <div class="about-version">Version 1.0.0</div>
     </div>
 
@@ -58,11 +59,20 @@ export function renderAboutTab(host, content) {
     localStorage.removeItem('os:font-size');
     localStorage.removeItem('os:font-family');
     localStorage.removeItem('os:accent');
+    localStorage.removeItem('os:icon-size');
+    localStorage.removeItem('os:animated-bg');
     document.documentElement.style.fontSize = '';
     document.documentElement.style.fontFamily = '';
     document.documentElement.style.setProperty('--os-accent', '#3b82f6');
+    document.documentElement.style.setProperty('--os-icon-size', '80px');
+    document.documentElement.style.setProperty('--os-icon-emoji', '2rem');
+    const wallpaper = document.querySelector('.os-desktop-wallpaper');
+    if (wallpaper) wallpaper.classList.remove('animated');
     const store = host.api?.store;
-    if (store && store.theme !== 'light') store.toggleTheme();
+    if (store) {
+      if (store.theme !== 'light') store.toggleTheme();
+      store.animatedBg = false;
+    }
     host.api?.notify('Appearance reset to defaults', 'info');
   });
 }

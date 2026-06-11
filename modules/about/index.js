@@ -16,22 +16,23 @@ class AppAbout extends HTMLElement {
 
     wrapper.innerHTML = `
       <div class="about-hero">
-        <div class="about-logo">🏔️</div>
-        <h1 class="about-title">Alpine Shell</h1>
+        <div class="about-logo">💊</div>
+        <h1 class="about-title">Capsule</h1>
+        <p class="about-tagline">A shared workspace for your team.</p>
         <p class="about-version">Version 1.0.0</p>
       </div>
 
       <div class="about-body">
         <p class="about-desc">
-          A beautiful, lightweight browser-based desktop environment built with modern web technologies.
-          No build step required — just serve and run.
+          Everything your team needs in one place — projects, roadmaps, workload, files, and chat.
+          No build step required. Runs entirely in the browser.
         </p>
 
         <div class="about-section">
           <h2 class="about-section-title">Built With</h2>
           <div class="about-tech-grid">
             <div class="about-tech-item">
-              <span class="about-tech-icon">🏔</span>
+              <span class="about-tech-icon">⚡</span>
               <div>
                 <div class="about-tech-name">Alpine.js v3</div>
                 <div class="about-tech-desc">Reactive UI framework</div>
@@ -62,7 +63,7 @@ class AppAbout extends HTMLElement {
         </div>
 
         <div class="about-footer">
-          <span>© 2025 Alpine Shell Project</span>
+          <span>© 2025 Capsule</span>
           <span class="about-dot">·</span>
           <span>Open Source</span>
         </div>
@@ -101,6 +102,11 @@ class AppAbout extends HTMLElement {
         font-size: 1.5rem;
         font-weight: 700;
         letter-spacing: -0.02em;
+        margin: 0 0 2px;
+      }
+      .about-tagline {
+        font-size: 0.85rem;
+        color: rgba(255,255,255,0.65);
         margin: 0 0 4px;
       }
       .about-version {

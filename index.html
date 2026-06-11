@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Alpine OS Shell</title>
+  <title>Capsule</title>
   <link rel="stylesheet" href="/shell/css/utils.css" />
   <link rel="stylesheet" href="/shell/css/shell.css" />
   <link rel="stylesheet" href="/shell/css/auth.css" />
@@ -44,6 +44,19 @@
       if (fam && fonts[fam]) document.documentElement.style.fontFamily = fonts[fam];
       var accent = localStorage.getItem('os:accent');
       if (accent) document.documentElement.style.setProperty('--os-accent', accent);
+      var iconSizes  = [56,68,80,96];
+      var iconEmojis = ['1.5rem','1.75rem','2rem','2.5rem'];
+      var ii = parseInt(localStorage.getItem('os:icon-size') ?? '2', 10);
+      if (ii >= 0 && ii < 4) {
+        document.documentElement.style.setProperty('--os-icon-size',  iconSizes[ii] + 'px');
+        document.documentElement.style.setProperty('--os-icon-emoji', iconEmojis[ii]);
+      }
+      if (localStorage.getItem('os:animated-bg') === '1') {
+        document.addEventListener('DOMContentLoaded', function() {
+          var w = document.querySelector('.os-desktop-wallpaper');
+          if (w) w.classList.add('animated');
+        });
+      }
     })();
   </script>
 
@@ -65,7 +78,7 @@
   x-data="{ launcherOpen: false, searchQuery: '' }"
   x-cloak
   :class="$store.os && $store.os.theme === 'dark' ? 'dark' : ''"
-  @os:launcher-toggle.window="launcherOpen = !launcherOpen; if(launcherOpen) $nextTick(() => $refs.launcherSearch && $refs.launcherSearch.focus())"
+  @os:launcher-toggle.window="launcherOpen = !launcherOpen; if(launcherOpen) { $nextTick(() => $refs.launcherSearch && $refs.launcherSearch.focus()); $store.os.staggerLauncherTiles(); }"
   @click.window="$store.os && $store.os.hideContextMenu()"
   @keydown.escape.window="launcherOpen = false"
 >
@@ -75,8 +88,8 @@
       <!-- Loading -->
       <template x-if="!$store.auth || $store.auth.screen === 'loading'">
         <div class="os-auth-card">
-          <div class="os-auth-logo">🏔️</div>
-          <div class="os-auth-title">Alpine Shell</div>
+          <div class="os-auth-logo">💊</div>
+          <div class="os-auth-title">Capsule</div>
           <div class="os-auth-spinner"></div>
         </div>
       </template>
@@ -84,8 +97,8 @@
       <!-- Login -->
       <template x-if="$store.auth && $store.auth.screen === 'login'">
         <div class="os-auth-card">
-          <div class="os-auth-logo">🏔️</div>
-          <div class="os-auth-title">Alpine Shell</div>
+          <div class="os-auth-logo">💊</div>
+          <div class="os-auth-title">Capsule</div>
           <div class="os-auth-subtitle">Sign in to continue</div>
           <button class="os-google-btn" @click="$store.auth.login()">
             <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
@@ -210,7 +223,7 @@
     @contextmenu.prevent="$store.os.buildDesktopContextMenu($event.clientX, $event.clientY)"
   >
     <!-- Wallpaper gradient — tinted by --os-accent (see shell.css) -->
-    <div class="os-desktop-wallpaper"></div>
+    <div class="os-desktop-wallpaper" :class="{ animated: $store.os && $store.os.animatedBg }"></div>
     <!-- Subtle texture -->
     <div class="os-desktop-texture"></div>
 
@@ -255,7 +268,7 @@
               $store.os.dragInstanceId && item.acceptsDroppedInstances
                 ? $store.os.dropOnFolder(item.id)
                 : ($store.os.dragDesktopKey ? $store.os.reorderDesktop($store.os.dragDesktopKey, item.key) : null)"
-            @click.stop="item.type === 'app' ? $store.os.launch(item.id) : $store.os.launchInstance(item.id)"
+            @click.stop="$store.os.clickDesktopIcon($event.currentTarget, item)"
             @contextmenu.prevent.stop="item.type === 'instance' ? $store.os.buildInstanceContextMenu($event.clientX, $event.clientY, item) : null"
           >
             <span class="os-desktop-icon-emoji" x-text="item.icon"></span>
@@ -374,7 +387,7 @@
         if (launcherOpen) $nextTick(() => $refs.launcherSearch && $refs.launcherSearch.focus());
       "
       title="Launcher (⌘K)"
-    >🏔️</button>
+    >💊</button>
 
     <!-- Window Buttons -->
     <div class="os-taskbar-windows">
@@ -407,7 +420,7 @@
           @click.stop="$store.auth.screen = 'workspace-select'; $store.auth.workspaces.length || $store.auth.init()"
           :title="($store.auth.user?.name || '') + ' · ' + ($store.auth.workspace?.name || '')"
         >
-          <span x-text="$store.auth.workspace?.icon || '🏔️'"></span>
+          <span x-text="$store.auth.workspace?.icon || '🏢'"></span>
           <span style="font-size:0.75rem;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="$store.auth.workspace?.name || ''"></span>
         </button>
       </template>
@@ -515,6 +528,79 @@
         </div>
       </template>
     </template>
+  </div>
+
+  <!-- ===== ONBOARDING MODAL ===== -->
+  <div
+    class="os-onboarding-backdrop"
+    x-show="$store.os && $store.os.showOnboarding"
+    x-transition:enter="transition duration-200 ease-out"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition duration-150 ease-in"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    style="display:none"
+  >
+    <div
+      class="os-onboarding-panel"
+      x-data="{ slide: 0, showAlways: false }"
+      x-transition:enter="transition duration-250 ease-out"
+      x-transition:enter-start="opacity-0 scale-95"
+      x-transition:enter-end="opacity-100 scale-100"
+      @click.stop
+    >
+      <div class="os-onboarding-slide" x-show="slide === 0">
+        <div class="os-ob-icon">💊</div>
+        <h2 class="os-ob-title">Welcome to Capsule</h2>
+        <p class="os-ob-body">A shared workspace for your team. Everything in one place — projects, roadmaps, workload, files, and chat.</p>
+      </div>
+      <div class="os-onboarding-slide" x-show="slide === 1">
+        <div class="os-ob-icon">📂 🗺️</div>
+        <h2 class="os-ob-title">Plan &amp; Track</h2>
+        <p class="os-ob-body"><strong>Projects Hub</strong> covers milestones, issues, action items, decisions, and docs per project.<br><br><strong>Roadmap</strong> visualises milestone timelines across all projects at once.</p>
+      </div>
+      <div class="os-onboarding-slide" x-show="slide === 2">
+        <div class="os-ob-icon">📊 🔧</div>
+        <h2 class="os-ob-title">Manage &amp; Build</h2>
+        <p class="os-ob-body"><strong>Load Management</strong> balances your team's workload across projects at a glance.<br><br><strong>Build App</strong> lets you generate custom AI-powered tools for your team with a single prompt.</p>
+      </div>
+      <div class="os-onboarding-slide" x-show="slide === 3">
+        <div class="os-ob-icon">📁 💬</div>
+        <h2 class="os-ob-title">Files &amp; Chat</h2>
+        <p class="os-ob-body"><strong>Files</strong> gives your team shared document storage in the workspace.<br><br><strong>Chat</strong> provides instant team messaging with channels, history, and unread badges.</p>
+      </div>
+      <div class="os-onboarding-slide" x-show="slide === 4">
+        <div class="os-ob-icon">🏢</div>
+        <h2 class="os-ob-title">Workspaces &amp; Invites</h2>
+        <p class="os-ob-body">Invite teammates via a shareable link from the workspace settings.<br><br>Switch between workspaces anytime from the taskbar. Every workspace has its own data and members.</p>
+      </div>
+      <div class="os-onboarding-slide" x-show="slide === 5">
+        <div class="os-ob-icon">⌨️</div>
+        <h2 class="os-ob-title">Pro Tips</h2>
+        <p class="os-ob-body">
+          <span class="os-ob-tip"><kbd>Ctrl / ⌘ K</kbd> — Open the app launcher</span>
+          <span class="os-ob-tip"><kbd>Ctrl / ⌘ W</kbd> — Close the focused window</span>
+          <span class="os-ob-tip">Right-click the desktop for quick actions &amp; shortcuts</span>
+          <span class="os-ob-tip">Drag desktop icons to reorder them</span>
+        </p>
+      </div>
+      <div class="os-onboarding-footer">
+        <label class="os-ob-check">
+          <input type="checkbox" x-model="showAlways"> Show on startup
+        </label>
+        <div class="os-ob-dots">
+          <template x-for="i in [0,1,2,3,4,5]" :key="i">
+            <span class="os-ob-dot" :class="{ active: slide === i }" @click="slide = i"></span>
+          </template>
+        </div>
+        <button
+          class="os-ob-next-btn"
+          @click="slide < 5 ? slide++ : $store.os.closeOnboarding(showAlways)"
+          x-text="slide < 5 ? 'Next →' : 'Get Started'"
+        ></button>
+      </div>
+    </div>
   </div>
 
   <!-- ===== TOAST STACK ===== -->

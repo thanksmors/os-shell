@@ -15,6 +15,7 @@ app.auth('/auth/google/*', (req, res, next) => next());
 // effect of being imported.
 import './routes/auth.js';
 import './routes/workspaces.js';
+import './routes/debug.js';
 import './routes/members.js';
 import './routes/invites.js';
 import './routes/data.js';

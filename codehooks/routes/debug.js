@@ -1,11 +1,19 @@
-import { app } from 'codehooks-js';
+import { app, datastore } from 'codehooks-js';
 import { dbGet } from '../lib/db.js';
 import { getSessionUser, sendUnauth } from '../lib/session.js';
 
 // Temporary debug endpoint — shows raw DB state for the calling user.
 app.get('/debug/me', async (req, res) => {
+  // Dump the raw session record so we can see exactly what's stored (and whether
+  // it actually carries a userId). This is the root-cause check.
+  const sessionToken = req.query?.session;
+  const db = await datastore.open();
+  const rawSession = sessionToken
+    ? await db.get(`session:${sessionToken}`).catch(() => null)
+    : null;
+
   const authUser = await getSessionUser(req);
-  if (!authUser) { sendUnauth(res); return; }
+  if (!authUser) { res.json({ error: 'no session', rawSession }); return; }
 
   const { userId } = authUser;
   const user = await dbGet('users', userId);
@@ -26,5 +34,5 @@ app.get('/debug/me', async (req, res) => {
     };
   }));
 
-  res.json({ userId, user, workspaces });
+  res.json({ resolvedUserId: userId, rawSession, user, workspaces });
 });

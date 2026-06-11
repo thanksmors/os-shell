@@ -4,7 +4,7 @@ import { getSessionUser, sendUnauth } from '../lib/session.js';
 
 // Bumped on every debug change. Hit /debug/version after a deploy to confirm the
 // new code actually landed. If this number is stale, the deploy didn't ship it.
-const DEBUG_BUILD = 4;
+const DEBUG_BUILD = 5;
 
 app.get('/debug/version', async (req, res) => {
   res.json({ build: DEBUG_BUILD });

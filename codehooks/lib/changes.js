@@ -1,13 +1,12 @@
-import { datastore } from 'codehooks-js';
+import { kvGet, kvSet } from './db.js';
 
 // ─── Changes feed helper ──────────────────────────────────────────────────────
 
 export async function recordChange(workspaceId, collection, id) {
   try {
-    const db = await datastore.open();
     const key = `changes:${workspaceId}`;
-    const feed = (await db.get(key).catch(() => null)) || {};
+    const feed = (await kvGet(key)) || {};
     feed[`${collection}:${id}`] = Date.now();
-    await db.set(key, feed);
+    await kvSet(key, feed);
   } catch {}
 }

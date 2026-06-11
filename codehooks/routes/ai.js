@@ -1,5 +1,6 @@
 import { app, datastore } from 'codehooks-js';
 import { getSessionUser, sendUnauth } from '../lib/session.js';
+import { kvSet, kvGet } from '../lib/db.js';
 
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
@@ -285,9 +286,8 @@ function validateBuildResult(parsed, planType) {
 
 app.worker('ai-generate-worker', async (req, res) => {
   const { jobId, workspaceId, mode, convo, planType, maxTokens, model } = req.body.payload || {};
-  const conn = await datastore.open();
   const finish = (patch) =>
-    conn.set(`ai_job:${jobId}`, { jobId, workspaceId, ...patch }, { ttl: AI_JOB_TTL }).catch(() => {});
+    kvSet(`ai_job:${jobId}`, { jobId, workspaceId, ...patch }, { ttl: AI_JOB_TTL }).catch(() => {});
 
   if (!jobId || !Array.isArray(convo)) { res.end(); return; }
 
@@ -362,10 +362,10 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
   const workspaceId = req.params.workspaceId;
   const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const conn = await datastore.open();
-  await conn.set(`ai_job:${jobId}`, { jobId, workspaceId, status: 'pending', createdAt: Date.now() }, { ttl: AI_JOB_TTL });
+  await kvSet(`ai_job:${jobId}`, { jobId, workspaceId, status: 'pending', createdAt: Date.now() }, { ttl: AI_JOB_TTL });
 
   const finish = async (patch) => {
-    await conn.set(`ai_job:${jobId}`, { jobId, workspaceId, ...patch }, { ttl: AI_JOB_TTL }).catch(() => {});
+    await kvSet(`ai_job:${jobId}`, { jobId, workspaceId, ...patch }, { ttl: AI_JOB_TTL }).catch(() => {});
   };
 
   // ── build/revise: hand off to the worker (M3, 110s budget) and return now ──
@@ -435,8 +435,7 @@ app.get('/w/:workspaceId/ai-job', async (req, res) => {
   const jobId = req.query?.job;
   if (!jobId) { res.json({ status: 'error', error: 'job query param required' }); return; }
 
-  const conn = await datastore.open();
-  const job = await conn.get(`ai_job:${jobId}`).catch(() => null);
+  const job = await kvGet(`ai_job:${jobId}`);
   if (!job) { res.json({ status: 'unknown' }); return; }
   res.json({ status: job.status, module: job.module, error: job.error, raw: job.raw });
 });

@@ -1,5 +1,5 @@
-import { app, datastore } from 'codehooks-js';
-import { dbGet, dbUpsert, genId } from '../lib/db.js';
+import { app } from 'codehooks-js';
+import { dbGet, dbUpsert, genId, kvSet, kvGet } from '../lib/db.js';
 import { getSessionUser, sendUnauth } from '../lib/session.js';
 import { effectiveRole } from '../lib/roles.js';
 
@@ -18,14 +18,12 @@ app.post('/workspaces/:workspaceId/invites', async (req, res) => {
 
   const inviteId = genId('inv');
   const invite = { inviteId, workspaceId, role: req.body.role || 'member', invitedBy: authUser.userId, createdAt: Date.now() };
-  const db = await datastore.open();
-  await db.set(`invite:${inviteId}`, invite, { ttl: 7 * 24 * 60 * 60 });
+  await kvSet(`invite:${inviteId}`, invite, { ttl: 7 * 24 * 60 * 60 });
   res.json({ ...invite, expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 });
 });
 
 app.get('/invites/:inviteId', async (req, res) => {
-  const db = await datastore.open();
-  const invite = await db.get(`invite:${req.params.inviteId}`).catch(() => null);
+  const invite = await kvGet(`invite:${req.params.inviteId}`);
   if (!invite) { res.json({}); return; }
   const ws = await dbGet('workspaces', invite.workspaceId);
   const inviter = await dbGet('users', invite.invitedBy);
@@ -36,8 +34,7 @@ app.post('/invites/:inviteId/accept', async (req, res) => {
   const authUser = await getSessionUser(req);
   if (!authUser) { sendUnauth(res); return; }
 
-  const db = await datastore.open();
-  const invite = await db.get(`invite:${req.params.inviteId}`).catch(() => null);
+  const invite = await kvGet(`invite:${req.params.inviteId}`);
   if (!invite) { res.json({ error: 'Invite not found' }); return; }
 
   const membersDoc = await dbGet('ws_members', invite.workspaceId);

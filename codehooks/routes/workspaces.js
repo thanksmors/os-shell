@@ -20,7 +20,15 @@ app.get('/workspaces', async (req, res) => {
     const role = effectiveRole(ws, membersDoc, authUser.userId) || 'member';
     return { ...ws, role };
   }));
-  res.json(workspaces.filter(Boolean));
+
+  const live = workspaces.filter(Boolean);
+  // Prune dangling references to deleted workspaces so they stop showing as
+  // blank rows.
+  if (userWs && live.length !== wsIds.length) {
+    await dbUpsert('user_workspaces', authUser.userId, { ...userWs, workspaceIds: live.map(w => w.workspaceId) });
+  }
+
+  res.json(live);
 });
 
 app.post('/workspaces', async (req, res) => {

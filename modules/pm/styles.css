@@ -183,8 +183,13 @@
   padding: 0 16px;
   border-bottom: 1px solid var(--os-border, #e4e4e7);
   flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.tab-bar::-webkit-scrollbar { display: none; }
 .tab-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
   padding: 8px 12px;
   border: none;
   background: transparent;
@@ -271,6 +276,65 @@
 }
 .item-row:hover .item-del { opacity: 0.6; }
 .item-del:hover { opacity: 1 !important; color: #ef4444; }
+
+/* Decisions */
+.item-rationale {
+  color: var(--os-text-muted, #71717a);
+  font-weight: 400;
+}
+
+/* Links */
+.item-link {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--os-accent, #3b82f6);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.item-link:hover { text-decoration: underline; }
+.item-url {
+  font-size: 0.72rem;
+  color: var(--os-text-muted, #71717a);
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
+}
+
+/* Brief / Roles editable fields */
+.field-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 640px;
+}
+.field-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--os-text-muted, #71717a);
+  margin-top: 8px;
+}
+.field-textarea {
+  min-height: 64px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--os-border, #e4e4e7);
+  border-radius: 7px;
+  background: var(--os-surface, #fff);
+  color: var(--os-text, #18181b);
+  font-size: 0.84rem;
+  font-family: inherit;
+  line-height: 1.45;
+}
+.field-textarea:focus { outline: 2px solid var(--os-accent, #3b82f6); border-color: transparent; }
+.field-input { flex: 0 0 auto; }
 
 /* Pills */
 .pill {

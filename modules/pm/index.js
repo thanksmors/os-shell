@@ -14,12 +14,23 @@ function fmtISO(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// Only http/https pass through; bare domains get https://; other schemes
+// (javascript:, data:, ...) are rejected to '#'.
+function safeUrl(u) {
+  let s = String(u || '').trim();
+  if (!/^https?:\/\//i.test(s)) {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(s)) return '#';
+    s = 'https://' + s;
+  }
+  return s;
+}
+
 class AppPm extends AppModuleBase {
   constructor() {
     super();
     this._selectedFolderId = null;   // null = All Projects
     this._selectedProjectId = null;
-    this._activeTab = 'milestones';
+    this._activeTab = 'brief';
     this._addingItem = false;
     this._saveTimer = null;
   }
@@ -44,7 +55,13 @@ class AppPm extends AppModuleBase {
   _getTitle() { return this._state?.name || 'Projects'; }
 
   _pd(pid) {
-    return this._state.projectData[pid] || { milestones: [], issues: [], actions: [] };
+    const d = this._state.projectData[pid] || {};
+    return {
+      milestones: [], issues: [], actions: [], decisions: [], links: [],
+      ...d,
+      brief: { problem: '', inScope: '', outOfScope: '', metrics: '', ...(d.brief || {}) },
+      roles: { driver: '', approver: '', team: '', ...(d.roles || {}) },
+    };
   }
 
   _setPd(pid, patch) {
@@ -107,9 +124,13 @@ class AppPm extends AppModuleBase {
       </div>`;
     } else {
       const tabs = [
+        ['brief', '📋 Brief'],
+        ['roles', '👥 Roles'],
         ['milestones', '🏁 Milestones'],
         ['issues', '🐛 Issues'],
-        ['actions', '✅ Action Items']
+        ['actions', '✅ Action Items'],
+        ['decisions', '⚖️ Decisions'],
+        ['links', '🔗 Links']
       ].map(([id, label]) =>
         `<button class="tab-btn${this._activeTab === id ? ' active' : ''}" data-tab="${id}">${label}</button>`
       ).join('');
@@ -145,6 +166,31 @@ class AppPm extends AppModuleBase {
   _renderTab(pid) {
     const pd = this._pd(pid);
     const today = fmtISO(new Date());
+
+    if (this._activeTab === 'brief') {
+      const b = pd.brief;
+      const field = (key, label, ph) => `
+        <label class="field-label">${label}</label>
+        <textarea class="field-textarea" data-brief-field="${key}" placeholder="${ph}">${esc(b[key])}</textarea>`;
+      return `<div class="field-stack">
+        ${field('problem', 'Problem statement', 'What pain point are we solving, and why now?')}
+        ${field('inScope', 'In scope', 'What this project will deliver')}
+        ${field('outOfScope', 'Out of scope', 'What we are explicitly NOT doing')}
+        ${field('metrics', 'Success metrics', 'How we know we won')}
+      </div>`;
+    }
+
+    if (this._activeTab === 'roles') {
+      const r = pd.roles;
+      const field = (key, label, ph) => `
+        <label class="field-label">${label}</label>
+        <input class="add-input field-input" data-role-field="${key}" placeholder="${ph}" value="${esc(r[key])}">`;
+      return `<div class="field-stack">
+        ${field('driver', 'Driver (owner)', 'Who pushes this forward day-to-day?')}
+        ${field('approver', 'Approver', 'Who signs off on major changes?')}
+        ${field('team', 'Core team', 'Who is doing the hands-on building?')}
+      </div>`;
+    }
 
     if (this._activeTab === 'milestones') {
       const sorted = [...pd.milestones].sort((a, b) =>
@@ -188,6 +234,43 @@ class AppPm extends AppModuleBase {
           <button class="btn-primary" data-action="confirm-add">Add</button>
           <button class="btn-plain" data-action="cancel-add">Cancel</button>
         </div>` : `<button class="add-item-btn" data-action="start-add">+ Add issue</button>`}`;
+    }
+
+    if (this._activeTab === 'decisions') {
+      const sorted = [...pd.decisions].sort((a, b) =>
+        (b.date || '').localeCompare(a.date || ''));
+      const rows = sorted.map(d => `<div class="item-row">
+        ${d.date ? `<span class="item-date">${esc(d.date)}</span>` : ''}
+        <span class="item-title">${esc(d.decision)}${d.rationale ? `<span class="item-rationale"> — ${esc(d.rationale)}</span>` : ''}</span>
+        ${d.owner ? `<span class="item-owner">${esc(d.owner)}</span>` : ''}
+        <button class="item-del" data-del-item="decision" data-id="${esc(d.id)}">✕</button>
+      </div>`).join('');
+      return `${rows || '<div class="tab-empty">No decisions logged yet</div>'}
+        ${this._addingItem ? `
+        <div class="add-form">
+          <input class="add-input" id="add-title" placeholder="Decision made" autofocus>
+          <input class="add-input" id="add-rationale" placeholder="Rationale (why)">
+          <input class="add-input add-owner" id="add-owner" placeholder="Owner">
+          <input class="add-input add-date" id="add-date" type="date" value="${today}">
+          <button class="btn-primary" data-action="confirm-add">Add</button>
+          <button class="btn-plain" data-action="cancel-add">Cancel</button>
+        </div>` : `<button class="add-item-btn" data-action="start-add">+ Log decision</button>`}`;
+    }
+
+    if (this._activeTab === 'links') {
+      const rows = pd.links.map(l => `<div class="item-row">
+        <a class="item-link" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener noreferrer">${esc(l.label || l.url)}</a>
+        <span class="item-url">${esc(l.url)}</span>
+        <button class="item-del" data-del-item="link" data-id="${esc(l.id)}">✕</button>
+      </div>`).join('');
+      return `${rows || '<div class="tab-empty">No links yet — add design files, repos, docs…</div>'}
+        ${this._addingItem ? `
+        <div class="add-form">
+          <input class="add-input" id="add-title" placeholder="Label (e.g. Figma)" autofocus>
+          <input class="add-input" id="add-url" placeholder="https://...">
+          <button class="btn-primary" data-action="confirm-add">Add</button>
+          <button class="btn-plain" data-action="cancel-add">Cancel</button>
+        </div>` : `<button class="add-item-btn" data-action="start-add">+ Add link</button>`}`;
     }
 
     // actions
@@ -313,6 +396,22 @@ class AppPm extends AppModuleBase {
       });
     }
 
+    // Brief / Roles free-text autosave (debounced, no re-render — preserves focus)
+    w.querySelectorAll('[data-brief-field]').forEach(ta => {
+      ta.addEventListener('input', () => {
+        const pid = this._selectedProjectId;
+        this._setPd(pid, { brief: { ...this._pd(pid).brief, [ta.dataset.briefField]: ta.value } });
+        this._scheduleSave();
+      });
+    });
+    w.querySelectorAll('[data-role-field]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const pid = this._selectedProjectId;
+        this._setPd(pid, { roles: { ...this._pd(pid).roles, [inp.dataset.roleField]: inp.value } });
+        this._scheduleSave();
+      });
+    });
+
     // Checkboxes (milestones / actions)
     w.querySelectorAll('input[data-toggle]').forEach(cb => {
       cb.addEventListener('change', () => {
@@ -354,7 +453,7 @@ class AppPm extends AppModuleBase {
     w.querySelectorAll('[data-del-item]').forEach(btn => {
       btn.addEventListener('click', () => {
         const pid = this._selectedProjectId;
-        const key = { milestone: 'milestones', issue: 'issues', action: 'actions' }[btn.dataset.delItem];
+        const key = { milestone: 'milestones', issue: 'issues', action: 'actions', decision: 'decisions', link: 'links' }[btn.dataset.delItem];
         this._setPd(pid, { [key]: this._pd(pid)[key].filter(x => x.id !== btn.dataset.id) });
         this._save();
         this._render();
@@ -419,7 +518,17 @@ class AppPm extends AppModuleBase {
     } else if (this._activeTab === 'issues') {
       const notes = w.querySelector('#add-notes')?.value?.trim() || '';
       this._setPd(pid, { issues: [...this._pd(pid).issues, { id, title, status: 'open', priority: 'med', notes }] });
-    } else {
+    } else if (this._activeTab === 'decisions') {
+      const rationale = w.querySelector('#add-rationale')?.value?.trim() || '';
+      const owner = w.querySelector('#add-owner')?.value?.trim() || '';
+      const date = w.querySelector('#add-date')?.value || fmtISO(new Date());
+      this._setPd(pid, { decisions: [...this._pd(pid).decisions, { id, date, decision: title, rationale, owner }] });
+    } else if (this._activeTab === 'links') {
+      const rawUrl = w.querySelector('#add-url')?.value?.trim() || '';
+      const url = safeUrl(rawUrl);
+      if (!rawUrl || url === '#') { w.querySelector('#add-url')?.focus(); return; }
+      this._setPd(pid, { links: [...this._pd(pid).links, { id, label: title, url }] });
+    } else if (this._activeTab === 'actions') {
       const owner = w.querySelector('#add-owner')?.value?.trim() || '';
       const dueDate = w.querySelector('#add-date')?.value || '';
       this._setPd(pid, { actions: [...this._pd(pid).actions, { id, title, owner, dueDate, done: false }] });

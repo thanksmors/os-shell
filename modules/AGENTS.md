@@ -276,7 +276,7 @@ others must be fully isolated, communicating only through `el.api` and `shell/ap
 | `people` | Generator | Visual org chart: person cards + SVG connectors, per-person detail modal, multiple roots. | `people-charts` |
 | `load` | Generator | Resource timeline: per-person task bars (pointer drag to reassign/move, edge-resize), monthly load % cells, Bars/Load toggles. Reads `people-charts` (roster sync) and `roadmaps` (project link). | `load-plans` |
 | `roadmap` | Generator | High-level project roadmap: projects with phase bars on a quarterly timeline, row reorder, bar drag/resize. Feeds Load via project linking. | `roadmaps` |
-| `pm` | Generator | Project hub: folder/project sidebar (notes-style) with Milestones / Issues / Action Items tabs per project. | `pm-data` |
+| `pm` | Generator | Project hub: folder/project sidebar (notes-style) with Brief / Roles / Milestones / Issues / Action Items / Decisions / Links tabs per project. | `pm-data` |
 | `folder` | Generator | Container for other instances. `acceptsDroppedInstances: true`. | none |
 | `emoji` | Singleton | Browse emojis by category or search, click to copy. CDN-backed. | none |
 | `notes` | Singleton | Markdown notes with folders, preview, image/YouTube embeds. | `notes` |

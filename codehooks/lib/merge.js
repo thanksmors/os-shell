@@ -17,8 +17,10 @@ const TOP_ARRAYS = {
 };
 
 // Collections with a nested map field whose values each contain id-keyed arrays.
+// Non-array fields inside the map values (e.g. pm-data brief/roles objects)
+// resolve whole-object last-write-wins from the newer doc.
 const NESTED = {
-  'pm-data': { mapField: 'projectData', subArrays: ['milestones', 'issues', 'actions'] },
+  'pm-data': { mapField: 'projectData', subArrays: ['milestones', 'issues', 'actions', 'decisions', 'links'] },
 };
 
 /**

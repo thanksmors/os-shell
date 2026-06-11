@@ -105,7 +105,7 @@ export function registerAuthStore() {
       const inv = await createInvite(this.managingWs, 'member', getSavedSession());
       const url = `${location.origin}${location.pathname}?invite=${inv.inviteId}`;
       await navigator.clipboard.writeText(url);
-      Alpine.store('os').toast('Invite link copied! Valid for 7 days.');
+      Alpine.store('os').notify('Invite link copied! Valid for 7 days.');
     },
 
     async removeMemberFromPanel(userId) {

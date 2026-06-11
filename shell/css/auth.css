@@ -231,6 +231,25 @@
   padding: 2px 8px;
   flex-shrink: 0;
 }
+.os-member-role-select {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  background: rgba(99,102,241,0.18);
+  color: #a5b4fc;
+  border: 1px solid rgba(99,102,241,0.3);
+  border-radius: 6px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: background 150ms, border-color 150ms;
+}
+.os-member-role-select:hover { background: rgba(99,102,241,0.3); border-color: rgba(99,102,241,0.5); }
+.os-member-role-select option { background: #302b63; color: #fff; text-transform: capitalize; }
+
 .os-member-remove {
   background: transparent;
   border: none;

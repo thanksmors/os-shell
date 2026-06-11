@@ -114,6 +114,20 @@ export function registerAuthStore() {
       this.members = this.members.filter(m => m.userId !== userId);
     },
 
+    async changeMemberRole(userId, newRole) {
+      const { updateMember } = await import('./workspace.js');
+      const result = await updateMember(this.managingWs, userId, newRole, getSavedSession());
+      if (result?.error) { Alpine.store('os').notify('Error: ' + result.error); return; }
+      this.members = this.members.map(m => m.userId === userId ? { ...m, role: newRole } : m);
+      // If transferring ownership, update local workspace role too
+      if (newRole === 'owner') {
+        this.workspaces = this.workspaces.map(w =>
+          w.workspaceId === this.managingWs ? { ...w, role: 'admin' } : w
+        );
+      }
+      Alpine.store('os').notify('Role updated.');
+    },
+
     async _activateWorkspace(ws, session) {
       this.workspace = ws;
       localStorage.setItem('os-workspace', ws.workspaceId);

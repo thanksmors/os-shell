@@ -164,7 +164,22 @@
                       <div class="os-member-name" x-text="m.name || m.email"></div>
                       <div class="os-member-email" x-show="m.name" x-text="m.email"></div>
                     </div>
-                    <span class="os-member-role-badge" x-text="m.role"></span>
+                    <template x-if="['owner','admin'].includes($store.auth.workspaces.find(w => w.workspaceId === $store.auth.managingWs)?.role) && m.userId !== $store.auth.user?.userId">
+                      <select
+                        class="os-member-role-select"
+                        :value="m.role"
+                        @change="$store.auth.changeMemberRole(m.userId, $event.target.value)"
+                      >
+                        <template x-if="$store.auth.workspaces.find(w => w.workspaceId === $store.auth.managingWs)?.role === 'owner'">
+                          <option value="owner" :selected="m.role === 'owner'">owner</option>
+                        </template>
+                        <option value="admin" :selected="m.role === 'admin'">admin</option>
+                        <option value="member" :selected="m.role === 'member'">member</option>
+                      </select>
+                    </template>
+                    <template x-if="!((['owner','admin'].includes($store.auth.workspaces.find(w => w.workspaceId === $store.auth.managingWs)?.role)) && m.userId !== $store.auth.user?.userId)">
+                      <span class="os-member-role-badge" x-text="m.role"></span>
+                    </template>
                     <button
                       x-show="['owner','admin'].includes($store.auth.workspaces.find(w => w.workspaceId === $store.auth.managingWs)?.role) && m.userId !== $store.auth.user?.userId"
                       class="os-member-remove"

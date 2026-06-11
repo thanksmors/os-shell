@@ -28,8 +28,11 @@ class AppLoad extends AppModuleBase {
     this._modal = null;
     this._settingsOpen = false;
     this._scrollTop = 0;
+    this._scrollLeft = 0;
     this._showBars = true;
     this._showLoad = true;
+    this._drag = null;
+    this._roadmapProjects = [];
     this.addEventListener('os:toggle-settings', () => {
       this._settingsOpen = !this._settingsOpen;
       this._render();
@@ -49,6 +52,7 @@ class AppLoad extends AppModuleBase {
         viewStart: fmtISO(qStart),
         viewMonths: 9,
         peopleInstanceId: null,
+        roadmapInstanceId: null,
         members: [],
         tasks: []
       };
@@ -62,8 +66,9 @@ class AppLoad extends AppModuleBase {
         const endDate = /^\d{4}-\d{2}-\d{2}$/.test(t.endDate) ? t.endDate : fmtISO(new Date(Number(e[1]), Number(e[2]), 0));
         return { ...t, startDate, endDate };
       }).filter(Boolean);
-      this._state = { ...saved, tasks };
+      this._state = { ...saved, roadmapInstanceId: saved.roadmapInstanceId ?? null, tasks };
     }
+    await this._loadRoadmapProjects();
   }
 
   async _save() {
@@ -100,6 +105,17 @@ class AppLoad extends AppModuleBase {
     return arr;
   }
   _todayISO() { return fmtISO(new Date()); }
+  _addYM(ym, n) { return this._addMonthISO(ym + '-01', n).slice(0, 7); }
+
+  // Pixel geometry of a month-granularity bar, clipped to the view; null if fully outside
+  _barGeom(startYM, endYM) {
+    const totalW = this._state.viewMonths * MONTH_W;
+    const left = this._monthsBetween(this._state.viewStart, startYM + '-01') * MONTH_W;
+    const right = this._monthsBetween(this._state.viewStart, this._addMonthISO(endYM + '-01', 1)) * MONTH_W;
+    if (left >= totalW || right <= 0 || right <= left) return null;
+    const clampedLeft = Math.max(0, left);
+    return { left: clampedLeft, width: Math.max(Math.min(right, totalW) - clampedLeft, 4) };
+  }
 
   // --- Capacity ---
   _monthLoad(memberId, monthIndex) {
@@ -140,6 +156,24 @@ class AppLoad extends AppModuleBase {
     catch { return []; }
   }
 
+  _roadmapInstances() {
+    try { return (window.Alpine?.store('os')?.instances || []).filter(i => i.appId === 'roadmap'); }
+    catch { return []; }
+  }
+
+  async _loadRoadmapProjects() {
+    if (!this._state?.roadmapInstanceId) { this._roadmapProjects = []; return; }
+    const rm = await getData('roadmaps', this._state.roadmapInstanceId);
+    this._roadmapProjects = rm?.projects || [];
+  }
+
+  // Open the task modal, refreshing linked roadmap projects first
+  async _openTaskModal(task, memberId) {
+    await this._loadRoadmapProjects();
+    this._modal = { type: 'task', data: task ? { ...task } : null, memberId: memberId || task?.memberId };
+    this._render();
+  }
+
   // --- Render ---
   _render() {
     const { members, tasks, viewStart, viewMonths, peopleInstanceId, name } = this._state;
@@ -149,6 +183,12 @@ class AppLoad extends AppModuleBase {
     const totalW = months.length * MONTH_W;
     const totalH = Math.max(members.length * ROW_H, ROW_H);
     const peopleInsts = this._peopleInstances();
+    const roadmapInsts = this._roadmapInstances();
+
+    // Layer layout: hidden layers cede their space to the visible one
+    const loadH = showLoad ? (showBars ? 36 : ROW_H - 4) : 0;
+    const barsAreaH = ROW_H - loadH - 8;
+    const loadBarMax = Math.max(8, loadH - 14);
 
     // Build quarter header spans
     let qHeaders = '';
@@ -194,7 +234,7 @@ class AppLoad extends AppModuleBase {
           const pct = Math.min(Math.round(load), 120);
           const cls = load >= 100 ? 'overload' : load >= 70 ? 'mid' : 'low';
           loadCells += `<div class="load-cell${m.isQS ? ' qs' : ''}" style="width:${MONTH_W}px" title="${Math.round(load)}%">
-            <div class="load-bar ${cls}" style="height:${Math.min(pct, 100) / 100 * 28}px"></div>
+            <div class="load-bar ${cls}" style="height:${Math.round(Math.min(pct, 100) / 100 * loadBarMax)}px"></div>
             <div class="load-label">${Math.round(load)}%</div>
           </div>`;
         });
@@ -212,24 +252,20 @@ class AppLoad extends AppModuleBase {
         });
         const laneCount = Math.max(1, laneEnds.length);
         const barGap = 2;
-        const barH = Math.max(8, Math.floor((30 - (laneCount - 1) * barGap) / laneCount));
+        const barH = Math.max(8, Math.floor((barsAreaH - (laneCount - 1) * barGap) / laneCount));
 
         let bars = '';
         if (!showBars) { /* bars suppressed */ }
         else sorted.forEach(t => {
-          const left = this._monthsBetween(viewStart, t.startDate) * MONTH_W;
-          // endDate is the last day of its month — bar ends at the start of the next month
-          const endNext = this._addMonthISO(t.endDate.slice(0, 7) + '-01', 1);
-          const right = this._monthsBetween(viewStart, endNext) * MONTH_W;
-          const width = right - left;
-          if (left >= totalW || right <= 0 || width <= 0) return;
-          const clampedLeft = Math.max(0, left);
-          const clampedWidth = Math.min(right, totalW) - clampedLeft;
+          const g = this._barGeom(t.startDate.slice(0, 7), t.endDate.slice(0, 7));
+          if (!g) return;
           const top = 4 + laneOf[t.id] * (barH + barGap);
           bars += `<div class="task-bar${barH < 16 ? ' slim' : ''}" data-task="${esc(t.id)}"
-            style="left:${clampedLeft}px;width:${Math.max(clampedWidth, 4)}px;top:${top}px;height:${barH}px;background:${esc(t.color)}"
+            style="left:${g.left}px;width:${g.width}px;top:${top}px;height:${barH}px;background:${esc(t.color)}"
             title="${esc(t.name)} (${t.pct}%)">
+            <div class="bar-handle left" data-handle="left"></div>
             <span>${esc(t.name)} ${t.pct}%</span>
+            <div class="bar-handle right" data-handle="right"></div>
           </div>`;
         }); // end showBars
 
@@ -243,7 +279,7 @@ class AppLoad extends AppModuleBase {
         </div>`;
 
         timelineRows += `<div class="person-row${rowOverloaded ? ' overloaded' : ''}" data-member="${esc(member.id)}" style="height:${ROW_H}px;width:${totalW}px">
-          <div class="load-cells">${loadCells}</div>
+          <div class="load-cells" style="height:${loadH}px">${loadCells}</div>
           ${bars}
         </div>`;
       });
@@ -261,6 +297,13 @@ class AppLoad extends AppModuleBase {
         <select class="settings-people">
           <option value="">— None —</option>
           ${peopleInsts.map(i => `<option value="${esc(i.instanceId)}"${i.instanceId === peopleInstanceId ? ' selected' : ''}>${esc(i.name || 'People')}</option>`).join('')}
+        </select>
+      </div>
+      <div class="settings-row">
+        <label>Link Roadmap</label>
+        <select class="settings-roadmap">
+          <option value="">— None —</option>
+          ${roadmapInsts.map(i => `<option value="${esc(i.instanceId)}"${i.instanceId === this._state.roadmapInstanceId ? ' selected' : ''}>${esc(i.name || 'Roadmap')}</option>`).join('')}
         </select>
       </div>
       <div class="settings-row">
@@ -314,9 +357,8 @@ class AppLoad extends AppModuleBase {
 
     this._bindEvents();
     requestAnimationFrame(() => {
-      const tBody = this._wrapper.querySelector('#t-body');
-      const nsScroll = this._wrapper.querySelector('#names-scroll');
-      if (tBody && this._scrollTop) tBody.scrollTop = this._scrollTop;
+      const tCol = this._wrapper.querySelector('.timeline-col');
+      if (tCol) { tCol.scrollTop = this._scrollTop; tCol.scrollLeft = this._scrollLeft; }
     });
   }
 
@@ -353,6 +395,12 @@ class AppLoad extends AppModuleBase {
         <div class="modal-box">
           <div class="modal-header">${isEdit ? 'Edit Task' : `Add Task${member ? ' for ' + esc(member.name) : ''}`}</div>
           <div class="modal-body">
+            ${this._roadmapProjects.length ? `
+            <label>Roadmap project</label>
+            <select class="modal-input" id="m-roadmap-project">
+              <option value="">— None —</option>
+              ${this._roadmapProjects.map(p => `<option value="${esc(p.id)}"${t.roadmapProjectId === p.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}
+            </select>` : ''}
             <label>Task name</label>
             <input class="modal-input" id="m-name" value="${esc(t.name || '')}" placeholder="e.g. Project Alpha">
             <label>Color</label>
@@ -420,7 +468,11 @@ class AppLoad extends AppModuleBase {
     const tCol = w.querySelector('.timeline-col');
     const nScroll = w.querySelector('#names-scroll');
     if (tCol && nScroll) {
-      tCol.addEventListener('scroll', () => { nScroll.scrollTop = tCol.scrollTop; });
+      tCol.addEventListener('scroll', () => {
+        nScroll.scrollTop = tCol.scrollTop;
+        this._scrollTop = tCol.scrollTop;
+        this._scrollLeft = tCol.scrollLeft;
+      });
     }
 
     // Toolbar actions
@@ -431,14 +483,8 @@ class AppLoad extends AppModuleBase {
       });
     });
 
-    // Task bar click (edit)
-    w.querySelectorAll('.task-bar').forEach(el => {
-      el.addEventListener('click', e => {
-        e.stopPropagation();
-        const task = this._state.tasks.find(t => t.id === el.dataset.task);
-        if (task) { this._modal = { type: 'task', data: { ...task }, memberId: task.memberId }; this._render(); }
-      });
-    });
+    // Task bars: pointer state machine — click opens modal, drag moves/reassigns, handles resize
+    this._bindBarDrag(w);
 
     // Name row click (edit member)
     w.querySelectorAll('.name-row').forEach(el => {
@@ -458,6 +504,23 @@ class AppLoad extends AppModuleBase {
         if (colorInput) colorInput.value = sw.dataset.color;
       });
     });
+
+    // Roadmap project picker — fills name + color from the chosen project
+    const rmSelect = w.querySelector('#m-roadmap-project');
+    if (rmSelect) {
+      rmSelect.addEventListener('change', () => {
+        const proj = this._roadmapProjects.find(p => p.id === rmSelect.value);
+        if (!proj) return;
+        const nameInput = w.querySelector('#m-name');
+        const colorInput = w.querySelector('#m-color');
+        if (nameInput) nameInput.value = proj.name;
+        if (colorInput && proj.color) {
+          colorInput.value = proj.color;
+          w.querySelectorAll('.swatch').forEach(s =>
+            s.classList.toggle('selected', s.dataset.color === proj.color));
+        }
+      });
+    }
 
     // % slider label
     const slider = w.querySelector('#m-pct');
@@ -484,6 +547,15 @@ class AppLoad extends AppModuleBase {
         this._render();
       });
     }
+    const roadmapSelect = w.querySelector('.settings-roadmap');
+    if (roadmapSelect) {
+      roadmapSelect.addEventListener('change', async () => {
+        this._state = { ...this._state, roadmapInstanceId: roadmapSelect.value || null };
+        await this._save();
+        await this._loadRoadmapProjects();
+        this._render();
+      });
+    }
     w.querySelectorAll('.span-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         this._state = { ...this._state, viewMonths: Number(btn.dataset.months) };
@@ -499,6 +571,120 @@ class AppLoad extends AppModuleBase {
         if (e.target === overlay) { this._modal = null; this._render(); }
       });
     }
+  }
+
+  // --- Bar drag/move/resize ---
+  _bindBarDrag(w) {
+    w.querySelectorAll('.task-bar').forEach(bar => {
+      bar.addEventListener('pointerdown', e => {
+        if (e.button !== 0 || this._drag) return;
+        const task = this._state.tasks.find(t => t.id === bar.dataset.task);
+        if (!task) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const handle = e.target.dataset?.handle;
+        const startYM = task.startDate.slice(0, 7);
+        const endYM = task.endDate.slice(0, 7);
+        this._drag = {
+          task, bar, pointerId: e.pointerId,
+          mode: handle === 'left' ? 'resize-l' : handle === 'right' ? 'resize-r' : 'move',
+          startX: e.clientX, startY: e.clientY,
+          origStartYM: startYM, origEndYM: endYM,
+          newStartYM: startYM, newEndYM: endYM, newMemberId: task.memberId,
+          active: false, ghost: null
+        };
+        bar.setPointerCapture(e.pointerId);
+        const onMove = ev => this._barDragMove(ev);
+        const onUp = ev => {
+          bar.removeEventListener('pointermove', onMove);
+          bar.removeEventListener('pointerup', onUp);
+          bar.removeEventListener('pointercancel', onUp);
+          this._barDragEnd(ev);
+        };
+        bar.addEventListener('pointermove', onMove);
+        bar.addEventListener('pointerup', onUp);
+        bar.addEventListener('pointercancel', onUp);
+      });
+    });
+  }
+
+  _barDragMove(ev) {
+    const d = this._drag;
+    if (!d) return;
+    const dx = ev.clientX - d.startX;
+    const dy = ev.clientY - d.startY;
+    if (!d.active) {
+      if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+      d.active = true;
+      d.bar.classList.add('dragging');
+      const tBody = this._wrapper.querySelector('#t-body');
+      d.ghost = document.createElement('div');
+      d.ghost.className = 'task-bar ghost';
+      d.ghost.style.background = d.task.color;
+      tBody?.appendChild(d.ghost);
+    }
+    const dMonths = Math.round(dx / MONTH_W);
+    let sYM = d.origStartYM, eYM = d.origEndYM, memberId = d.task.memberId;
+    if (d.mode === 'move') {
+      sYM = this._addYM(d.origStartYM, dMonths);
+      eYM = this._addYM(d.origEndYM, dMonths);
+      const tBody = this._wrapper.querySelector('#t-body');
+      if (tBody) {
+        const rect = tBody.getBoundingClientRect();
+        const idx = Math.floor((ev.clientY - rect.top) / ROW_H);
+        const clamped = Math.min(Math.max(idx, 0), this._state.members.length - 1);
+        memberId = this._state.members[clamped]?.id || memberId;
+      }
+    } else if (d.mode === 'resize-l') {
+      sYM = this._addYM(d.origStartYM, dMonths);
+      if (sYM > eYM) sYM = eYM;
+    } else {
+      eYM = this._addYM(d.origEndYM, dMonths);
+      if (eYM < sYM) eYM = sYM;
+    }
+    d.newStartYM = sYM; d.newEndYM = eYM; d.newMemberId = memberId;
+    const g = this._barGeom(sYM, eYM);
+    const rowIdx = Math.max(0, this._state.members.findIndex(m => m.id === memberId));
+    if (g && d.ghost) {
+      d.ghost.style.display = '';
+      d.ghost.style.left = g.left + 'px';
+      d.ghost.style.width = g.width + 'px';
+      d.ghost.style.top = (rowIdx * ROW_H + 4) + 'px';
+      d.ghost.style.height = Math.max(d.bar.offsetHeight, 18) + 'px';
+      const [sy, sm] = sYM.split('-').map(Number);
+      const [ey2, em2] = eYM.split('-').map(Number);
+      d.ghost.textContent = `${MONTH_NAMES[sm - 1]} ${sy} – ${MONTH_NAMES[em2 - 1]} ${ey2}`;
+    } else if (d.ghost) {
+      d.ghost.style.display = 'none';
+    }
+  }
+
+  async _barDragEnd() {
+    const d = this._drag;
+    this._drag = null;
+    if (!d) return;
+    d.ghost?.remove();
+    d.bar.classList.remove('dragging');
+    try { d.bar.releasePointerCapture(d.pointerId); } catch {}
+    if (!d.active) {
+      await this._openTaskModal(d.task);
+      return;
+    }
+    const startDate = d.newStartYM + '-01';
+    const [ey, em] = d.newEndYM.split('-').map(Number);
+    const endDate = fmtISO(new Date(ey, em, 0));
+    const t = d.task;
+    if (startDate === t.startDate && endDate === t.endDate && d.newMemberId === t.memberId) {
+      this._render();
+      return;
+    }
+    this._state = {
+      ...this._state,
+      tasks: this._state.tasks.map(x => x.id === t.id
+        ? { ...x, startDate, endDate, memberId: d.newMemberId } : x)
+    };
+    await this._save();
+    this._render();
   }
 
   async _handleAction(action, dataset) {
@@ -517,8 +703,7 @@ class AppLoad extends AppModuleBase {
       this._state = { ...this._state, viewStart: fmtISO(qs) };
       await this._save(); this._render();
     } else if (action === 'add-task') {
-      this._modal = { type: 'task', data: null, memberId: dataset.member };
-      this._render();
+      await this._openTaskModal(null, dataset.member);
     } else if (action === 'add-member') {
       this._modal = { type: 'member', data: null };
       this._render();
@@ -560,15 +745,16 @@ class AppLoad extends AppModuleBase {
     const [ey, em] = endYM.split('-').map(Number);
     const endDate = fmtISO(new Date(ey, em, 0));
     const memberId = this._modal.memberId || this._modal.data?.memberId;
+    const roadmapProjectId = w.querySelector('#m-roadmap-project')?.value || null;
 
     const existing = this._modal.data?.id;
     if (existing) {
       this._state = {
         ...this._state,
-        tasks: this._state.tasks.map(t => t.id === existing ? { ...t, name, color, startDate, endDate, pct } : t)
+        tasks: this._state.tasks.map(t => t.id === existing ? { ...t, name, color, startDate, endDate, pct, roadmapProjectId } : t)
       };
     } else {
-      const newTask = { id: 'tsk-' + Date.now(), name, color, memberId, startDate, endDate, pct };
+      const newTask = { id: 'tsk-' + Date.now(), name, color, memberId, startDate, endDate, pct, roadmapProjectId };
       this._state = { ...this._state, tasks: [...this._state.tasks, newTask] };
     }
     this._modal = null;

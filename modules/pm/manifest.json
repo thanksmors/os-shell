@@ -1,0 +1,18 @@
+{
+  "appId": "pm",
+  "tag": "app-pm",
+  "entry": "/modules/pm/index.js",
+  "title": "Project Hub",
+  "icon": "🎯",
+  "defaultSize": { "w": 900, "h": 560 },
+  "singleton": false,
+  "generator": true,
+  "hasSettings": false,
+  "resizable": true,
+  "minSize": { "w": 620, "h": 400 },
+  "sync": true,
+  "dataCollections": ["pm-data"],
+  "contextMenu": [
+    { "label": "🎯 New Project Hub", "config": { "name": "Projects", "icon": "🎯" } }
+  ]
+}

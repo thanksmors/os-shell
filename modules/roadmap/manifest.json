@@ -1,0 +1,18 @@
+{
+  "appId": "roadmap",
+  "tag": "app-roadmap",
+  "entry": "/modules/roadmap/index.js",
+  "title": "Roadmap",
+  "icon": "🗺️",
+  "defaultSize": { "w": 960, "h": 560 },
+  "singleton": false,
+  "generator": true,
+  "hasSettings": true,
+  "resizable": true,
+  "minSize": { "w": 600, "h": 380 },
+  "sync": true,
+  "dataCollections": ["roadmaps"],
+  "contextMenu": [
+    { "label": "🗺️ New Roadmap", "config": { "name": "Roadmap", "icon": "🗺️" } }
+  ]
+}

@@ -160,6 +160,10 @@ All reads/writes via `getData(collection, id)` / `setData(collection, id, data)`
 | `tierlists` | tier | `instanceId` |
 | `grids` | grid | `instanceId` |
 | `projects` | projects | `instanceId` |
+| `people-charts` | people | `instanceId` |
+| `load-plans` | load | `instanceId` |
+| `roadmaps` | roadmap | `instanceId` |
+| `pm-data` | pm | `instanceId` |
 | `module-settings` | AppModuleBase | `instanceId` (slot resolutions for `requiredCollections`) |
 | `meta` | shell | `'instances'` (desktop instance registry) |
 | `generated-modules` | builder | `'index'` — `{ [appId]: { manifest, js, css } }` |
@@ -258,6 +262,10 @@ others must be fully isolated, communicating only through `el.api` and `shell/ap
 | `tier` | Generator | S–F tier list. Cards support inline text + image upload (base64). | `tierlists` |
 | `grid` | Generator | Spreadsheet-style grid. Settings panel. | `grids` |
 | `projects` | Generator | Project management board. Links to Data module via `requiredCollections`. | `projects` |
+| `people` | Generator | Visual org chart: person cards + SVG connectors, per-person detail modal, multiple roots. | `people-charts` |
+| `load` | Generator | Resource timeline: per-person task bars (pointer drag to reassign/move, edge-resize), monthly load % cells, Bars/Load toggles. Reads `people-charts` (roster sync) and `roadmaps` (project link). | `load-plans` |
+| `roadmap` | Generator | High-level project roadmap: projects with phase bars on a quarterly timeline, row reorder, bar drag/resize. Feeds Load via project linking. | `roadmaps` |
+| `pm` | Generator | Project hub: folder/project sidebar (notes-style) with Milestones / Issues / Action Items tabs per project. | `pm-data` |
 | `folder` | Generator | Container for other instances. `acceptsDroppedInstances: true`. | none |
 | `emoji` | Singleton | Browse emojis by category or search, click to copy. CDN-backed. | none |
 | `notes` | Singleton | Markdown notes with folders, preview, image/YouTube embeds. | `notes` |

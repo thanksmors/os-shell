@@ -2,6 +2,7 @@ import { app, datastore, realtime } from 'codehooks-js';
 import { dbGet, dbUpsert } from '../lib/db.js';
 import { getSessionUser, sendUnauth } from '../lib/session.js';
 import { recordChange } from '../lib/changes.js';
+import { mergeDoc } from '../lib/merge.js';
 
 // Publish a change event to all workspace listeners via SSE.
 // clientId is the tab that made the write — used by that tab to suppress its own echo.
@@ -64,7 +65,9 @@ app.put('/w/:workspaceId/:collection/:id', async (req, res) => {
   if (!authUser) { sendUnauth(res); return; }
   const { workspaceId, collection, id } = req.params;
   const db = await datastore.open();
-  const record = { ...req.body, workspaceId, appId: id };
+  const current = await db.getOne(collection, { workspaceId, appId: id }).catch(() => null);
+  const merged  = mergeDoc(current, req.body, collection);
+  const record  = { ...merged, workspaceId, appId: id };
   await db.updateOne(collection, { workspaceId, appId: id }, record, {}, { upsert: true });
   await recordChange(workspaceId, collection, id);
   await publishChange(workspaceId, collection, id, req.query.client);

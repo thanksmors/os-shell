@@ -98,11 +98,15 @@ export async function getData(collection, id) {
 
 // setData: writes localStorage immediately, queues network PUT in background.
 // Returns instantly — callers get back their data without waiting for the network.
+// Stamps _ts on every object payload so the server-side merge can order concurrent writes.
 export function setData(collection, id, data) {
+  const payload = (data && typeof data === 'object' && !Array.isArray(data))
+    ? { ...data, _ts: Date.now() }
+    : data;
   _missCache.delete(lsKey(collection, id));
-  lsSet(collection, id, data);
-  _enqueue({ op: 'put', collection, id, data });
-  return data;
+  lsSet(collection, id, payload);
+  _enqueue({ op: 'put', collection, id, data: payload });
+  return payload;
 }
 
 export function deleteData(collection, id) {

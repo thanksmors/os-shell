@@ -1,6 +1,7 @@
 import { app } from 'codehooks-js';
 import { dbGet, dbUpsert } from '../lib/db.js';
 import { getSessionUser, sendUnauth } from '../lib/session.js';
+import { effectiveRole } from '../lib/roles.js';
 
 // ─── Members ──────────────────────────────────────────────────────────────────
 
@@ -24,12 +25,13 @@ app.put('/workspaces/:workspaceId/members/:userId', async (req, res) => {
   const membersDoc = await dbGet('ws_members', workspaceId);
   if (!membersDoc) { res.json({ error: 'Workspace not found' }); return; }
 
-  const me = membersDoc?.members?.find(m => m.userId === authUser.userId);
-  if (!me || !['owner', 'admin'].includes(me.role)) { res.status(403); res.json({ error: 'Insufficient permissions' }); return; }
+  const ws = await dbGet('workspaces', workspaceId);
+  const myRole = effectiveRole(ws, membersDoc, authUser.userId);
+  if (!['owner', 'admin'].includes(myRole)) { res.status(403); res.json({ error: 'Insufficient permissions' }); return; }
 
   const newRole = req.body.role;
   if (!['owner', 'admin', 'member'].includes(newRole)) { res.json({ error: 'Invalid role' }); return; }
-  if (newRole === 'owner' && me.role !== 'owner') { res.json({ error: 'Only owner can transfer ownership' }); return; }
+  if (newRole === 'owner' && myRole !== 'owner') { res.json({ error: 'Only owner can transfer ownership' }); return; }
 
   membersDoc.members = membersDoc.members.map(m => {
     if (m.userId === userId) return { ...m, role: newRole };
@@ -53,9 +55,10 @@ app.delete('/workspaces/:workspaceId/members/:userId', async (req, res) => {
   const membersDoc = await dbGet('ws_members', workspaceId);
   if (!membersDoc) { res.json({ error: 'Workspace not found' }); return; }
 
-  const me = membersDoc?.members?.find(m => m.userId === authUser.userId);
+  const ws = await dbGet('workspaces', workspaceId);
+  const myRole = effectiveRole(ws, membersDoc, authUser.userId);
   const isSelf = userId === authUser.userId;
-  if (!isSelf && !['owner', 'admin'].includes(me?.role)) { res.status(403); res.json({ error: 'Insufficient permissions' }); return; }
+  if (!isSelf && !['owner', 'admin'].includes(myRole)) { res.status(403); res.json({ error: 'Insufficient permissions' }); return; }
 
   membersDoc.members = membersDoc.members.filter(m => m.userId !== userId);
   await dbUpsert('ws_members', workspaceId, membersDoc);

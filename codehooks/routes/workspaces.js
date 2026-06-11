@@ -1,6 +1,7 @@
 import { app } from 'codehooks-js';
 import { dbGet, dbUpsert, dbInsert, dbDelete, genId } from '../lib/db.js';
 import { getSessionUser, sendUnauth } from '../lib/session.js';
+import { effectiveRole, healOwnerRole } from '../lib/roles.js';
 
 // ─── Workspaces ───────────────────────────────────────────────────────────────
 
@@ -12,9 +13,12 @@ app.get('/workspaces', async (req, res) => {
   const wsIds = userWs?.workspaceIds || [];
   const workspaces = await Promise.all(wsIds.map(async id => {
     const ws = await dbGet('workspaces', id);
-    const membersDoc = await dbGet('ws_members', id);
-    const me = membersDoc?.members?.find(m => m.userId === authUser.userId);
-    return ws ? { ...ws, role: me?.role || 'member' } : null;
+    if (!ws) return null;
+    let membersDoc = await dbGet('ws_members', id);
+    // Self-heal a drifted members doc so the recorded owner regains owner role.
+    membersDoc = await healOwnerRole(id, ws, membersDoc, authUser.userId);
+    const role = effectiveRole(ws, membersDoc, authUser.userId) || 'member';
+    return { ...ws, role };
   }));
   res.json(workspaces.filter(Boolean));
 });
@@ -44,10 +48,9 @@ app.put('/workspaces/:workspaceId', async (req, res) => {
 
   const { workspaceId } = req.params;
   const membersDoc = await dbGet('ws_members', workspaceId);
-  const me = membersDoc?.members?.find(m => m.userId === authUser.userId);
-  if (!me || !['owner', 'admin'].includes(me.role)) { res.status(403); res.json({ error: 'Insufficient permissions' }); return; }
-
   const ws = await dbGet('workspaces', workspaceId);
+  const role = effectiveRole(ws, membersDoc, authUser.userId);
+  if (!['owner', 'admin'].includes(role)) { res.status(403); res.json({ error: 'Insufficient permissions' }); return; }
   if (!ws) { res.json({}); return; }
 
   const updated = { ...ws };

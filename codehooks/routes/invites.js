@@ -1,6 +1,7 @@
 import { app, datastore } from 'codehooks-js';
 import { dbGet, dbUpsert, genId } from '../lib/db.js';
 import { getSessionUser, sendUnauth } from '../lib/session.js';
+import { effectiveRole } from '../lib/roles.js';
 
 // ─── Invites ──────────────────────────────────────────────────────────────────
 // Invites stored in KV with 7-day TTL — expired entries auto-delete.
@@ -11,8 +12,9 @@ app.post('/workspaces/:workspaceId/invites', async (req, res) => {
 
   const { workspaceId } = req.params;
   const membersDoc = await dbGet('ws_members', workspaceId);
-  const me = membersDoc?.members?.find(m => m.userId === authUser.userId);
-  if (!me || !['owner', 'admin'].includes(me.role)) { res.status(403); res.json({ error: 'Insufficient permissions' }); return; }
+  const ws = await dbGet('workspaces', workspaceId);
+  const role = effectiveRole(ws, membersDoc, authUser.userId);
+  if (!['owner', 'admin'].includes(role)) { res.status(403); res.json({ error: 'Insufficient permissions' }); return; }
 
   const inviteId = genId('inv');
   const invite = { inviteId, workspaceId, role: req.body.role || 'member', invitedBy: authUser.userId, createdAt: Date.now() };

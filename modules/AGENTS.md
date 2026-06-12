@@ -48,7 +48,7 @@ modules/your-id/
 | `sync` | boolean | `false` | `AppModuleBase` subscribes to cross-device sync when true — SSE-driven (~1–2s), with polling fallback. On a remote change it re-runs `_load()` + `_render()`. |
 | `dataCollections` | string[] | `[]` | Collection names owned by this module. `removeInstance()` deletes `os:{name}:{instanceId}` from localStorage for each. **Always declare** — omitting causes stale data accumulation. |
 | `acceptsDroppedInstances` | boolean | `false` | Makes this instance a drop container on the desktop. Set on the folder module only. |
-| `requiredCollections` | object[] | `[]` | Named collection slots needing user resolution on first launch. Shape: `{ slot, default, hint }`. `AppModuleBase._setupCollections()` shows a dialog. Projects module only. |
+| `requiredCollections` | object[] | `[]` | Named collection slots needing user resolution on first launch. Shape: `{ slot, default, hint }`. `AppModuleBase._setupCollections()` shows a dialog. No current module uses it. |
 | `contextMenu` | object[] | `[]` | Entries in the desktop right-click menu. Shape: `{ label, config }`. Generator modules must have at least one or they are completely unreachable. |
 
 ---
@@ -162,11 +162,7 @@ All reads/writes via `getData(collection, id)` / `setData(collection, id, data)`
 |---|---|---|
 | `lists` | list | `instanceId` |
 | `boards` | kanban | `instanceId` |
-| `gantt` | gantt | `instanceId` |
-| `rocks` | rocks | `instanceId` |
 | `tierlists` | tier | `instanceId` |
-| `grids` | grid | `instanceId` |
-| `projects` | projects | `instanceId` |
 | `people-charts` | people | `instanceId` |
 | `load-plans` | load | `instanceId` |
 | `roadmaps` | roadmap | `instanceId` |
@@ -183,7 +179,7 @@ All reads/writes via `getData(collection, id)` / `setData(collection, id, data)`
 | `build-jobs` | builder | `'index'` — `{ [jobId]: { status, plan, messages, module, … } }` |
 
 Collections backing **collaborative** modules (`load-plans`, `roadmaps`, `pm-data`,
-`boards`, `gantt`, `chat`, `chat-messages`) are registered in `TOP_ARRAYS` in
+`boards`, `chat`, `chat-messages`) are registered in `TOP_ARRAYS` in
 `codehooks/lib/merge.js` for concurrent-edit merging. A new collaborative collection
 must be added there too — see `codehooks/AGENTS.md`.
 
@@ -259,11 +255,12 @@ collection. The rewrite + blob URL creation must happen here too.
 
 ---
 
-### Cross-module dependency — named exception
+### Cross-module dependency
 
-`modules/projects/index.js` imports from `modules/data/api.js`. This is the **only**
-inter-module import in the codebase. Do not model new modules on this pattern — all
-others must be fully isolated, communicating only through `el.api` and `shell/api.js`.
+No module imports from another module. (`modules/data/api.js` is imported by the
+*shell* — `shell/module-base.js` and `shell/store-os.js` — not by other modules.)
+All modules must be fully isolated, communicating only through `el.api` and
+`shell/api.js`.
 
 ---
 
@@ -294,8 +291,8 @@ false positives on the latter.
 - **In-place mutation of module-local `this._state`** followed immediately by
   `_save()` + `_render()`. The "replace refs, never mutate" contract applies to the
   **Alpine store** (it's a reactive proxy); `this._state` is plain module state and
-  modules fully re-render from it. Half the modules (list, kanban, rocks, gantt,
-  grid, tier, l10) use `push`/`splice`/property assignment this way — it is fine.
+  modules fully re-render from it. Several modules (list, kanban, tier, l10) use
+  `push`/`splice`/property assignment this way — it is fine.
 - **Scalar assignment on top-level Alpine store props** (e.g. folder's drag
   handshake: `store.dragInstanceId = null`). Alpine proxies detect property
   assignment; the contract forbids mutating *nested objects/arrays* in place, not
@@ -355,11 +352,7 @@ Do **not** call `_load()` or `_render()` manually in a `connectedCallback` overr
 |---|---|---|---|
 | `list` | Generator | Named to-do lists with custom fields. Settings panel. | `lists` |
 | `kanban` | Generator | Drag-and-drop board with configurable columns. Settings panel. | `boards` |
-| `gantt` | Generator | Project timeline, 12/24/36-month viewport. Settings panel. | `gantt` |
-| `rocks` | Generator | OKR board: Functions → Rocks → Milestones with target dates. | `rocks` |
 | `tier` | Generator | S–F tier list. Cards support inline text + image upload (base64). | `tierlists` |
-| `grid` | Generator | Spreadsheet-style grid. Settings panel. | `grids` |
-| `projects` | Generator | Project management board. Links to Data module via `requiredCollections`. | `projects` |
 | `people` | Generator | Visual org chart: person cards + SVG connectors, per-person detail modal, multiple roots. | `people-charts` |
 | `load` | Generator | Resource timeline: per-person task bars (pointer drag to reassign/move, edge-resize), monthly load % cells, Bars/Load toggles. Reads `people-charts` (roster sync) and `roadmaps` (project link). | `load-plans` |
 | `roadmap` | Generator | High-level project roadmap: projects with phase bars on a quarterly timeline, row reorder, bar drag/resize. Feeds Load via project linking. | `roadmaps` |
@@ -368,11 +361,11 @@ Do **not** call `_load()` or `_render()` manually in a `connectedCallback` overr
 | `emoji` | Singleton | Browse emojis by category or search, click to copy. CDN-backed. | none |
 | `notes` | Singleton | Markdown notes with folders, preview, image/YouTube embeds. | `notes` |
 | `chat` | Singleton | Channels + messages, unread badge, SSE-driven sync. | `chat`, `chat-messages`, `chat-read` |
-| `files` | Singleton | Drive-style file manager: folders, base64 upload/download, in-app preview (images, PDF, text, MD, HTML, CSV, DOCX/XLSX via lazy CDN libs). | `files-meta`, `files-data` |
+| `files` | Singleton | "Drive" (🗃️) — file manager: folders, base64 upload/download, in-app preview (images, PDF, text, MD, HTML, CSV, DOCX/XLSX via lazy CDN libs). | `files-meta`, `files-data` |
 | `about` | Singleton | About/info page. | none |
 | `settings` | Singleton | Appearance (theme/font/accent), workspace, about. | none |
 | `builder` | Singleton | "Build App" — AI module generation: clarify → plan → queued build, revise. | `generated-modules`, `build-jobs` |
-| `data` | (internal) | Shared collection management API for projects module. Not in registry. | — |
+| `data` | (internal) | Shared collection management API, consumed by the shell (`module-base.js`, `store-os.js`). In `registry.json` but hidden from the launcher (`hiddenApps` default). | — |
 | `boilerplate` | (template) | Not in `registry.json`. Starting point for new modules. | — |
 
 ### Add-a-module checklist

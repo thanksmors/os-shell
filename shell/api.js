@@ -447,21 +447,6 @@ export async function saveBoard(appId, board) {
   return setData('boards', appId, board);
 }
 
-// ─── Gantt helpers ──────────────────────────────────────────────────────────
-
-export async function getGantt(appId) {
-  const data = await getData('gantt', appId);
-  if (!data || typeof data !== 'object') return { name: 'My Projects', viewMonths: 12, projects: [] };
-  if (!Array.isArray(data.projects)) data.projects = [];
-  if (typeof data.name !== 'string') data.name = 'My Projects';
-  if (typeof data.viewMonths !== 'number') data.viewMonths = 12;
-  return data;
-}
-
-export async function saveGantt(appId, gantt) {
-  return setData('gantt', appId, gantt);
-}
-
 // ─── Tier List helpers ─────────────────────────────────────────────────────
 
 const DEFAULT_TIERS = [

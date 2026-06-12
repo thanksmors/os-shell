@@ -403,12 +403,14 @@
   padding: 12px 8px;
   border-radius: 12px;
   cursor: pointer;
-  transition: background 150ms, transform 100ms;
+  transition: background 150ms,
+              transform 200ms cubic-bezier(0.34,1.56,0.64,1),
+              box-shadow 200ms ease-out;
   border: none;
   background: transparent;
   width: 100%;
 }
-.os-app-tile:hover { background: rgba(59,130,246,0.08); transform: scale(1.04); }
+.os-app-tile:hover { background: rgba(59,130,246,0.08); transform: translateY(-4px) scale(1.08); box-shadow: 0 12px 32px rgba(0,0,0,0.40); }
 .dark .os-app-tile:hover { background: rgba(255,255,255,0.06); }
 .os-app-tile:active { transform: scale(0.97); }
 
@@ -722,203 +724,35 @@
   .os-desktop-wallpaper.animated { animation: none; }
 }
 
-/* ── Starfield wallpaper ─────────────────────────────────────────────────── */
+/* ── Night Sky wallpaper (photo) ───────────────────────────────────────────── */
+/* Photo: Unsplash Cq5NaI0yKBE (2268×4032). Fit to viewport width; the portrait
+   overflow gives the .animated pan its vertical travel. */
 .os-desktop-wallpaper.wallpaper-starfield {
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--os-accent, #3b82f6)  8%, #08081a) 0%,
-    #0a0a1e 40%,
-    color-mix(in srgb, var(--os-accent, #3b82f6) 12%, #10103a) 100%);
-}
-/* Randomly scattered stars rendered as box-shadow point lists */
-.os-desktop-wallpaper.wallpaper-starfield::before,
-.os-desktop-wallpaper.wallpaper-starfield::after {
-  content: '';
-  position: absolute;
-  top: 0; left: 0;
-  border-radius: 50%;
-  background: transparent;
-  pointer-events: none;
+  background: #08081a;
+  overflow: hidden;
 }
 .os-desktop-wallpaper.wallpaper-starfield::before {
-  /* small stars */
-  width: 1px; height: 1px;
-  box-shadow:
-    456px 51px rgba(255,255,255,0.82),
-    1003px 457px rgba(255,255,255,0.4),
-    419px 1385px rgba(255,255,255,0.82),
-    2233px 178px rgba(255,255,255,0.71),
-    130px 61px rgba(255,255,255,0.37),
-    952px 1034px rgba(255,255,255,0.72),
-    2298px 407px rgba(255,255,255,0.8),
-    2232px 859px rgba(255,255,255,0.45),
-    1139px 13px rgba(255,255,255,0.83),
-    653px 865px rgba(255,255,255,0.54),
-    636px 440px rgba(255,255,255,0.97),
-    1378px 209px rgba(255,255,255,0.36),
-    396px 735px rgba(255,255,255,0.89),
-    1083px 88px rgba(255,255,255,0.81),
-    2196px 255px rgba(255,255,255,0.98),
-    1550px 161px rgba(255,255,255,0.69),
-    1481px 1182px rgba(255,255,255,0.43),
-    284px 93px rgba(255,255,255,0.76),
-    1185px 163px rgba(255,255,255,0.9),
-    413px 778px rgba(255,255,255,0.49),
-    1494px 333px rgba(255,255,255,0.56),
-    858px 1372px rgba(255,255,255,0.49),
-    292px 1247px rgba(255,255,255,0.74),
-    2187px 501px rgba(255,255,255,0.41),
-    1554px 552px rgba(255,255,255,0.99),
-    2281px 449px rgba(255,255,255,0.78),
-    229px 469px rgba(255,255,255,0.88),
-    1292px 821px rgba(255,255,255,0.49),
-    864px 1161px rgba(255,255,255,0.91),
-    1288px 435px rgba(255,255,255,0.76),
-    1620px 1316px rgba(255,255,255,0.62),
-    1084px 285px rgba(255,255,255,0.47),
-    2299px 1103px rgba(255,255,255,0.48),
-    2394px 877px rgba(255,255,255,0.93),
-    1635px 741px rgba(255,255,255,0.45),
-    566px 1043px rgba(255,255,255,0.65),
-    192px 224px rgba(255,255,255,0.41),
-    655px 1393px rgba(255,255,255,0.6),
-    260px 788px rgba(255,255,255,0.57),
-    1917px 1083px rgba(255,255,255,0.48),
-    2266px 23px rgba(255,255,255,0.78),
-    469px 1396px rgba(255,255,255,0.92),
-    1092px 1312px rgba(255,255,255,0.54),
-    1202px 890px rgba(255,255,255,0.41),
-    13px 539px rgba(255,255,255,0.98),
-    731px 1039px rgba(255,255,255,0.94),
-    1222px 1308px rgba(255,255,255,0.66),
-    814px 313px rgba(255,255,255,0.56),
-    661px 1104px rgba(255,255,255,0.97),
-    2172px 1px rgba(255,255,255,0.72),
-    2001px 39px rgba(255,255,255,0.38),
-    1486px 629px rgba(255,255,255,0.47),
-    986px 1161px rgba(255,255,255,0.96),
-    350px 995px rgba(255,255,255,0.87),
-    2181px 257px rgba(255,255,255,0.39),
-    1946px 1125px rgba(255,255,255,0.42),
-    2161px 1242px rgba(255,255,255,0.6),
-    867px 1104px rgba(255,255,255,0.83),
-    823px 638px rgba(255,255,255,0.58),
-    1529px 897px rgba(255,255,255,0.93),
-    1849px 247px rgba(255,255,255,0.47),
-    262px 692px rgba(255,255,255,0.31),
-    2268px 471px rgba(255,255,255,0.71),
-    29px 145px rgba(255,255,255,0.8),
-    241px 468px rgba(255,255,255,0.35),
-    128px 676px rgba(255,255,255,0.35),
-    974px 570px rgba(255,255,255,0.77),
-    877px 1104px rgba(255,255,255,0.39),
-    2338px 1180px rgba(255,255,255,0.63),
-    1937px 833px rgba(255,255,255,0.43),
-    397px 1349px rgba(255,255,255,0.6),
-    1734px 841px rgba(255,255,255,0.63),
-    221px 1379px rgba(255,255,255,0.76),
-    403px 124px rgba(255,255,255,0.58),
-    1389px 223px rgba(255,255,255,0.47),
-    779px 1098px rgba(255,255,255,0.61),
-    1728px 375px rgba(255,255,255,0.49),
-    1023px 154px rgba(255,255,255,0.61),
-    2254px 200px rgba(255,255,255,0.34),
-    2214px 30px rgba(255,255,255,0.98),
-    968px 340px rgba(255,255,255,0.58),
-    1971px 437px rgba(255,255,255,0.91),
-    240px 337px rgba(255,255,255,0.57),
-    1599px 543px rgba(255,255,255,0.95),
-    1863px 584px rgba(255,255,255,0.6),
-    2276px 1355px rgba(255,255,255,0.8),
-    634px 388px rgba(255,255,255,0.51),
-    239px 1186px rgba(255,255,255,0.82),
-    249px 642px rgba(255,255,255,0.34),
-    2392px 976px rgba(255,255,255,0.65),
-    2175px 322px rgba(255,255,255,0.34),
-    2080px 164px rgba(255,255,255,0.9),
-    280px 1218px rgba(255,255,255,0.35),
-    963px 826px rgba(255,255,255,0.38),
-    2333px 504px rgba(255,255,255,0.71),
-    162px 1268px rgba(255,255,255,0.36),
-    2390px 1157px rgba(255,255,255,0.67),
-    1068px 418px rgba(255,255,255,0.77),
-    1286px 488px rgba(255,255,255,0.49),
-    536px 1375px rgba(255,255,255,0.75),
-    1872px 647px rgba(255,255,255,0.95),
-    297px 19px rgba(255,255,255,0.62),
-    2306px 204px rgba(255,255,255,0.35),
-    873px 1036px rgba(255,255,255,0.49),
-    1429px 140px rgba(255,255,255,0.92),
-    1513px 583px rgba(255,255,255,0.41),
-    2225px 619px rgba(255,255,255,0.73),
-    2166px 16px rgba(255,255,255,0.77),
-    2271px 613px rgba(255,255,255,0.95),
-    424px 275px rgba(255,255,255,0.49);
+  content: '';
+  position: absolute;
+  left: 0; top: 0;
+  width: 100%;
+  height: calc(100vw * (4032 / 2268));
+  min-height: 100%;
+  background: url('/shell/assets/wallpaper-night-sky.jpg') top center / 100% auto no-repeat;
+  will-change: transform;
 }
-.os-desktop-wallpaper.wallpaper-starfield::after {
-  /* larger, brighter stars */
-  width: 2px; height: 2px;
-  box-shadow:
-    438px 1133px rgba(255,255,255,0.41),
-    1154px 1238px rgba(255,255,255,0.45),
-    1404px 416px rgba(255,255,255,0.78),
-    1081px 1035px rgba(255,255,255,0.64),
-    208px 189px rgba(255,255,255,0.74),
-    1133px 90px rgba(255,255,255,0.3),
-    535px 1304px rgba(255,255,255,0.99),
-    661px 904px rgba(255,255,255,0.69),
-    1751px 1148px rgba(255,255,255,0.31),
-    308px 305px rgba(255,255,255,0.68),
-    1512px 1192px rgba(255,255,255,0.69),
-    1760px 261px rgba(255,255,255,0.33),
-    1493px 81px rgba(255,255,255,0.93),
-    860px 1396px rgba(255,255,255,0.47),
-    421px 724px rgba(255,255,255,0.85),
-    1664px 1271px rgba(255,255,255,0.82),
-    969px 332px rgba(255,255,255,0.98),
-    725px 844px rgba(255,255,255,0.32),
-    1360px 843px rgba(255,255,255,0.86),
-    1016px 546px rgba(255,255,255,0.41),
-    442px 783px rgba(255,255,255,0.91),
-    1927px 455px rgba(255,255,255,0.44),
-    1885px 716px rgba(255,255,255,0.51),
-    932px 456px rgba(255,255,255,0.32),
-    791px 816px rgba(255,255,255,0.53),
-    284px 571px rgba(255,255,255,0.55),
-    2086px 818px rgba(255,255,255,0.78),
-    2196px 678px rgba(255,255,255,0.96),
-    472px 534px rgba(255,255,255,0.42),
-    1087px 78px rgba(255,255,255,0.38),
-    1779px 707px rgba(255,255,255,0.81),
-    1284px 893px rgba(255,255,255,0.72),
-    2094px 236px rgba(255,255,255,0.57),
-    2361px 389px rgba(255,255,255,0.48),
-    1786px 3px rgba(255,255,255,0.66),
-    2205px 1373px rgba(255,255,255,0.44),
-    1766px 143px rgba(255,255,255,0.96),
-    1352px 1276px rgba(255,255,255,0.52),
-    510px 615px rgba(255,255,255,0.65),
-    1672px 668px rgba(255,255,255,0.58);
-}
-/* Animated starfield: gradient sweep + obvious star twinkle */
 .os-desktop-wallpaper.wallpaper-starfield.animated {
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--os-accent, #3b82f6) 12%, #07071a) 0%,
-    color-mix(in srgb, var(--os-accent, #3b82f6)  6%, #0a0a22) 33%,
-    color-mix(in srgb, var(--os-accent, #3b82f6) 18%, #0f0f38) 66%,
-    color-mix(in srgb, var(--os-accent, #3b82f6)  8%, #080820) 100%);
-  background-size: 300% 300%;
-  animation: os-aurora 18s ease infinite;
+  animation: none; /* cancel the generic .animated aurora sweep */
 }
-@keyframes os-stars-twinkle {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.2; }
+.os-desktop-wallpaper.wallpaper-starfield.animated::before {
+  animation: os-sky-pan 180s ease-in-out infinite alternate;
 }
-.os-desktop-wallpaper.wallpaper-starfield.animated::before { animation: os-stars-twinkle 4s ease-in-out infinite; }
-.os-desktop-wallpaper.wallpaper-starfield.animated::after  { animation: os-stars-twinkle 6s ease-in-out infinite 1s; }
+@keyframes os-sky-pan {
+  from { transform: translateY(0); }
+  to   { transform: translateY(min(0px, calc(100vh - 100vw * (4032 / 2268)))); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .os-desktop-wallpaper.wallpaper-starfield.animated { animation: none; }
-  .os-desktop-wallpaper.wallpaper-starfield::before,
-  .os-desktop-wallpaper.wallpaper-starfield::after { animation: none; }
+  .os-desktop-wallpaper.wallpaper-starfield.animated::before { animation: none; }
 }
 
 /* ── Onboarding modal ────────────────────────────────────────────────────── */

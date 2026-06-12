@@ -11,7 +11,6 @@ const TOP_ARRAYS = {
   'roadmaps':      ['projects', 'phases'],
   'pm-data':       ['folders', 'projects'],
   'boards':        ['cards', 'columns'],
-  'gantt':         ['projects'],
   'chat':          ['channels'],
   'chat-messages': ['messages'],
 };

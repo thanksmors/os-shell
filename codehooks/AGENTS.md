@@ -219,11 +219,6 @@ All records include `appId` (lookup key) and Codehooks-internal `_id`.
 { "name": "Sprint Board", "columns": [{ "id": "col-1", "name": "To Do" }], "cards": [{ "id": "card-...", "colId": "col-1", "text": "..." }], "appId": "inst-...", "_id": "..." }
 ```
 
-**`gantt`:**
-```json
-{ "name": "Roadmap", "viewMonths": 12, "projects": [{ "id": "proj-...", "name": "Launch", "startDate": "2026-01-01", "endDate": "2026-03-31", "color": "#007aff" }], "appId": "inst-...", "_id": "..." }
-```
-
 ---
 
 ### CLI reference

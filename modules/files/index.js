@@ -122,7 +122,7 @@ class AppFiles extends HTMLElement {
       <div class="layout">
         <aside class="sidebar">
           <div class="sidebar-header">
-            <span class="sidebar-title">📁 My Drive</span>
+            <span class="sidebar-title">🗃️ Drive</span>
             <button class="add-btn" id="add-folder-root" title="New folder">+</button>
           </div>
           <div class="sidebar-tree" id="sidebar-tree"></div>

@@ -24,7 +24,7 @@ export function renderAppearanceTab(host, content) {
   const savedFamily = localStorage.getItem('os:font-family') || 'system';
   const savedAccent = localStorage.getItem('os:accent') || '#3b82f6';
   const animBg        = localStorage.getItem('os:animated-bg') === '1';
-  const savedWallpaper = localStorage.getItem('os:wallpaper') || 'aurora';
+  const savedWallpaper = localStorage.getItem('os:wallpaper') || 'starfield';
 
   content.innerHTML = `
     <div class="settings-section">
@@ -110,8 +110,8 @@ export function renderAppearanceTab(host, content) {
           <div class="settings-row-desc">Desktop background style</div>
         </div>
         <select class="settings-select" id="wallpaper-select">
-          <option value="aurora"${savedWallpaper === 'aurora' ? ' selected' : ''}>Aurora (default)</option>
-          <option value="starfield"${savedWallpaper === 'starfield' ? ' selected' : ''}>Starfield</option>
+          <option value="starfield"${savedWallpaper === 'starfield' ? ' selected' : ''}>Night Sky (default)</option>
+          <option value="aurora"${savedWallpaper === 'aurora' ? ' selected' : ''}>Aurora</option>
         </select>
       </div>
       <div class="settings-row">

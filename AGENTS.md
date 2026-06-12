@@ -62,7 +62,7 @@ ancestor doc's Child DOX Index. Run at closeout whenever any `AGENTS.md` changed
 
 ```bash
 for f in $(find . -mindepth 2 -name AGENTS.md -not -path '*/node_modules/*' -not -path '*/.git/*'); do
-  d=$(dirname "$f"); p=$(dirname "$d")
+  d=$(dirname "$f"); d=${d#./}; p=$(dirname "$d")
   while [ ! -f "$p/AGENTS.md" ] && [ "$p" != "." ]; do p=$(dirname "$p"); done
   grep -q "$d" "$p/AGENTS.md" 2>/dev/null || echo "ORPHAN: $f not indexed in $p/AGENTS.md"
 done

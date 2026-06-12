@@ -55,8 +55,8 @@
         var w = document.querySelector('.os-desktop-wallpaper');
         if (!w) return;
         if (localStorage.getItem('os:animated-bg') === '1') w.classList.add('animated');
-        var wp = localStorage.getItem('os:wallpaper');
-        if (wp && wp !== 'aurora') w.classList.add('wallpaper-' + wp);
+        var wp = localStorage.getItem('os:wallpaper') || 'starfield';
+        if (wp !== 'aurora') w.classList.add('wallpaper-' + wp);
       });
     })();
   </script>
@@ -665,7 +665,7 @@
           { icon: '🗺️', name: 'Roadmap', desc: 'Milestone timelines across all projects at once.' },
           { icon: '📊', name: 'Load', desc: 'Balance your team\'s workload across projects.' },
           { icon: '🔧', name: 'Build App', desc: 'Generate custom AI-powered tools with a prompt.' },
-          { icon: '📁', name: 'Files', desc: 'Shared document storage for the workspace.' },
+          { icon: '🗃️', name: 'Drive', desc: 'Shared document storage for the workspace.' },
           { icon: '💬', name: 'Chat', desc: 'Team messaging with channels and unread badges.' },
         ],
       }"

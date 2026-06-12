@@ -21,7 +21,7 @@ export function registerOsStore() {
     desktopOrder: JSON.parse(localStorage.getItem('os:desktopOrder') || '[]'),
     showOnboarding: false,
     animatedBg: localStorage.getItem('os:animated-bg') === '1',
-    wallpaper: localStorage.getItem('os:wallpaper') || 'aurora',
+    wallpaper: localStorage.getItem('os:wallpaper') || 'starfield',
     startMenuOpen: false,
     recentApps: JSON.parse(localStorage.getItem('os:recent-apps') || '[]'),
     hiddenApps: JSON.parse(localStorage.getItem('os:hidden-apps') ??

@@ -4,7 +4,9 @@
 
 The runtime kernel. Loaded once at startup; never reloaded. Provides the Alpine
 store, persistence adapter, module base class, CSS pipeline, auth, animations, and
-keyboard shortcuts. Nothing in this directory imports from `modules/`.
+keyboard shortcuts. Nothing in this directory imports from `modules/`, with one
+exception: `module-base.js` and `store-os.js` import the internal collection API
+`modules/data/api.js`.
 
 ## Ownership
 

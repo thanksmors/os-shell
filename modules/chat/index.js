@@ -240,16 +240,26 @@ class AppChat extends HTMLElement {
       if (showDate) {
         html += `<div class="date-sep"><span>${this._esc(dateStr)}</span></div>`;
       }
-      html += `
-        <div class="msg-row${showHeader ? '' : ' compact'}">
-          ${showHeader
-            ? `<div class="msg-av${isOwn ? ' own' : ''}">${this._esc(initial)}</div>`
-            : `<div class="msg-av-gap"></div>`}
-          <div class="msg-body">
-            ${showHeader ? `<div class="msg-meta"><span class="msg-name${isOwn ? ' own' : ''}">${this._esc(msg.userName || 'Unknown')}</span><span class="msg-time">${timeStr}</span></div>` : ''}
-            <div class="msg-text">${this._esc(msg.text)}</div>
-          </div>
-        </div>`;
+      if (isOwn) {
+        html += `
+          <div class="msg-row own${showHeader ? '' : ' compact'}">
+            <div class="msg-body own">
+              ${showHeader ? `<div class="msg-meta own"><span class="msg-time">${timeStr}</span></div>` : ''}
+              <div class="msg-bubble own">${this._esc(msg.text)}</div>
+            </div>
+          </div>`;
+      } else {
+        html += `
+          <div class="msg-row${showHeader ? '' : ' compact'}">
+            ${showHeader
+              ? `<div class="msg-av">${this._esc(initial)}</div>`
+              : `<div class="msg-av-gap"></div>`}
+            <div class="msg-body">
+              ${showHeader ? `<div class="msg-meta"><span class="msg-name">${this._esc(msg.userName || 'Unknown')}</span><span class="msg-time">${timeStr}</span></div>` : ''}
+              <div class="msg-bubble">${this._esc(msg.text)}</div>
+            </div>
+          </div>`;
+      }
     }
     area.innerHTML = html;
     area.scrollTop = area.scrollHeight;

@@ -10,7 +10,14 @@ export async function dbGet(collection, appId) {
 export async function dbUpsert(collection, appId, record) {
   const db = await datastore.open();
   const doc = { ...record, appId };
-  await db.updateOne(collection, { appId }, doc, {}, { upsert: true });
+  // Explicit get → insert/update. Codehooks updateOne is (collection, query,
+  // document, options) — passing { upsert: true } as a 5th arg is silently
+  // ignored, so updateOne throws "5 NOT_FOUND" when the query matches nothing.
+  // That breaks every first-write (new user, new workspace). Do not "optimize"
+  // this back into a single updateOne+upsert call.
+  const existing = await db.getOne(collection, { appId }).catch(() => null);
+  if (existing) await db.updateOne(collection, { appId }, doc);
+  else          await db.insertOne(collection, doc);
   return doc;
 }
 

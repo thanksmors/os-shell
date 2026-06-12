@@ -70,7 +70,11 @@ app.put('/w/:workspaceId/:collection/:id', async (req, res) => {
   const current = await db.getOne(collection, { workspaceId, appId: id }).catch(() => null);
   const merged  = mergeDoc(current, req.body, collection);
   const record  = { ...merged, workspaceId, appId: id };
-  await db.updateOne(collection, { workspaceId, appId: id }, record, {}, { upsert: true });
+  // current already tells us whether the doc exists — insert vs update directly.
+  // updateOne's { upsert: true } 5th arg is ignored and throws NOT_FOUND on a
+  // missing doc, so the first save to a new collection/id would fail.
+  if (current) await db.updateOne(collection, { workspaceId, appId: id }, record);
+  else         await db.insertOne(collection, record);
   await recordChange(workspaceId, collection, id);
   await publishChange(workspaceId, collection, id, req.query.client);
   res.json(record);

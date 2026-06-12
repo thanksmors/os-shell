@@ -86,15 +86,31 @@ every request and surfaces as "CORS request did not succeed, status null".
 const data = await db.getOne(collection, { appId }).catch(() => null);
 ```
 
-**4. `updateOne` with `{ upsert: true }` — use instead of get + insert/update**
+**4. `updateOne` upsert is a trap — use explicit get → insert/update**
 
-`dbUpsert` in `lib/db.js` now uses this pattern — one round-trip instead of two:
+Codehooks `updateOne(collection, query, document, options)` takes **four** args.
+The pattern below passes `{}` as `options` (so upsert is OFF) and `{ upsert: true }`
+as a silently-ignored 5th arg:
 
 ```js
+// BROKEN — upsert never takes effect:
 await db.updateOne(collection, { appId }, record, {}, { upsert: true });
 ```
 
-The old get → insert/update pattern still works but wastes a read. Do not reintroduce it.
+With no upsert, `updateOne` throws **`5 NOT_FOUND`** when the query matches no
+document — so every *first write* (new user in `bootstrapSession`, new workspace,
+first save to a collection) blows up with an unhandled Codehook exception. Existing
+users only hit update paths, so the bug hides until a brand-new account signs in.
+
+`dbUpsert` in `lib/db.js` and the data PUT route now do an explicit get → branch:
+
+```js
+const existing = await db.getOne(collection, { appId }).catch(() => null);
+if (existing) await db.updateOne(collection, { appId }, doc);
+else          await db.insertOne(collection, doc);
+```
+
+One extra read, but it actually works. Do not "optimize" it back to upsert.
 
 **5. `res.json(null)` sends empty body**
 

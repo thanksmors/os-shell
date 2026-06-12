@@ -51,12 +51,50 @@
         document.documentElement.style.setProperty('--os-icon-size',  iconSizes[ii] + 'px');
         document.documentElement.style.setProperty('--os-icon-emoji', iconEmojis[ii]);
       }
-      if (localStorage.getItem('os:animated-bg') === '1') {
-        document.addEventListener('DOMContentLoaded', function() {
-          var w = document.querySelector('.os-desktop-wallpaper');
-          if (w) w.classList.add('animated');
-        });
+      document.addEventListener('DOMContentLoaded', function() {
+        var w = document.querySelector('.os-desktop-wallpaper');
+        if (!w) return;
+        if (localStorage.getItem('os:animated-bg') === '1') w.classList.add('animated');
+        var wp = localStorage.getItem('os:wallpaper');
+        if (wp && wp !== 'aurora') w.classList.add('wallpaper-' + wp);
+      });
+    })();
+  </script>
+
+  <!-- Saturn logo Web Component (must load before body renders) -->
+  <script type="module" src="/shell/saturn-logo.js"></script>
+
+  <!-- Photo carousel for auth screen backdrop -->
+  <script type="module">
+    import { SPACE_IMAGES } from '/shell/space-images.js';
+    (function() {
+      const container = document.getElementById('os-auth-photos');
+      const creditEl  = document.getElementById('os-auth-credit');
+      if (!container) return;
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const layers = SPACE_IMAGES.map((img, i) => {
+        const el = document.createElement('div');
+        el.className = `os-auth-photo os-auth-photo--kb${i % 4}`;
+        el.style.backgroundImage = `url(${JSON.stringify(img.url)})`;
+        container.appendChild(el);
+        // Probe: if image is unreachable, mark as failed so it gets skipped
+        const probe = new Image();
+        const item = { el, img, ok: true };
+        probe.onerror = () => { item.ok = false; };
+        probe.src = img.url;
+        return item;
+      });
+      let idx = 0;
+      function activate(i) {
+        const live = layers.filter(l => l.ok);
+        layers.forEach(l => l.el.classList.remove('active'));
+        if (!live.length) return;
+        idx = i % live.length;
+        live[idx].el.classList.add('active');
+        if (creditEl) creditEl.textContent = live[idx].img.credit;
       }
+      activate(0);
+      if (!reduced) setInterval(() => activate(idx + 1), 20000);
     })();
   </script>
 
@@ -85,19 +123,25 @@
 
   <!-- ===== AUTH SCREEN ===== -->
   <div class="os-auth-screen" x-show="!$store.auth || $store.auth.screen !== 'desktop'">
+      <!-- Photo backdrop (populated by the carousel module above) -->
+      <div class="os-auth-photos" id="os-auth-photos"></div>
+      <div class="os-auth-scrim"></div>
+      <div class="os-auth-credit" id="os-auth-credit"></div>
       <!-- Loading -->
       <template x-if="!$store.auth || $store.auth.screen === 'loading'">
         <div class="os-auth-card">
-          <div class="os-auth-logo">🪐</div>
+          <saturn-logo class="os-auth-logo-svg"></saturn-logo>
           <div class="os-auth-title">ODVI Spaces</div>
-          <div class="os-auth-spinner"></div>
+          <div class="os-auth-orbit-loader">
+            <div class="os-auth-orbit-track"><div class="os-auth-orbit-dot"></div></div>
+          </div>
         </div>
       </template>
 
       <!-- Login -->
       <template x-if="$store.auth && $store.auth.screen === 'login'">
         <div class="os-auth-card">
-          <div class="os-auth-logo">🪐</div>
+          <saturn-logo class="os-auth-logo-svg"></saturn-logo>
           <div class="os-auth-title">ODVI Spaces</div>
           <div class="os-auth-subtitle">Sign in to continue</div>
           <button class="os-google-btn" @click="$store.auth.login()">
@@ -228,7 +272,7 @@
     @contextmenu.prevent="$store.os.buildDesktopContextMenu($event.clientX, $event.clientY)"
   >
     <!-- Wallpaper gradient — tinted by --os-accent (see shell.css) -->
-    <div class="os-desktop-wallpaper" :class="{ animated: $store.os && $store.os.animatedBg }"></div>
+    <div class="os-desktop-wallpaper" :class="{ animated: $store.os && $store.os.animatedBg, 'wallpaper-starfield': $store.os && $store.os.wallpaper === 'starfield' }"></div>
     <!-- Subtle texture -->
     <div class="os-desktop-texture"></div>
 
@@ -392,7 +436,7 @@
         if (launcherOpen) { $nextTick(() => $refs.launcherSearch && $refs.launcherSearch.focus()); $store.os.staggerLauncherTiles(); }
       "
       title="Start menu (⌘K)"
-    >🪐</button>
+    ><saturn-logo class="os-start-logo"></saturn-logo><span class="os-start-label">Spaces</span></button>
 
     <!-- Window Buttons -->
     <div class="os-taskbar-windows">
@@ -605,6 +649,17 @@
         showAlways: false,
         hoverFeat: null,
         hoverApp: null,
+        triviaIdx: 0,
+        trivia: [
+          'Saturn\'s rings are over 280,000 km wide but only ~10 m thick.',
+          'Sunlight takes about 80 minutes to reach Saturn.',
+          'A day on Saturn lasts just 10.7 hours.',
+          'Saturn has 146 confirmed moons — more than any planet.',
+          'The JWST can see galaxies over 13 billion light-years away.',
+          'Saturn is the least dense planet — it would float in water.',
+          'The Pillars of Creation are about 7 light-years tall.',
+          'Voyager 1 left our solar system in 2012 after 35 years of travel.',
+        ],
         feats: [
           { icon: '📂', name: 'Projects Hub', desc: 'Milestones, issues, action items, decisions, and docs per project.' },
           { icon: '🗺️', name: 'Roadmap', desc: 'Milestone timelines across all projects at once.' },
@@ -619,8 +674,21 @@
       x-transition:enter-end="opacity-100 scale-100"
       @click.stop
     >
-      <div class="os-onboarding-slide" x-show="slide === 0">
-        <div class="os-ob-icon">🪐</div>
+      <!-- Hero band — space window with CSS starfield, icon/logo changes per slide -->
+      <div class="os-ob-hero">
+        <template x-if="slide === 0">
+          <saturn-logo class="os-ob-hero-saturn"></saturn-logo>
+        </template>
+        <template x-if="slide !== 0">
+          <span class="os-ob-hero-icon" x-text="slide === 1 ? '🧩' : '⌨️'"></span>
+        </template>
+      </div>
+
+      <div class="os-onboarding-slide" x-show="slide === 0"
+        x-transition:enter="transition duration-200 ease-out"
+        x-transition:enter-start="opacity-0 translate-y-1"
+        x-transition:enter-end="opacity-100 translate-y-0"
+      >
         <h2 class="os-ob-title">Welcome to ODVI Spaces</h2>
         <p class="os-ob-body">A shared workspace for your team — part of the ODVI apps ecosystem. Everything in one place:</p>
         <div class="os-ob-feat-row">
@@ -636,8 +704,11 @@
           <template x-if="!hoverFeat"><span class="os-ob-hover-hint">Hover an icon to learn more</span></template>
         </div>
       </div>
-      <div class="os-onboarding-slide" x-show="slide === 1">
-        <div class="os-ob-icon">🧩</div>
+      <div class="os-onboarding-slide" x-show="slide === 1"
+        x-transition:enter="transition duration-200 ease-out"
+        x-transition:enter-start="opacity-0 translate-y-1"
+        x-transition:enter-end="opacity-100 translate-y-0"
+      >
         <h2 class="os-ob-title">The ODVI Ecosystem</h2>
         <p class="os-ob-body">Spaces is one of a family of ODVI apps. Click any to open it.</p>
         <div class="os-ob-feat-row">
@@ -658,9 +729,15 @@
           <template x-if="hoverApp"><span><strong x-text="hoverApp.name"></strong> — <span x-text="hoverApp.desc"></span></span></template>
           <template x-if="!hoverApp"><span class="os-ob-hover-hint">Hover an icon to learn more · click to open</span></template>
         </div>
+        <p class="os-ob-body" style="margin-top:8px;font-size:0.82rem;">
+          You can open any of these anytime from the <strong>Spaces menu</strong> in the lower-left corner.
+        </p>
       </div>
-      <div class="os-onboarding-slide" x-show="slide === 2">
-        <div class="os-ob-icon">⌨️</div>
+      <div class="os-onboarding-slide" x-show="slide === 2"
+        x-transition:enter="transition duration-200 ease-out"
+        x-transition:enter-start="opacity-0 translate-y-1"
+        x-transition:enter-end="opacity-100 translate-y-0"
+      >
         <h2 class="os-ob-title">Pro Tips</h2>
         <p class="os-ob-body">
           <span class="os-ob-tip"><kbd>Ctrl / ⌘ K</kbd> — Open the app launcher</span>
@@ -669,18 +746,20 @@
           <span class="os-ob-tip">Drag desktop icons to reorder them</span>
         </p>
       </div>
+      <p class="os-ob-trivia" x-text="trivia[triviaIdx]"></p>
       <div class="os-onboarding-footer">
         <label class="os-ob-check">
           <input type="checkbox" x-model="showAlways"> Show on startup
         </label>
         <div class="os-ob-dots">
           <template x-for="i in [0,1,2]" :key="i">
-            <span class="os-ob-dot" :class="{ active: slide === i }" @click="slide = i"></span>
+            <span class="os-ob-dot" :class="{ active: slide === i }"
+              @click="slide = i; triviaIdx = (triviaIdx + 1) % trivia.length"></span>
           </template>
         </div>
         <button
           class="os-ob-next-btn"
-          @click="slide < 2 ? slide++ : $store.os.closeOnboarding(showAlways)"
+          @click="slide < 2 ? (slide++, triviaIdx = (triviaIdx + 1) % trivia.length) : $store.os.closeOnboarding(showAlways)"
           x-text="slide < 2 ? 'Next →' : 'Get Started'"
         ></button>
       </div>

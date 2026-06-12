@@ -3,18 +3,82 @@
   position: fixed;
   inset: 0;
   z-index: 9999;
+  /* always-present fallback beneath photo layers */
   background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+/* ── Photo carousel backdrop ───────────────────────────────────────────────── */
+.os-auth-photos { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+
+.os-auth-photo {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 1.8s ease;
+}
+.os-auth-photo.active {
+  opacity: 1;
+  animation-duration: 32s;
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: both;
+  animation-iteration-count: infinite;
+}
+.os-auth-photo--kb0.active { animation-name: os-kb-0; }
+.os-auth-photo--kb1.active { animation-name: os-kb-1; }
+.os-auth-photo--kb2.active { animation-name: os-kb-2; }
+.os-auth-photo--kb3.active { animation-name: os-kb-3; }
+
+@keyframes os-kb-0 { from { transform: scale(1.00) translate(  0%,  0%); } to { transform: scale(1.08) translate(-1.5%, -1%); } }
+@keyframes os-kb-1 { from { transform: scale(1.00) translate(  0%,  0%); } to { transform: scale(1.08) translate( 1.5%, -1%); } }
+@keyframes os-kb-2 { from { transform: scale(1.00) translate(  0%,  0%); } to { transform: scale(1.08) translate(-1.5%,  1%); } }
+@keyframes os-kb-3 { from { transform: scale(1.00) translate(  0%,  0%); } to { transform: scale(1.08) translate( 1.5%,  1%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .os-auth-photo         { transition: none; }
+  .os-auth-photo.active  { animation: none; opacity: 1; }
+  .os-auth-photo:not(.active) { opacity: 0; }
+}
+
+/* Dark scrim for text legibility */
+.os-auth-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(8,6,24,0.35) 0%,
+    rgba(8,6,24,0.60) 60%,
+    rgba(8,6,24,0.80) 100%
+  );
+  pointer-events: none;
+}
+
+/* Photo credit — bottom right */
+.os-auth-credit {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.38);
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  z-index: 1;
+}
+
 .os-auth-card {
-  background: rgba(255,255,255,0.06);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 20px;
-  padding: 40px;
+  position: relative;
+  z-index: 2;
+  background: rgba(255,255,255,0.07);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-top-color: rgba(255,255,255,0.28);
+  border-radius: 24px;
+  padding: 44px 40px 40px;
   min-width: 320px;
   max-width: 400px;
   width: 100%;
@@ -22,7 +86,11 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  animation: slide-up 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: slide-up 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.06) inset,
+    0 2px 40px rgba(0,0,0,0.45),
+    0 8px 80px rgba(0,0,0,0.35);
 }
 
 .os-auth-card--wide {
@@ -31,10 +99,25 @@
 }
 
 .os-auth-logo { font-size: 3rem; line-height: 1; margin-bottom: 4px; }
-.os-auth-title { font-size: 1.4rem; font-weight: 700; color: #fff; }
+.os-auth-logo-svg {
+  display: block;
+  width: 72px;
+  height: 58px;
+  margin-bottom: 6px;
+}
+.os-auth-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  background: linear-gradient(135deg, #ffffff 20%, #93c5fd 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 .os-auth-subtitle { font-size: 0.875rem; color: rgba(255,255,255,0.55); }
 .os-auth-error { font-size: 0.8rem; color: #f87171; margin-top: 8px; text-align: center; }
 
+/* Legacy border-spinner kept for fallback; prefer .os-auth-orbit-loader */
 .os-auth-spinner {
   width: 28px;
   height: 28px;
@@ -45,6 +128,46 @@
   margin-top: 16px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Orbit loader — dot circling a tiny Saturn */
+.os-auth-orbit-loader {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  margin-top: 20px;
+  flex-shrink: 0;
+}
+.os-auth-orbit-loader::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f5e49c, #c28a28);
+}
+.os-auth-orbit-track {
+  position: absolute;
+  inset: 0;
+  animation: orbit-spin 1.4s linear infinite;
+  transform-origin: center;
+}
+.os-auth-orbit-dot {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #93c5fd;
+  box-shadow: 0 0 5px #60a5fa;
+}
+@keyframes orbit-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .os-auth-orbit-track { animation: none; }
+}
 
 .os-auth-header {
   display: flex;

@@ -23,7 +23,8 @@ export function renderAppearanceTab(host, content) {
   const iconIdx     = Math.min(3, Math.max(0, parseInt(localStorage.getItem('os:icon-size') ?? '0', 10)));
   const savedFamily = localStorage.getItem('os:font-family') || 'system';
   const savedAccent = localStorage.getItem('os:accent') || '#3b82f6';
-  const animBg      = localStorage.getItem('os:animated-bg') === '1';
+  const animBg        = localStorage.getItem('os:animated-bg') === '1';
+  const savedWallpaper = localStorage.getItem('os:wallpaper') || 'aurora';
 
   content.innerHTML = `
     <div class="settings-section">
@@ -105,8 +106,18 @@ export function renderAppearanceTab(host, content) {
       <div class="settings-section-title">Desktop</div>
       <div class="settings-row">
         <div>
+          <div class="settings-row-label">Wallpaper</div>
+          <div class="settings-row-desc">Desktop background style</div>
+        </div>
+        <select class="settings-select" id="wallpaper-select">
+          <option value="aurora"${savedWallpaper === 'aurora' ? ' selected' : ''}>Aurora (default)</option>
+          <option value="starfield"${savedWallpaper === 'starfield' ? ' selected' : ''}>Starfield</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <div>
           <div class="settings-row-label">Animated Background</div>
-          <div class="settings-row-desc">Subtle aurora animation on the desktop wallpaper</div>
+          <div class="settings-row-desc">Enable motion on the desktop wallpaper</div>
         </div>
         <button class="settings-toggle${animBg ? ' on' : ''}" id="anim-bg-toggle"></button>
       </div>
@@ -159,6 +170,16 @@ export function renderAppearanceTab(host, content) {
     iconBadge.textContent = ICON_LABELS[i];
     iconNotches.forEach((n, j) => n.classList.toggle('active', j === i));
     updateIconSliderFill(i);
+  });
+
+  // Wallpaper select
+  content.querySelector('#wallpaper-select').addEventListener('change', e => {
+    const name = e.target.value;
+    host.api.store.setWallpaper(name);
+    const wp = document.querySelector('.os-desktop-wallpaper');
+    if (wp) {
+      wp.classList.toggle('wallpaper-starfield', name === 'starfield');
+    }
   });
 
   // Animated background

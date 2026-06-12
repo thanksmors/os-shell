@@ -21,6 +21,7 @@ export function registerOsStore() {
     desktopOrder: JSON.parse(localStorage.getItem('os:desktopOrder') || '[]'),
     showOnboarding: false,
     animatedBg: localStorage.getItem('os:animated-bg') === '1',
+    wallpaper: localStorage.getItem('os:wallpaper') || 'aurora',
     startMenuOpen: false,
     recentApps: JSON.parse(localStorage.getItem('os:recent-apps') || '[]'),
     hiddenApps: JSON.parse(localStorage.getItem('os:hidden-apps') ??
@@ -60,6 +61,11 @@ export function registerOsStore() {
     toggleAnimatedBg() {
       this.animatedBg = !this.animatedBg;
       localStorage.setItem('os:animated-bg', this.animatedBg ? '1' : '');
+    },
+
+    setWallpaper(name) {
+      this.wallpaper = name;
+      localStorage.setItem('os:wallpaper', name);
     },
 
     _pushRecent(appId) {

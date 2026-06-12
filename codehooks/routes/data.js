@@ -22,8 +22,19 @@ async function publishChange(workspaceId, collection, id, clientId) {
 app.post('/w/:workspaceId/sse-listener', async (req, res) => {
   const authUser = await getSessionUser(req);
   if (!authUser) { sendUnauth(res); return; }
-  const listener = await realtime.createListener('/sync', { workspaceId: req.params.workspaceId });
-  res.json({ listenerId: listener._id });
+  try {
+    const listener = await realtime.createListener('/sync', { workspaceId: req.params.workspaceId });
+    res.json({ listenerId: listener._id });
+  } catch (err) {
+    // createListener calls db.insertOne against the channel's listener
+    // collection. On a brand-new workspace this can fail with 5 NOT_FOUND
+    // (no event-listener collection exists yet for that channel). The
+    // frontend treats listenerId: null as "polling only" (shell/api.js),
+    // so the user can still use the app — just without live cross-tab
+    // sync on the first sign-in to a fresh workspace.
+    console.error('[sse-listener] createListener failed, falling back to polling:', err?.message);
+    res.json({ listenerId: null });
+  }
 });
 
 // ─── Workspace-scoped data routes ─────────────────────────────────────────────

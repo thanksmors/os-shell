@@ -2,165 +2,58 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Diagnose and fix the chronic 5 NOT_FOUND error surfacing on new-email sign-in; rename "Capsule" to "Workspace Capsules" on the auth screen and About module only; bump icon sizes from `[56,68,80,96]` to `[80,96,112,128]`.
+**Goal:** Fix the chronic 5 NOT_FOUND error surfacing on new-email sign-in; rename "Capsule" to "Workspace Capsules" on the auth screen and About module only; bump icon sizes from `[56,68,80,96]` to `[80,96,112,128]`.
 
-**Architecture:** Three independent workstreams bundled into one plan per user request. Bug workstream is iterative (diagnose → fix → cleanup); rename and icon sizing are pure text/constant changes. Project is solo + main-only (no worktree, no branches) per root `AGENTS.md` — commits go directly to `main` and Netlify deploys from there.
+**Architecture:** Three independent workstreams bundled into one plan per user request. Bug workstream pivoted from "diagnose then fix" to "apply the known-likely fix directly" — see Pivot note below. Rename and icon sizing are pure text/constant changes. Project is solo + main-only (no worktree, no branches) per root `AGENTS.md` — commits go directly to `main` and Netlify deploys from there.
 
 **Tech Stack:** Alpine.js v3, plain ES modules, Codehooks.io backend, Co-Authored-By commit attribution.
 
 ---
 
+## Pivot: why the diagnostic step was dropped
+
+The original plan added a temporary `codehooks/routes/debug.js` with a Node `process.on('unhandledRejection')` listener to capture the actual stack trace. The intent was "no fix on a guess" — the user picked diagnose-first so we'd have evidence before patching.
+
+The runtime blocked that approach. `coho deploy -p test-tp2u` failed with `Failed execution on deploy: process.on is not a function`. The codehooks sandbox exposes a shim `process` (it has `.env`, used in `codehooks-js` README examples) but no `.on` method. There's no global error-capture primitive in this runtime — async rejections can't be caught from outside a route handler, only from inside it via try/catch. So a diagnostic route cannot capture an unhandled rejection that fires during another request.
+
+We already have enough evidence to act without the stack trace:
+- 100+ `5 NOT_FOUND: Not found` errors in coho log since 2026-06-09, bursting 5+/sec after every deploy
+- The error clusters on new-email sign-in (the only sign-in path that creates a brand-new `workspaceId`)
+- The single async call in the new-workspace activation path is `realtime.createListener('/sync', { workspaceId })` in `codehooks/routes/data.js:25`
+- `realtime.createListener` is `db.insertOne` against `_event_listeners_sync` (codehooks-js `index.js:286`); on a fresh channel/workspace the underlying collection may not exist yet → `5 NOT_FOUND`
+- The frontend already treats `listenerId: null` as "polling only" with exponential backoff (`shell/api.js:296`)
+
+So the fix branch from the spec (Section 1, Step 3 "Likely") is applied directly. If it doesn't resolve the symptom, the next iteration has the fix's own error log to work from.
+
+The committed `codehooks/routes/debug.js` (commits `f4346c2`, `151eed6`) is removed in the same change that applies the fix; the cleanup task is dropped from the plan.
+
+---
+
 ## File Structure
 
-**New files (transient):**
-- `codehooks/routes/debug.js` — temporary diagnostic route + error middleware, deleted in cleanup task
+**New files:** none.
 
 **Modified files:**
-- `codehooks/index.js` — add `import './routes/debug.js';` (and remove in cleanup)
-- `codehooks/routes/data.js` — likely fix: wrap `realtime.createListener` in try/catch
-- `codehooks/AGENTS.md` — new "Debug routes" subsection under Local Contracts
+- `codehooks/index.js` — remove `import './routes/debug.js';`
+- `codehooks/routes/data.js:22-27` — wrap `realtime.createListener` in try/catch
+- `codehooks/AGENTS.md` — new "Debug routes" subsection under Local Contracts (historical pattern; no current debug route)
 - `index.html` — 4 changes: lines 47 (icon sizes), 48 (icon emojis), 92 + 101 (Capsule → Workspace Capsules)
 - `modules/about/index.js` — 2 changes: lines 20 + 66 (Capsule → Workspace Capsules)
 - `modules/settings/tabs/about.js` — 2 changes: lines 67 + 68 (reset-to-defaults values)
 - `modules/settings/tabs/appearance.js` — 2 changes: lines 3 + 4 (icon size constants)
 
-**Deleted in cleanup:**
-- `codehooks/routes/debug.js`
+**Deleted in this change:** `codehooks/routes/debug.js` (created in `f4346c2`, fixed-up in `151eed6`; runtime doesn't support the chosen capture mechanism).
 
 ---
 
-## Task 1: Add temporary debug route + error middleware
+## Task 1: Apply the fix to `data.js` and remove the dead debug route
 
 **Files:**
-- Create: `codehooks/routes/debug.js`
-- Modify: `codehooks/index.js` (add import line)
+- Modify: `codehooks/routes/data.js:22-27` (wrap createListener in try/catch)
+- Delete: `codehooks/routes/debug.js`
+- Modify: `codehooks/index.js` (remove the debug import)
 
-- [ ] **Step 1: Create `codehooks/routes/debug.js`**
-
-Write the file in full:
-
-```js
-import { app } from 'codehooks-js';
-import { kvSet, kvGet } from '../lib/db.js';
-
-// ─── Debug routes (TEMPORARY — remove after the issue is fixed) ───────────────
-// Captures the most recent unhandled exception into KV so we can read it from
-// the browser. Pattern matches prior debug routes (a3194de, de866a8, a26a195).
-
-const KV_KEY = 'last_error';
-
-// Why process.on, not app.use((err, req, res, next) => ...):
-// The suspect failure is async — `realtime.createListener` is awaited inside a
-// route handler. Even in a fully-Express-compatible framework, async rejections
-// do not auto-route to error middleware; they become unhandled promise
-// rejections unless the handler explicitly calls next(err). So Express-style
-// error middleware would miss the very class of error we're trying to catch.
-// Node's process-level listeners are the only capture guaranteed to fire.
-process.on('unhandledRejection', (err) => {
-  capture('unhandledRejection', err, null);
-});
-process.on('uncaughtException', (err) => {
-  capture('uncaughtException', err, null);
-});
-
-function capture(source, err, req) {
-  const payload = {
-    source,
-    method: req?.method,
-    path: req?.path,
-    query: req?.query,
-    message: err?.message,
-    stack: err?.stack,
-    ts: Date.now(),
-  };
-  kvSet(KV_KEY, payload).catch(() => {});
-  console.error(`[debug] ${source}:`, payload);
-}
-
-app.get('/debug/last-error', async (req, res) => {
-  const last = await kvGet(KV_KEY);
-  res.json(last || { error: 'none' });
-});
-```
-
-- [ ] **Step 2: Add the import to `codehooks/index.js`**
-
-Open `codehooks/index.js`. After the line `import './routes/data.js';` (currently line 20), add:
-
-```js
-import './routes/debug.js';
-```
-
-- [ ] **Step 3: Commit**
-
-```bash
-cd /home/mors/Projects/os-shell2
-git add codehooks/routes/debug.js codehooks/index.js
-git commit -m "Add temp /debug/last-error route to diagnose 5 NOT_FOUND errors
-
-Captures unhandled exceptions to KV so we can read the actual route + stack
-without relying on coho log surfacing async errors. To be removed after the
-underlying issue is fixed.
-
-Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
-```
-
----
-
-## Task 2: Deploy the diagnostic and read the captured error
-
-**Files:** none (deploy only)
-
-- [ ] **Step 1: Pull and deploy**
-
-Per `codehooks/AGENTS.md` "Deploy discipline" — `coho deploy` ships *local* code, not git.
-
-```bash
-cd /home/mors/Projects/os-shell2
-git pull origin main
-coho deploy -p <your-project-name>
-```
-
-- [ ] **Step 2: Verify the route is live**
-
-```bash
-curl "https://test-tp2u.api.codehooks.io/dev/debug/last-error?apikey=$API_KEY"
-```
-
-Expected: `{"error":"none"}` (no errors captured yet, but the route is reachable).
-
-- [ ] **Step 3: Sign in with the brand-new email**
-
-In a browser, open the app, click "Sign in with Google", pick the email that triggered the original failure. Complete the OAuth flow.
-
-- [ ] **Step 4: Immediately read the captured error**
-
-Within 30 seconds of the failed sign-in, run:
-
-```bash
-curl "https://test-tp2u.api.codehooks.io/dev/debug/last-error?apikey=$API_KEY" | python3 -m json.tool
-```
-
-- [ ] **Step 5: Record the result**
-
-The response will have shape `{ method, path, query, message, stack, ts }` or `{ error: 'none' }`. Save the full output to a temp file (e.g. `/tmp/last-error.json`). You will need it in Task 3 to choose the fix.
-
-Expected if the hypothesis was right: the `stack` line points to `codehooks/routes/data.js:25` and `message` is something like "5 NOT_FOUND: Not found".
-
-If the response is `{ error: 'none' }`, the bug did not reproduce on this sign-in — sign in with a different new email and re-curl.
-
----
-
-## Task 3: Implement the fix (likely branch — `realtime.createListener`)
-
-**STOP:** if the captured error from Task 2 has a different `path` or `message` than the likely branch described here, do NOT proceed with this fix. Replan based on the actual evidence. The "Other" branch in the spec (`docs/superpowers/specs/2026-06-12-signin-bug-rebrand-icon-polish-design.md` Section 1 Step 3) covers this case.
-
-**Files:**
-- Modify: `codehooks/routes/data.js:22-27`
-
-- [ ] **Step 1: Wrap `realtime.createListener` in try/catch**
-
-Open `codehooks/routes/data.js`. Find the existing block:
+- [ ] **Step 1: Open `codehooks/routes/data.js`.** The block at lines 22–27 is:
 
 ```js
 app.post('/w/:workspaceId/sse-listener', async (req, res) => {
@@ -181,96 +74,63 @@ app.post('/w/:workspaceId/sse-listener', async (req, res) => {
     const listener = await realtime.createListener('/sync', { workspaceId: req.params.workspaceId });
     res.json({ listenerId: listener._id });
   } catch (err) {
-    // The frontend treats `listenerId: null` as "polling only" and retries with
-    // exponential backoff (see shell/api.js:296). A null listener on a fresh
-    // workspace is non-fatal — the user can still use the app via polling.
+    // createListener calls db.insertOne against the channel's listener
+    // collection. On a brand-new workspace this can fail with 5 NOT_FOUND
+    // (no event-listener collection exists yet for that channel). The
+    // frontend treats listenerId: null as "polling only" (shell/api.js),
+    // so the user can still use the app — just without live cross-tab
+    // sync on the first sign-in to a fresh workspace.
     console.error('[sse-listener] createListener failed, falling back to polling:', err?.message);
     res.json({ listenerId: null });
   }
 });
 ```
 
-- [ ] **Step 2: Commit**
-
-```bash
-cd /home/mors/Projects/os-shell2
-git add codehooks/routes/data.js
-git commit -m "Wrap realtime.createListener in try/catch — return null on failure
-
-The first listener for a brand-new workspaceId sometimes fails with
-5 NOT_FOUND. Frontend already treats null listenerId as 'polling only',
-so the user can still use the app — just without live cross-tab sync
-on a fresh workspace.
-
-Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
-```
-
----
-
-## Task 4: Deploy the fix and verify the bug is gone
-
-**Files:** none (deploy only)
-
-- [ ] **Step 1: Pull and deploy**
-
-```bash
-cd /home/mors/Projects/os-shell2
-git pull origin main
-coho deploy -p <your-project-name>
-```
-
-- [ ] **Step 2: Sign in with the new email a second time**
-
-In a browser, sign in with the same new email from Task 2. The sign-in should complete and the workspace selector / desktop should appear (auto-creating the Personal workspace via `bootstrapSession`).
-
-- [ ] **Step 3: Read the captured error — `ts` should be older than the sign-in from Step 2, OR the response should be `{"error":"none"}`**
-
-```bash
-curl "https://test-tp2u.api.codehooks.io/dev/debug/last-error?apikey=$API_KEY"
-```
-
-If the response is `{ error: 'none' }` — the fix worked, no new error captured. If the response has a `ts` field, compare it to the time of the Step 2 sign-in. If `ts` predates the sign-in, the error is stale (from Task 2) and the fix worked. If `ts` is fresher than the sign-in, the fix did not address the actual cause — STOP, replan.
-
-- [ ] **Step 4: Watch `coho log` for 10 minutes, confirm no new 5 NOT_FOUND**
-
-```bash
-coho log -p <your-project-name> -s <space> | tail -50
-```
-
-Look for any new lines starting with `[error]`. Expected: no new lines containing `5 NOT_FOUND: Not found`.
-
----
-
-## Task 5: Remove the temporary debug route (cleanup)
-
-**Files:**
-- Delete: `codehooks/routes/debug.js`
-- Modify: `codehooks/index.js` (remove the import)
-
-- [ ] **Step 1: Delete the debug route file**
+- [ ] **Step 2: Delete the debug route file**
 
 ```bash
 cd /home/mors/Projects/os-shell2
 rm codehooks/routes/debug.js
 ```
 
-- [ ] **Step 2: Remove the import from `codehooks/index.js`**
+- [ ] **Step 3: Remove the import from `codehooks/index.js`**
 
-Open `codehooks/index.js`. Delete the line `import './routes/debug.js';` (added in Task 1).
+Open `codehooks/index.js`. Delete the line `import './routes/debug.js';`.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 cd /home/mors/Projects/os-shell2
-git add codehooks/routes/debug.js codehooks/index.js
-git commit -m "Remove temp /debug/last-error route after fix ships
+git add codehooks/routes/data.js codehooks/routes/debug.js codehooks/index.js
+git commit -m "Fix sse-listener on fresh workspace; remove unworkable debug route
 
-Cleanup per the debug-routes pattern in codehooks/AGENTS.md.
+The diagnostic was meant to capture the exact stack from realtime.createListener
+on new-workspace sign-in. The codehooks sandbox exposes process.env but not
+process.on, so 'coho deploy' rejected the listener with 'process.on is not
+a function' — no global error capture is available in this runtime.
+
+Strong evidence already exists: 100+ 5 NOT_FOUND errors over 2 days,
+clustering on new-email sign-in (the only path that creates a fresh
+workspaceId); realtime.createListener (codehooks-js index.js:286) is the
+only async call in the new-workspace activation path; the frontend already
+treats listenerId: null as 'polling only' with exponential backoff.
+
+Wrap the call in try/catch and return null listenerId on failure. The user
+can still use the app via polling on first sign-in; cross-tab sync resumes
+on subsequent sign-ins once the listener collection exists.
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 4: Pull and deploy**
+---
+
+## Task 2: Deploy the fix and verify the bug is gone
+
+**Files:** none (deploy only)
+
+- [ ] **Step 1: Pull and deploy**
+
+Per `codehooks/AGENTS.md` "Deploy discipline" — `coho deploy` ships *local* code, not git.
 
 ```bash
 cd /home/mors/Projects/os-shell2
@@ -278,9 +138,25 @@ git pull origin main
 coho deploy -p <your-project-name>
 ```
 
+Expected: deploy succeeds. No `process.on is not a function` error this time (debug route is gone).
+
+- [ ] **Step 2: Sign in with the new email a second time**
+
+In a browser, sign in with the same new email that triggered the original failure. The sign-in should complete and the workspace selector / desktop should appear (auto-creating the Personal workspace via `bootstrapSession`). No "Unhandled Codehook exception" in the browser.
+
+- [ ] **Step 3: Watch `coho log` for 10 minutes**
+
+```bash
+coho log -p <your-project-name> -s <space> | tail -50
+```
+
+Expected: no new `[error]` lines containing `5 NOT_FOUND: Not found` from the `sse-listener` path. (Other 5 NOT_FOUND errors from other sources would still be visible if they exist — the fix only addresses the listener-registration path.)
+
+If a fresh `5 NOT_FOUND` line appears, capture the full log line and the workspaceId it came from. The fix may not be addressing the actual cause; we will iterate.
+
 ---
 
-## Task 6: Rename "Capsule" → "Workspace Capsules" in auth + About
+## Task 3: Rename "Capsule" → "Workspace Capsules" in auth + About
 
 **Files:**
 - Modify: `index.html` (lines 92, 101)
@@ -359,7 +235,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 
 ---
 
-## Task 7: Bump icon sizes [56, 68, 80, 96] → [80, 96, 112, 128]
+## Task 4: Bump icon sizes [56, 68, 80, 96] → [80, 96, 112, 128]
 
 **Files:**
 - Modify: `index.html` (lines 47, 48)
@@ -467,7 +343,7 @@ Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 
 ---
 
-## Task 8: Update `codehooks/AGENTS.md` with Debug routes subsection
+## Task 5: Update `codehooks/AGENTS.md` with Debug routes subsection
 
 **Files:**
 - Modify: `codehooks/AGENTS.md` (add subsection under Local Contracts)
@@ -484,19 +360,20 @@ Insert this block (preserving the existing `##` heading style) just above the "#
 ### Debug routes — temporary, must be removed before merge
 
 The codebase has used temporary `codehooks/routes/debug.js` routes to diagnose
-runtime issues (commits a3194de, de866a8, a26a195, and the 2026-06-12
-signin-bug spec). When adding a debug route:
+runtime issues (commits a3194de, de866a8, a26a195). The 2026-06-12 signin-bug
+attempt to add a fourth was abandoned — see the implementation plan for the
+runtime constraint that blocked it.
 
+When adding a debug route:
 - Put it in a dedicated `routes/debug.js` file, imported by `index.js`.
 - Gate it on `process.env.NODE_ENV !== 'production'` (or similar) so it
   cannot ship to prod.
-- Capture unhandled exceptions via Node's `process.on('unhandledRejection')`
-  and `process.on('uncaughtException')` — NOT Express-style error middleware.
-  Async rejections inside route handlers (the very class of error we expect
-  from `realtime.createListener`) do not reach error middleware unless the
-  handler explicitly calls `next(err)`; Node's process-level listeners are
-  the only capture guaranteed to fire. Persist to KV, not just `console.error`
-  (which can be truncated for async errors).
+- Persist captured state to KV via `kvSet`/`kvGet` (not raw `db.set`/`db.get`
+  — see "KV store" above), not just `console.error`, which can be truncated.
+- Do not assume Node primitives are available — the codehooks runtime is a
+  sandbox where `process.on` does not exist. Capture errors at the route
+  handler level (try/catch) or by calling the suspect function from a probe
+  endpoint, not via global listeners.
 - Remove the file + its import in the same commit that fixes the underlying
   issue. Do not leave debug routes that dump raw session/user data in prod.
 
@@ -510,25 +387,30 @@ cd /home/mors/Projects/os-shell2
 git add codehooks/AGENTS.md
 git commit -m "Document debug-routes pattern in codehooks/AGENTS.md
 
-Fourth time we've added a temp debug.js; codify the pattern so future
-ones follow the same shape and the cleanup contract is explicit.
+Three prior temp debug.js routes (a3194de, de866a8, a26a195); codify the
+pattern so future ones follow the same shape and the cleanup contract is
+explicit. Also note the runtime constraint that blocked the 2026-06-12
+attempt (process.on is not available in the codehooks sandbox).
 
 Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
 ```
 
 ---
 
-## Task 9: Final verification + closeout
+## Task 6: Final verification + closeout
 
 **Files:** none (verification only)
 
-- [ ] **Step 1: Pull and deploy remaining changes (Tasks 6, 7, 8)**
+- [ ] **Step 1: Pull and deploy remaining changes (Tasks 3, 4, 5)**
 
 ```bash
 cd /home/mors/Projects/os-shell2
 git pull origin main
 coho deploy -p <your-project-name>
 ```
+
+Netlify auto-deploys from `main` for the frontend, so the rename and icon sizing
+changes are live immediately on push — no manual Netlify step.
 
 - [ ] **Step 2: Browser-check the rename**
 
@@ -564,17 +446,11 @@ Sign in with a brand-new email that has never signed in before. Expected:
 coho log -p <your-project-name> -s <space> | tail -50
 ```
 
-Expected: no new `[error]` lines containing `5 NOT_FOUND: Not found`.
+Expected: no new `[error]` lines from the `sse-listener` path containing
+`5 NOT_FOUND: Not found`. (Other 5 NOT_FOUND errors from other paths would
+still be visible if they exist; the fix only addresses listener registration.)
 
-- [ ] **Step 6: Verify the debug route is gone**
-
-```bash
-curl "https://test-tp2u.api.codehooks.io/dev/debug/last-error?apikey=$API_KEY"
-```
-
-Expected: a 404 (route no longer exists) or Codehooks' generic 500 (the import was removed, so even errors during boot would not register this route).
-
-- [ ] **Step 7: Run the DOX orphan check**
+- [ ] **Step 6: Run the DOX orphan check**
 
 Per root `AGENTS.md` "No orphans" rule:
 
@@ -589,11 +465,11 @@ done
 
 Expected: no `ORPHAN:` lines. (This task did not add or move any `AGENTS.md` files, so the check is a sanity test that previous spec commits left the index intact.)
 
-- [ ] **Step 8: Report closeout**
+- [ ] **Step 7: Report closeout**
 
 In the final user-facing message, list:
-- Which Task 3 branch was taken (likely vs other)
-- The captured error details (route + stack) from Task 2 — useful for future debugging
+- Which Task 1 branch was taken (only the "likely" branch, since diagnostic was abandoned)
+- The runtime constraint that blocked the diagnostic, for future reference
 - Any AGENTS.md / spec files intentionally left unchanged and why (per root `AGENTS.md` "Closeout" rule)
 
 ---
@@ -601,6 +477,6 @@ In the final user-facing message, list:
 ## Notes
 
 - **Co-Authored-By** lines match recent Claude-authored commits. Remove if the user prefers no attribution on implementation commits.
-- **The "Likely" branch in Task 3 is a guess, not a known.** Task 2 captures the real error. If Task 2 shows a different route, STOP at Task 3 and replan.
 - **All deploys go through Codehooks.** Per `codehooks/AGENTS.md`, the AI build probe `GET /ai/ping` returns `{ build, hasKey, ok }` and can be used to confirm a deploy landed. The `AI_BUILD` string in `codehooks/routes/ai.js:8` is `'2026-06-10-m3-worker'`; it does not need to be bumped for this plan (no ai.js changes).
 - **Netlify is auto-deployed from `main`.** Each commit in this plan triggers a Netlify build. No manual Netlify deploy step.
+- **Iterate if the fix doesn't resolve the symptom.** If Task 2 Step 3 still shows `5 NOT_FOUND` from `sse-listener`, the captured error message from `[sse-listener] createListener failed, falling back to polling: ...` is the new evidence to work from.

@@ -16,39 +16,39 @@ The coho log shows the bug is not isolated to the new sign-in: 100+ `5 NOT_FOUND
 
 ## Approach
 
-### 1. Sign-in bug — diagnose first, fix second
+### 1. Sign-in bug — apply the likely fix directly
 
-The error message in coho log does not identify which route threw. We have a strong guess (`realtime.createListener` for a brand-new workspaceId in `codehooks/routes/data.js:25` is not wrapped in try/catch), but we should not fix on a guess.
+The error message in coho log does not identify which route threw. We have a strong guess (`realtime.createListener` for a brand-new workspaceId in `codehooks/routes/data.js:25` is not wrapped in try/catch), but the original plan was to add a temporary diagnostic route to confirm before patching.
 
-**Step 1 — add a temporary capture route + process-level error listener.**
+**The diagnostic was abandoned before deploy.** The codehooks runtime sandbox does not expose Node's `process.on` — `coho deploy` failed with `process.on is not a function`. There is no global error-capture primitive in this runtime, so a probe route cannot catch an unhandled rejection that fires during another request. (The committed `codehooks/routes/debug.js` in commits `f4346c2` + `151eed6` is removed in the same change that applies the fix.)
 
-New file `codehooks/routes/debug.js`, imported by `codehooks/index.js`. It registers:
+**Step 1 — apply the likely fix.**
 
-- Node's `process.on('unhandledRejection')` and `process.on('uncaughtException')` listeners that stash the most recent error into a KV record under `last_error` with shape `{ source, message, stack, ts }`. **Why not Express-style error middleware (`app.use((err, req, res, next) => ...)`)?** The suspect failure is async — `realtime.createListener` is awaited inside a route handler. Even in a fully-Express-compatible framework, async rejections do not auto-route to error middleware; they become unhandled promise rejections unless the handler explicitly calls `next(err)`. Node's process-level listeners are the only capture guaranteed to fire.
-- `GET /debug/last-error` — returns the stored record (or `{ error: 'none' }` if nothing has been captured). Read-after-triggers pattern, like the prior `a3194de` / `de866a8` / `a26a195` debug routes.
+Wrap the suspect call in try/catch in `codehooks/routes/data.js:22-27`:
 
-The listener uses `console.error` first (cheap, surfaces in `coho log` if it works) and persists to KV as the source of truth (reliable even if coho log truncates async errors).
-
-**Step 2 — trigger and read.**
-
-User signs in with the new email. Immediately afterwards, the user (or we) `curl` the debug route:
-
-```bash
-curl "https://test-tp2u.api.codehooks.io/dev/debug/last-error?apikey=..."
+```js
+app.post('/w/:workspaceId/sse-listener', async (req, res) => {
+  const authUser = await getSessionUser(req);
+  if (!authUser) { sendUnauth(res); return; }
+  try {
+    const listener = await realtime.createListener('/sync', { workspaceId: req.params.workspaceId });
+    res.json({ listenerId: listener._id });
+  } catch (err) {
+    console.error('[sse-listener] createListener failed, falling back to polling:', err?.message);
+    res.json({ listenerId: null });
+  }
+});
 ```
 
-The response identifies the failing route + stack. If the error is what we guessed (`realtime.createListener`), the stack will point to `codehooks/routes/data.js:25`. If it's elsewhere, we design the fix from the actual evidence.
+The frontend already treats a null listener as "polling only" (`shell/api.js:296-298` retries with exponential backoff). No frontend change needed.
 
-**Step 3 — fix.**
+**Step 2 — verify.**
 
-Branch on what the diagnostic returns:
+Sign in with the new email again. Expected: sign-in completes, no "Unhandled Codehook exception" in the browser, the Personal workspace auto-creates, the user lands on the desktop. `coho log` shows no new `5 NOT_FOUND: Not found` lines from the `sse-listener` path over the next 10 minutes.
 
-- *Likely: `realtime.createListener` throws on a fresh workspaceId.* Wrap the call in try/catch, return `{ listenerId: null }` on failure. The frontend already treats a null listener as "polling only" (`shell/api.js:296-298` retries with exponential backoff). No frontend change needed.
-- *Other.* Design the fix in a follow-up brainstorm once we know the actual cause. Do not speculatively patch routes that the diagnostic did not implicate.
+**Step 3 — iterate if the symptom persists.**
 
-**Step 4 — cleanup.**
-
-Remove `codehooks/routes/debug.js` and its import in `codehooks/index.js` after the fix ships and is confirmed working. The three prior debug routes all followed this pattern (a3194de, de866a8, a26a195) — temporary, removed, not left in prod.
+If the bug continues, the captured error message from `[sse-listener] createListener failed, falling back to polling: ...` in the new logs is the next round of evidence. The fix may need to address a deeper cause (e.g., the listener collection's initialization on a brand-new channel) rather than the symptom.
 
 ### 2. Rename "Capsule" → "Workspace Capsules" (auth + About only)
 
@@ -93,27 +93,26 @@ Labels (`XSmall / Small / Medium / Large`) and the 4-step slider stay the same �
 
 ## AGENTS.md updates
 
-One targeted update to `codehooks/AGENTS.md` — add a new "Debug routes" subsection under "Local Contracts" (where the other gotcha-rules live):
-
-> The codebase has used temporary `codehooks/routes/debug.js` routes to diagnose runtime issues (commits a3194de, de866a8, a26a195, and 2026-06-12 signin-bug spec). When adding a debug route: put it in a dedicated `routes/debug.js` file, gate it on `process.env.NODE_ENV !== 'production'` or similar so it cannot ship to prod, and remove it in the same commit that fixes the underlying issue. Do not leave debug routes that dump raw session/user data in production.
+One targeted update to `codehooks/AGENTS.md` — add a new "Debug routes" subsection under "Local Contracts" (where the other gotcha-rules live). Codifies the pattern from the three prior successful temp debug routes (a3194de, de866a8, a26a195) and records the runtime constraint that blocked the 2026-06-12 attempt (`process.on` is not available in the codehooks sandbox). Includes a guidance bullet that future debug routes should capture errors at the route-handler level (try/catch) or via a probe endpoint that calls the suspect function, not via global listeners.
 
 No other doc changes. `shell/AGENTS.md`, `modules/AGENTS.md`, and root `AGENTS.md` do not reference the icon-sizing constants or the "Capsule" brand name.
 
 ## Verification
 
-- **Bug (diagnose):** after Step 1 deploy, sign in with a brand-new email, then `curl /debug/last-error` returns `{ route, method, stack, ts }` for the actual failing handler.
-- **Bug (fix):** after Step 3 deploy, sign in with the new email a second time. `coho log -p <project> -s <space>` shows no new `5 NOT_FOUND` lines in the next 10 minutes. `curl /debug/last-error` returns `{ error: 'none' }`.
+- **Bug (fix):** after the fix deploys, sign in with the new email. The sign-in completes without "Unhandled Codehook exception" in the browser. The Personal workspace auto-creates, the user lands on the desktop. `coho log -p <project> -s <space>` shows no new `5 NOT_FOUND: Not found` lines from the `sse-listener` path over the next 10 minutes.
+- **Bug (iterate):** if a fresh `5 NOT_FOUND` from `sse-listener` still appears, the new `[sse-listener] createListener failed, falling back to polling: ...` log line is the next round of evidence — the cause is deeper than a missing try/catch.
 - **Naming:** deploy, visit `/` (loading + login screens) and open the About module. Both show "Workspace Capsules". Browser tab still shows "Capsule". Settings > About and onboarding unchanged.
 - **Icon sizes:** reload `index.html`, observe default desktop icons are noticeably larger. Open Settings > Appearance, drag the Icon Size slider, confirm all four positions render at the new sizes. Hit "Reset Appearance" in About tab, confirm desktop reverts to `112px` / `3rem` emoji.
-- **Cleanup:** final commit removes `codehooks/routes/debug.js` and its import in `codehooks/index.js`. Deploy. `coho log` shows no errors.
+- **Cleanup:** `codehooks/routes/debug.js` and its import in `codehooks/index.js` are removed in the same commit that applies the bug fix. Final deploy confirms the file is gone and no `process.on` deploy error occurs.
 
 ## Out of scope
 
 - Renaming the data model (`workspaces` → `workspace_capsules`, etc.) — explicitly not requested.
 - Changing the product name in the browser tab title, onboarding, or AI prompt — kept as "Capsule" short form.
 - Touching `build/` Tailwind config — unactivated, per `AGENTS.md` "Stack summary".
-- Refactoring `bootstrapSession` race conditions or other latent issues — addressed only if the diagnostic implicates them.
+- Refactoring `bootstrapSession` race conditions or other latent issues — addressed only if the fix does not resolve the symptom.
+- Adding a different diagnostic mechanism (probe endpoint, custom try/catch wrapper, etc.) — the next iteration's evidence is the `[sse-listener] createListener failed, falling back to polling: ...` log line the fix itself emits.
 
 ## Open questions
 
-None at design time. The fix for the sign-in bug is intentionally left as a placeholder (Section 1, Step 3) because we are not designing a fix for a guessed cause; the diagnostic determines the fix.
+None at design time. The fix for the sign-in bug is applied on the strong evidence already in hand (coho log pattern + new-workspace sign-in correlation + `createListener` is the only async call in the new-workspace activation path). If the symptom persists after the fix deploys, the next iteration has the fix's own error log to work from.

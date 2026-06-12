@@ -97,6 +97,13 @@ guarantees `_load()` (which sets `this._state`) completes before `_render()`
 is called. Writing your own `connectedCallback` that calls `_render()` directly
 crashes with `TypeError: this._state is null`.
 
+> **Legacy reality (2026-06 audit):** 9 modules predate the base class and extend
+> raw `HTMLElement`: `notes`, `emoji`, `files`, `chat`, `settings`, `about`,
+> `builder`, `read`, and — despite being generators — `tier` and `folder`. Each
+> hand-rolls shadow DOM setup and a theme MutationObserver. They work; do NOT
+> refactor them opportunistically. The rule applies to **new** modules and to any
+> legacy module receiving a substantial rewrite.
+
 Generator modules extend `AppModuleBase` from `shell/module-base.js`. Ordered steps:
 
 1. Shadow DOM + styles (`modules/{id}/styles.css` + `setup-dialog.css`)
@@ -257,6 +264,64 @@ collection. The rewrite + blob URL creation must happen here too.
 `modules/projects/index.js` imports from `modules/data/api.js`. This is the **only**
 inter-module import in the codebase. Do not model new modules on this pattern — all
 others must be fully isolated, communicating only through `el.api` and `shell/api.js`.
+
+---
+
+### Isolation contract — what counts as a violation (2026-06 audit)
+
+A full audit of all 21 modules established these rules. They separate true
+violations from patterns that look wrong but are correct — past audits produced
+false positives on the latter.
+
+**Hard rules (violations):**
+
+1. **No direct `localStorage`** — all persistence via `getData`/`setData` in
+   `shell/api.js`. *Exception:* `settings/tabs/*` manage shell-global state
+   (appearance keys `os:*`, auth session `os-session`/`os-workspace`) — that IS
+   their job, not module data.
+2. **Never `windowId` in a data key** — not even as a fallback. A fallback chain
+   like `instanceId || windowId` silently degrades to per-launch state.
+3. **Read the os store via `this.api.store`**, not `window.Alpine.store('os')`.
+   *Exception:* the **auth** store is only reachable via `window.Alpine.store('auth')`
+   — `el.api.store` exposes the os store only.
+4. **Append nodes only inside your shadow root.** `document.createElement()` itself
+   is fine — what matters is where the node is appended. (Drag ghosts in load/roadmap
+   are appended to the shadow wrapper: correct.)
+5. **Escape all user data in `innerHTML`** via `_esc()`/`esc()`.
+
+**Patterns that are CORRECT — do not "fix" these:**
+
+- **In-place mutation of module-local `this._state`** followed immediately by
+  `_save()` + `_render()`. The "replace refs, never mutate" contract applies to the
+  **Alpine store** (it's a reactive proxy); `this._state` is plain module state and
+  modules fully re-render from it. Half the modules (list, kanban, rocks, gantt,
+  grid, tier, l10) use `push`/`splice`/property assignment this way — it is fine.
+- **Scalar assignment on top-level Alpine store props** (e.g. folder's drag
+  handshake: `store.dragInstanceId = null`). Alpine proxies detect property
+  assignment; the contract forbids mutating *nested objects/arrays* in place, not
+  assigning top-level values.
+- **Theme MutationObserver on `document.documentElement`** in legacy raw-HTMLElement
+  modules — read-only global access for dark-mode sync. (AppModuleBase subclasses
+  get this free via `Alpine.effect`.)
+- **`window.addEventListener('os:instances-changed', ...)`** — the documented shell
+  event, dispatched on `window` by design.
+- **Lazy CDN library loading via `document.head` script injection with a `window._lib`
+  cache** (`files/index.js:347`, mammoth/XLSX). UMD libraries cannot load inside a
+  shadow root; the window cache prevents double-loading across instances. Sanctioned,
+  but keep it to lazy, on-demand loads of large parsers.
+
+**Known deviations (legacy debt — fix when touching the file, don't churn):**
+
+| File:line | Issue |
+|---|---|
+| `tier/index.js:30` | `windowId` fallback in `_appId` chain — latent fresh-state bug; drop the fallback |
+| `chat/index.js:40` | Direct `localStorage.getItem('os-user')` for identity — should come through the shell |
+| `data/index.js:63,66`, `load/index.js:155,160` | `window.Alpine.store('os')` where `this.api.store` is available |
+| `tier`, `folder` | Generators on raw `HTMLElement` instead of `AppModuleBase` |
+
+**Audit hygiene:** verify line-level claims with grep before recording them — the
+2026-06 audit's subagents produced several false positives (drag-ghost appends,
+`_state` mutation "violations") that died on inspection.
 
 ---
 

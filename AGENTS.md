@@ -26,6 +26,11 @@ this.apps[id] = manifest;
 this.instances.push(newItem);
 ```
 
+Scope: this applies to the **Alpine store** (`shell/store-os.js`, anything reached
+via `el.api.store`). Module-local `this._state` is plain data — in-place mutation
+followed by `_save()` + `_render()` is the established module pattern and is fine.
+See "Isolation contract" in `modules/AGENTS.md`.
+
 ### Script load order in index.html
 
 The `alpine:init` listener and `initStore()` call must appear in `<head>` **before**

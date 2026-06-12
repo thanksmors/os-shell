@@ -30,11 +30,16 @@ export async function bootstrapSession(gData) {
 
   const userWs = await dbGet('user_workspaces', userId) || { workspaceIds: [] };
   if (!userWs.workspaceIds?.length) {
-    const workspaceId = genId('ws');
-    await dbInsert('workspaces', { appId: workspaceId, workspaceId, name: 'Personal', icon: '🏠', ownerId: userId, createdAt: Date.now() });
-    const membersDoc = { workspaceId, members: [{ userId, role: 'owner', name: name || email, email, picture: picture || '', addedAt: Date.now() }] };
-    await dbUpsert('ws_members', workspaceId, membersDoc);
-    await dbUpsert('user_workspaces', userId, { userId, workspaceIds: [workspaceId] });
+    try {
+      const workspaceId = genId('ws');
+      await dbInsert('workspaces', { appId: workspaceId, workspaceId, name: 'My Workspace', icon: '🏢', ownerId: userId, createdAt: Date.now() });
+      const membersDoc = { workspaceId, members: [{ userId, role: 'owner', name: name || email, email, picture: picture || '', addedAt: Date.now() }] };
+      await dbUpsert('ws_members', workspaceId, membersDoc);
+      await dbUpsert('user_workspaces', userId, { userId, workspaceIds: [workspaceId] });
+    } catch(e) {
+      console.error('[bootstrapSession] auto-workspace creation failed for', userId, e);
+      // Non-fatal: user will see an empty workspace list and can create one manually.
+    }
   }
 
   return { sessionToken, userId, name: name || email, email, picture: picture || '' };

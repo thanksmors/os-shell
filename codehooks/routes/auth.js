@@ -58,7 +58,14 @@ app.get('/auth/google/callback', async (req, res) => {
   const gData = await verifyGoogleIdToken(tokens.id_token);
   if (!gData) { back('verify'); return; }
 
-  const { sessionToken } = await bootstrapSession(gData);
+  let sessionToken;
+  try {
+    ({ sessionToken } = await bootstrapSession(gData));
+  } catch(e) {
+    console.error('[auth/callback] bootstrapSession failed:', e);
+    back('session_error');
+    return;
+  }
   back(null, sessionToken);
 });
 

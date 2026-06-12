@@ -511,6 +511,17 @@
         </div>
       </template>
 
+      <!-- ODVI ecosystem apps (external) -->
+      <div class="os-sm-label" x-show="!searchQuery">ODVI Apps</div>
+      <div class="os-launcher-grid" x-show="!searchQuery">
+        <template x-for="app in ($store.os ? $store.os.odviApps.filter(a => a.id !== 'spaces') : [])" :key="'odvi-'+app.id">
+          <button class="os-app-tile os-odvi-tile" :title="app.desc" @click="window.open(app.url, '_blank'); launcherOpen = false;">
+            <span class="os-app-tile-icon" x-text="app.icon"></span>
+            <span class="os-app-tile-label" x-text="app.name"></span>
+          </button>
+        </template>
+      </div>
+
       <!-- All apps -->
       <div class="os-sm-label" x-show="!searchQuery">All Apps</div>
       <div class="os-launcher-grid">
@@ -589,7 +600,20 @@
   >
     <div
       class="os-onboarding-panel"
-      x-data="{ slide: 0, showAlways: false }"
+      x-data="{
+        slide: 0,
+        showAlways: false,
+        hoverFeat: null,
+        hoverApp: null,
+        feats: [
+          { icon: '📂', name: 'Projects Hub', desc: 'Milestones, issues, action items, decisions, and docs per project.' },
+          { icon: '🗺️', name: 'Roadmap', desc: 'Milestone timelines across all projects at once.' },
+          { icon: '📊', name: 'Load', desc: 'Balance your team\'s workload across projects.' },
+          { icon: '🔧', name: 'Build App', desc: 'Generate custom AI-powered tools with a prompt.' },
+          { icon: '📁', name: 'Files', desc: 'Shared document storage for the workspace.' },
+          { icon: '💬', name: 'Chat', desc: 'Team messaging with channels and unread badges.' },
+        ],
+      }"
       x-transition:enter="transition duration-250 ease-out"
       x-transition:enter-start="opacity-0 scale-95"
       x-transition:enter-end="opacity-100 scale-100"
@@ -598,29 +622,44 @@
       <div class="os-onboarding-slide" x-show="slide === 0">
         <div class="os-ob-icon">🪐</div>
         <h2 class="os-ob-title">Welcome to ODVI Spaces</h2>
-        <p class="os-ob-body">A shared workspace for your team. Everything in one place — projects, roadmaps, workload, files, and chat.</p>
+        <p class="os-ob-body">A shared workspace for your team — part of the ODVI apps ecosystem. Everything in one place:</p>
+        <div class="os-ob-feat-row">
+          <template x-for="f in feats" :key="f.name">
+            <div class="os-ob-feat" @mouseenter="hoverFeat = f" @mouseleave="hoverFeat = null">
+              <span class="os-ob-feat-icon" x-text="f.icon"></span>
+              <span class="os-ob-feat-name" x-text="f.name"></span>
+            </div>
+          </template>
+        </div>
+        <div class="os-ob-hover-info">
+          <template x-if="hoverFeat"><span><strong x-text="hoverFeat.name"></strong> — <span x-text="hoverFeat.desc"></span></span></template>
+          <template x-if="!hoverFeat"><span class="os-ob-hover-hint">Hover an icon to learn more</span></template>
+        </div>
       </div>
       <div class="os-onboarding-slide" x-show="slide === 1">
-        <div class="os-ob-icon">📂 🗺️</div>
-        <h2 class="os-ob-title">Plan &amp; Track</h2>
-        <p class="os-ob-body"><strong>Projects Hub</strong> covers milestones, issues, action items, decisions, and docs per project.<br><br><strong>Roadmap</strong> visualises milestone timelines across all projects at once.</p>
+        <div class="os-ob-icon">🧩</div>
+        <h2 class="os-ob-title">The ODVI Ecosystem</h2>
+        <p class="os-ob-body">Spaces is one of a family of ODVI apps. Click any to open it.</p>
+        <div class="os-ob-feat-row">
+          <template x-for="app in ($store.os ? $store.os.odviApps : [])" :key="app.id">
+            <div
+              class="os-ob-feat"
+              :class="{ 'os-ob-feat--self': app.id === 'spaces' }"
+              @mouseenter="hoverApp = app" @mouseleave="hoverApp = null"
+              @click="app.id !== 'spaces' && window.open(app.url, '_blank')"
+            >
+              <span class="os-ob-feat-icon" x-text="app.icon"></span>
+              <span class="os-ob-feat-name" x-text="app.name"></span>
+              <span class="os-ob-feat-badge" x-show="app.badge" x-text="app.badge"></span>
+            </div>
+          </template>
+        </div>
+        <div class="os-ob-hover-info">
+          <template x-if="hoverApp"><span><strong x-text="hoverApp.name"></strong> — <span x-text="hoverApp.desc"></span></span></template>
+          <template x-if="!hoverApp"><span class="os-ob-hover-hint">Hover an icon to learn more · click to open</span></template>
+        </div>
       </div>
       <div class="os-onboarding-slide" x-show="slide === 2">
-        <div class="os-ob-icon">📊 🔧</div>
-        <h2 class="os-ob-title">Manage &amp; Build</h2>
-        <p class="os-ob-body"><strong>Load Management</strong> balances your team's workload across projects at a glance.<br><br><strong>Build App</strong> lets you generate custom AI-powered tools for your team with a single prompt.</p>
-      </div>
-      <div class="os-onboarding-slide" x-show="slide === 3">
-        <div class="os-ob-icon">📁 💬</div>
-        <h2 class="os-ob-title">Files &amp; Chat</h2>
-        <p class="os-ob-body"><strong>Files</strong> gives your team shared document storage in the workspace.<br><br><strong>Chat</strong> provides instant team messaging with channels, history, and unread badges.</p>
-      </div>
-      <div class="os-onboarding-slide" x-show="slide === 4">
-        <div class="os-ob-icon">🏢</div>
-        <h2 class="os-ob-title">Workspaces &amp; Invites</h2>
-        <p class="os-ob-body">Invite teammates via a shareable link from the workspace settings.<br><br>Switch between workspaces anytime from the taskbar. Every workspace has its own data and members.</p>
-      </div>
-      <div class="os-onboarding-slide" x-show="slide === 5">
         <div class="os-ob-icon">⌨️</div>
         <h2 class="os-ob-title">Pro Tips</h2>
         <p class="os-ob-body">
@@ -635,14 +674,14 @@
           <input type="checkbox" x-model="showAlways"> Show on startup
         </label>
         <div class="os-ob-dots">
-          <template x-for="i in [0,1,2,3,4,5]" :key="i">
+          <template x-for="i in [0,1,2]" :key="i">
             <span class="os-ob-dot" :class="{ active: slide === i }" @click="slide = i"></span>
           </template>
         </div>
         <button
           class="os-ob-next-btn"
-          @click="slide < 5 ? slide++ : $store.os.closeOnboarding(showAlways)"
-          x-text="slide < 5 ? 'Next →' : 'Get Started'"
+          @click="slide < 2 ? slide++ : $store.os.closeOnboarding(showAlways)"
+          x-text="slide < 2 ? 'Next →' : 'Get Started'"
         ></button>
       </div>
     </div>

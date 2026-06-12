@@ -840,3 +840,70 @@
 }
 .os-ob-next-btn:hover { filter: brightness(1.12); }
 .os-ob-next-btn:active { transform: scale(0.97); }
+
+/* Onboarding feature / ecosystem icon rows */
+.os-ob-feat-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.os-ob-feat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 6px;
+  width: 64px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+.os-ob-feat:hover {
+  background: rgba(59,130,246,0.08);
+  transform: translateY(-2px);
+}
+.dark .os-ob-feat:hover { background: rgba(255,255,255,0.07); }
+.os-ob-feat--self { cursor: default; }
+.os-ob-feat-icon {
+  font-size: 1.75rem;
+  line-height: 1;
+}
+.os-ob-feat-name {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #374151;
+  text-align: center;
+  line-height: 1.2;
+}
+.dark .os-ob-feat-name { color: #d1d5db; }
+.os-ob-feat-badge {
+  font-size: 0.55rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: rgba(59,130,246,0.12);
+  color: var(--os-accent);
+}
+.os-ob-hover-info {
+  min-height: 3em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #6b7280;
+  max-width: 400px;
+  margin-top: 4px;
+}
+.dark .os-ob-hover-info { color: #9ca3af; }
+.os-ob-hover-info strong { color: #374151; }
+.dark .os-ob-hover-info strong { color: #e5e7eb; }
+.os-ob-hover-hint { opacity: 0.55; font-style: italic; }
+
+/* Start menu ODVI ecosystem tiles — external-link hint */
+.os-odvi-tile .os-app-tile-label::after { content: ' ↗'; opacity: 0.5; }

@@ -1,6 +1,7 @@
 import { motion, spring, stagger } from '/shell/motion.js';
 import { iconUrl } from './icon.js';
 import { getInstances, saveInstances, subscribe, getData, deleteData } from './api.js';
+import { ODVI_APPS } from './odvi-apps.js';
 
 export function registerOsStore() {
   Alpine.store('os', {
@@ -24,6 +25,7 @@ export function registerOsStore() {
     recentApps: JSON.parse(localStorage.getItem('os:recent-apps') || '[]'),
     hiddenApps: JSON.parse(localStorage.getItem('os:hidden-apps') ??
       (localStorage.setItem('os:hidden-apps', '["data"]'), '["data"]')),
+    odviApps: ODVI_APPS,
 
     init() {
       // keep <html class="dark"> in sync with reactive theme, and persist it

@@ -674,17 +674,7 @@
       x-transition:enter-end="opacity-100 scale-100"
       @click.stop
     >
-      <!-- Hero band — space window with CSS starfield, icon/logo changes per slide -->
-      <div class="os-ob-hero">
-        <template x-if="slide === 0">
-          <saturn-logo class="os-ob-hero-saturn"></saturn-logo>
-        </template>
-        <template x-if="slide !== 0">
-          <span class="os-ob-hero-icon" x-text="slide === 1 ? '🧩' : '⌨️'"></span>
-        </template>
-      </div>
-
-      <div class="os-onboarding-slide" x-show="slide === 0"
+      <div class="os-onboarding-slide" x-show="slide === 1"
         x-transition:enter="transition duration-200 ease-out"
         x-transition:enter-start="opacity-0 translate-y-1"
         x-transition:enter-end="opacity-100 translate-y-0"
@@ -704,7 +694,7 @@
           <template x-if="!hoverFeat"><span class="os-ob-hover-hint">Hover an icon to learn more</span></template>
         </div>
       </div>
-      <div class="os-onboarding-slide" x-show="slide === 1"
+      <div class="os-onboarding-slide" x-show="slide === 0"
         x-transition:enter="transition duration-200 ease-out"
         x-transition:enter-start="opacity-0 translate-y-1"
         x-transition:enter-end="opacity-100 translate-y-0"
@@ -746,7 +736,7 @@
           <span class="os-ob-tip">Drag desktop icons to reorder them</span>
         </p>
       </div>
-      <p class="os-ob-trivia" x-text="trivia[triviaIdx]"></p>
+      <p class="os-ob-trivia"><span class="os-ob-trivia-tag">Space Trivia</span> <span x-text="trivia[triviaIdx]"></span></p>
       <div class="os-onboarding-footer">
         <label class="os-ob-check">
           <input type="checkbox" x-model="showAlways"> Show on startup

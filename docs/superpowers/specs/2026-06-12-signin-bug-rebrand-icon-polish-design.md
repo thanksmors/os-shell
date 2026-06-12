@@ -48,7 +48,7 @@ Branch on what the diagnostic returns:
 
 **Step 4 — cleanup.**
 
-Remove `codehooks/routes/debug.js` and its import in `codehooks/index.js` after the fix ships and is confirmed working. The four prior debug routes all followed this pattern — temporary, removed, not left in prod.
+Remove `codehooks/routes/debug.js` and its import in `codehooks/index.js` after the fix ships and is confirmed working. The three prior debug routes all followed this pattern (a3194de, de866a8, a26a195) — temporary, removed, not left in prod.
 
 ### 2. Rename "Capsule" → "Workspace Capsules" (auth + About only)
 
@@ -83,8 +83,9 @@ Four values shift up in two files. Emoji sizes scale proportionally to keep the 
 | `modules/settings/tabs/appearance.js` | 3 | `const ICON_SIZES   = [56, 68, 80, 96];` | `const ICON_SIZES   = [80, 96, 112, 128];` |
 | `modules/settings/tabs/appearance.js` | 4 | `const ICON_EMOJIS  = ['1.5rem', '1.75rem', '2rem', '2.5rem'];` | `const ICON_EMOJIS  = ['2.125rem', '2.5rem', '3rem', '3.375rem'];` |
 | `modules/settings/tabs/about.js` | 67 | `'--os-icon-size', '80px')` (reset-to-defaults) | `'--os-icon-size', '112px')` |
+| `modules/settings/tabs/about.js` | 68 | `'--os-icon-emoji', '2rem')` (reset-to-defaults) | `'--os-icon-emoji', '3rem')` |
 
-The `about.js` reset-to-defaults change matters: the "Reset Appearance" button previously restored to `80px` (the old Medium). With the new sizes, `80px` is now Small. The reset should land on Medium to match the slider's default index (index 2 → `112px`). Same for emoji: reset to `3rem` (was `2rem`).
+The `about.js` reset-to-defaults changes matter: the "Reset Appearance" button previously restored to `80px` / `2rem` (the old Medium). With the new sizes, those values are now Small. The reset must land on Medium to match the slider's default index (index 2 → `112px` / `3rem`), otherwise the reset button silently downgrades the user's icons.
 
 `--os-icon-size` and `--os-icon-emoji` CSS variable defaults in `shell/css/shell.css:3-4` stay at `80px` / `2rem` — those are pre-paint fallbacks. The `index.html` inline init script always runs first and sets the real values, so the CSS defaults only matter if the inline script is skipped (e.g. older browsers or a JS error). The defaults are intentionally not bumped to avoid inflating the unstyled state.
 
@@ -92,7 +93,7 @@ Labels (`XSmall / Small / Medium / Large`) and the 4-step slider stay the same �
 
 ## AGENTS.md updates
 
-One targeted update to `codehooks/AGENTS.md` under "Deploy discipline" (or a new "Debug routes" subsection):
+One targeted update to `codehooks/AGENTS.md` — add a new "Debug routes" subsection under "Local Contracts" (where the other gotcha-rules live):
 
 > The codebase has used temporary `codehooks/routes/debug.js` routes to diagnose runtime issues (commits a3194de, de866a8, a26a195, and 2026-06-12 signin-bug spec). When adding a debug route: put it in a dedicated `routes/debug.js` file, gate it on `process.env.NODE_ENV !== 'production'` or similar so it cannot ship to prod, and remove it in the same commit that fixes the underlying issue. Do not leave debug routes that dump raw session/user data in production.
 

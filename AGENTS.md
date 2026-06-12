@@ -5,10 +5,72 @@ persistent desktop icons, and pluggable app modules. Stack: Alpine.js v3, Web
 Components + Shadow DOM, plain ES modules, Netlify deployment, optional Codehooks
 cloud backend.
 
+This file is the root contract. `CLAUDE.md` imports it (`@AGENTS.md`) — never
+duplicate rules between the two. All `AGENTS.md` files in this repo form the DOX
+hierarchy defined below.
+
 ## Ownership
 
 Solo project. All changes commit directly to `main`. No feature branches — Netlify
 deploys from `main`; branches make changes invisible until merged.
+
+## Precedence
+
+1. Direct user instructions in the current session
+2. The nearest `AGENTS.md` for local work details
+3. Parent `AGENTS.md` files up to this root for repo-wide rules
+4. No child doc may weaken the Behavioral Core or DOX rules below
+
+## Behavioral Core
+
+Applies to all work in all subtrees. Biases toward caution over speed; use judgment
+on trivial tasks.
+
+- **Think before coding.** State assumptions explicitly; if uncertain, ask. Present
+  competing interpretations instead of picking silently. If a simpler approach
+  exists, say so — push back when warranted.
+- **Simplicity first.** Minimum code that solves the problem. No unrequested
+  features, abstractions, configurability, or error handling for impossible cases.
+- **Surgical changes.** Touch only what the request requires; match existing style.
+  Don't refactor or "improve" adjacent code. Remove only orphans your own change
+  created; mention pre-existing dead code, don't delete it. Exception: inside
+  `AGENTS.md` files, stale or contradictory text must be deleted immediately.
+- **Goal-driven execution.** Turn tasks into verifiable goals (failing test → make
+  it pass). For multi-step work, state a brief plan with a verification per step.
+
+## DOX: Documentation Governance
+
+`AGENTS.md` files are binding contracts for their subtrees.
+
+**Read before editing.** Walk root → each target path, reading every `AGENTS.md` on
+the route. Nearest doc is the local contract; re-read the chain in the current
+session — don't rely on memory.
+
+**DOX pass after editing.** Before closing any task, update the closest owning
+`AGENTS.md` if the change affects purpose, scope, contracts, workflows, constraints,
+artifacts, user preferences, or any `AGENTS.md` index. Update parents when structure
+or the child index changes; update children when parent changes alter local rules.
+Pure code edits that change no contract leave docs unchanged — say so at closeout.
+
+**Child docs.** Create one only when a folder is a durable boundary with its own
+rules — never speculatively. Section order: Purpose, Ownership, Local Contracts,
+Work Guidance, Verification, Child DOX Index. A child doc and its parent index entry
+are one atomic unit — create, move, or delete them in the same change.
+
+**No orphans.** Every `AGENTS.md` except this root must appear in its nearest
+ancestor doc's Child DOX Index. Run at closeout whenever any `AGENTS.md` changed:
+
+```bash
+for f in $(find . -mindepth 2 -name AGENTS.md -not -path '*/node_modules/*' -not -path '*/.git/*'); do
+  d=$(dirname "$f"); p=$(dirname "$d")
+  while [ ! -f "$p/AGENTS.md" ] && [ "$p" != "." ]; do p=$(dirname "$p"); done
+  grep -q "$d" "$p/AGENTS.md" 2>/dev/null || echo "ORPHAN: $f not indexed in $p/AGENTS.md"
+done
+```
+
+**Closeout.** Re-check changed paths against the DOX chain → update owning docs →
+refresh affected indexes → run orphan check if docs changed → run verification →
+report docs intentionally left unchanged and why.
 
 ## Local Contracts
 

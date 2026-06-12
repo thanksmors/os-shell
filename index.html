@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Alpine OS Shell</title>
+  <title>ODVI Spaces</title>
   <link rel="stylesheet" href="/shell/css/utils.css" />
   <link rel="stylesheet" href="/shell/css/shell.css" />
   <link rel="stylesheet" href="/shell/css/auth.css" />
@@ -33,6 +33,71 @@
     }
   </script>
 
+  <!-- Restore persisted appearance settings before first paint -->
+  <script>
+    (function() {
+      var sizes = ['87.5%','93.75%','100%','112.5%'];
+      var idx = parseInt(localStorage.getItem('os:font-size') ?? '2', 10);
+      if (idx >= 0 && idx < 4) document.documentElement.style.fontSize = sizes[idx];
+      var fonts = { system: 'system-ui,-apple-system,sans-serif', serif: 'Georgia,serif', mono: 'ui-monospace,monospace' };
+      var fam = localStorage.getItem('os:font-family');
+      if (fam && fonts[fam]) document.documentElement.style.fontFamily = fonts[fam];
+      var accent = localStorage.getItem('os:accent');
+      if (accent) document.documentElement.style.setProperty('--os-accent', accent);
+      var iconSizes  = [80,96,112,128];
+      var iconEmojis = ['2rem','2.5rem','3rem','3.5rem'];
+      var ii = parseInt(localStorage.getItem('os:icon-size') ?? '0', 10);
+      if (ii >= 0 && ii < 4) {
+        document.documentElement.style.setProperty('--os-icon-size',  iconSizes[ii] + 'px');
+        document.documentElement.style.setProperty('--os-icon-emoji', iconEmojis[ii]);
+      }
+      document.addEventListener('DOMContentLoaded', function() {
+        var w = document.querySelector('.os-desktop-wallpaper');
+        if (!w) return;
+        if (localStorage.getItem('os:animated-bg') === '1') w.classList.add('animated');
+        var wp = localStorage.getItem('os:wallpaper');
+        if (wp && wp !== 'aurora') w.classList.add('wallpaper-' + wp);
+      });
+    })();
+  </script>
+
+  <!-- Saturn logo Web Component (must load before body renders) -->
+  <script type="module" src="/shell/saturn-logo.js"></script>
+
+  <!-- Photo carousel for auth screen backdrop -->
+  <script type="module">
+    import { SPACE_IMAGES } from '/shell/space-images.js';
+    (function() {
+      const container = document.getElementById('os-auth-photos');
+      const creditEl  = document.getElementById('os-auth-credit');
+      if (!container) return;
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const layers = SPACE_IMAGES.map((img, i) => {
+        const el = document.createElement('div');
+        el.className = `os-auth-photo os-auth-photo--kb${i % 4}`;
+        el.style.backgroundImage = `url(${JSON.stringify(img.url)})`;
+        container.appendChild(el);
+        // Probe: if image is unreachable, mark as failed so it gets skipped
+        const probe = new Image();
+        const item = { el, img, ok: true };
+        probe.onerror = () => { item.ok = false; };
+        probe.src = img.url;
+        return item;
+      });
+      let idx = 0;
+      function activate(i) {
+        const live = layers.filter(l => l.ok);
+        layers.forEach(l => l.el.classList.remove('active'));
+        if (!live.length) return;
+        idx = i % live.length;
+        live[idx].el.classList.add('active');
+        if (creditEl) creditEl.textContent = live[idx].img.credit;
+      }
+      activate(0);
+      if (!reduced) setInterval(() => activate(idx + 1), 20000);
+    })();
+  </script>
+
   <!-- Alpine Plugins (must load before Alpine core) -->
   <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/focus@3/dist/cdn.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/anchor@3/dist/cdn.min.js"></script>
@@ -43,39 +108,41 @@
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 
   <style>
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    html { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
   </style>
 </head>
 <body
   x-data="{ launcherOpen: false, searchQuery: '' }"
   x-cloak
   :class="$store.os && $store.os.theme === 'dark' ? 'dark' : ''"
-  @os:launcher-toggle.window="launcherOpen = !launcherOpen; if(launcherOpen) $nextTick(() => $refs.launcherSearch && $refs.launcherSearch.focus())"
+  @os:launcher-toggle.window="launcherOpen = !launcherOpen; if(launcherOpen) { $nextTick(() => $refs.launcherSearch && $refs.launcherSearch.focus()); $store.os.staggerLauncherTiles(); }"
   @click.window="$store.os && $store.os.hideContextMenu()"
   @keydown.escape.window="launcherOpen = false"
 >
 
   <!-- ===== AUTH SCREEN ===== -->
   <div class="os-auth-screen" x-show="!$store.auth || $store.auth.screen !== 'desktop'">
+      <!-- Photo backdrop (populated by the carousel module above) -->
+      <div class="os-auth-photos" id="os-auth-photos"></div>
+      <div class="os-auth-scrim"></div>
+      <div class="os-auth-credit" id="os-auth-credit"></div>
       <!-- Loading -->
       <template x-if="!$store.auth || $store.auth.screen === 'loading'">
         <div class="os-auth-card">
-          <div class="os-auth-logo">🏔️</div>
-          <div class="os-auth-title">Alpine Shell</div>
-          <div class="os-auth-spinner"></div>
+          <saturn-logo class="os-auth-logo-svg"></saturn-logo>
+          <div class="os-auth-title">ODVI Spaces</div>
+          <div class="os-auth-orbit-loader">
+            <div class="os-auth-orbit-track"><div class="os-auth-orbit-dot"></div></div>
+          </div>
         </div>
       </template>
 
       <!-- Login -->
       <template x-if="$store.auth && $store.auth.screen === 'login'">
         <div class="os-auth-card">
-          <div class="os-auth-logo">🏔️</div>
-          <div class="os-auth-title">Alpine Shell</div>
+          <saturn-logo class="os-auth-logo-svg"></saturn-logo>
+          <div class="os-auth-title">ODVI Spaces</div>
           <div class="os-auth-subtitle">Sign in to continue</div>
           <button class="os-google-btn" @click="$store.auth.login()">
             <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
@@ -93,36 +160,107 @@
       <!-- Workspace Select -->
       <template x-if="$store.auth && $store.auth.screen === 'workspace-select'">
         <div class="os-auth-card os-auth-card--wide">
-          <div class="os-auth-header">
+
+          <!-- === LIST VIEW === -->
+          <template x-if="!$store.auth.managingWs">
             <div>
-              <div class="os-auth-title" style="font-size:1.1rem;">Choose a Workspace</div>
-              <div class="os-auth-subtitle" x-text="'Signed in as ' + ($store.auth.user?.email || '')"></div>
-            </div>
-            <button class="os-auth-signout" @click="$store.auth.signOut()">Sign out</button>
-          </div>
-
-          <div class="os-ws-list">
-            <template x-for="ws in $store.auth.workspaces" :key="ws.workspaceId">
-              <button class="os-ws-item" @click="$store.auth.selectWorkspace(ws.workspaceId)">
-                <span class="os-ws-icon" x-text="ws.icon"></span>
-                <div class="os-ws-info">
-                  <div class="os-ws-name" x-text="ws.name"></div>
-                  <div class="os-ws-role" x-text="ws.role"></div>
+              <div class="os-auth-header">
+                <div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+                    <span style="font-size:1.2rem;">🪐</span>
+                    <span style="font-size:0.7rem;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#9ca3af;">ODVI Spaces</span>
+                  </div>
+                  <div class="os-auth-title" style="font-size:1.1rem;">Choose a Workspace</div>
+                  <div class="os-auth-subtitle" x-text="'Signed in as ' + ($store.auth.user?.email || '')"></div>
                 </div>
-                <span style="color:#9ca3af;font-size:1rem;">›</span>
-              </button>
-            </template>
-          </div>
+                <button class="os-auth-signout" @click="$store.auth.signOut()">Sign out</button>
+              </div>
 
-          <!-- Create new workspace -->
-          <div class="os-ws-create" x-data="{ open: false, name: '', icon: '🏢' }">
-            <button class="os-ws-create-btn" @click="open = !open">＋ New Workspace</button>
-            <div x-show="open" x-transition style="margin-top:12px;display:flex;gap:8px;align-items:center;">
-              <input class="os-auth-input" style="width:60px;" maxlength="4" x-model="icon" placeholder="🏢" />
-              <input class="os-auth-input" style="flex:1;" x-model="name" placeholder="Workspace name…" @keydown.enter="name.trim() && $store.auth.createWorkspace(name.trim(), icon)" />
-              <button class="os-ws-create-go" @click="name.trim() && $store.auth.createWorkspace(name.trim(), icon)">Create</button>
+              <div class="os-ws-list">
+                <template x-for="ws in $store.auth.workspaces" :key="ws.workspaceId">
+                  <div class="os-ws-item-wrap">
+                    <button class="os-ws-item" @click="$store.auth.selectWorkspace(ws.workspaceId)">
+                      <span class="os-ws-icon" x-text="ws.icon"></span>
+                      <div class="os-ws-info">
+                        <div class="os-ws-name" x-text="ws.name"></div>
+                        <div class="os-ws-role" x-text="ws.role"></div>
+                      </div>
+                      <span style="color:#9ca3af;font-size:1rem;">›</span>
+                    </button>
+                    <button class="os-ws-manage-btn" @click.stop="$store.auth.openManage(ws.workspaceId)" title="Members &amp; invite">⚙</button>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Create new workspace -->
+              <div class="os-ws-create" x-data="{ open: false, name: '', icon: '🏢' }">
+                <button class="os-ws-create-btn" @click="open = !open">＋ New Workspace</button>
+                <div x-show="open" x-collapse class="ws-create-row" style="margin-top:12px;">
+                  <button type="button" class="os-auth-input os-icon-pick" style="width:60px;cursor:pointer;" title="Pick an icon"
+                    @click="$store.os.pickIcon($event.currentTarget, icon, e => icon = e)" x-text="icon"></button>
+                  <input class="os-auth-input" style="flex:1;" x-model="name" placeholder="Workspace name…" @keydown.enter="name.trim() && $store.auth.createWorkspace(name.trim(), icon)" />
+                  <button class="os-ws-create-go" @click="name.trim() && $store.auth.createWorkspace(name.trim(), icon)">Create</button>
+                </div>
+              </div>
             </div>
-          </div>
+          </template>
+
+          <!-- === MANAGE VIEW === -->
+          <template x-if="$store.auth.managingWs">
+            <div>
+              <div class="os-auth-header">
+                <div>
+                  <button class="os-ws-back-btn" @click="$store.auth.closeManage()">← Back</button>
+                  <div class="os-auth-title" style="font-size:1rem;margin-top:6px;" x-text="($store.auth.workspaces.find(w => w.workspaceId === $store.auth.managingWs)?.name || '') + ' · Members'"></div>
+                </div>
+                <button class="os-auth-signout" @click="$store.auth.signOut()">Sign out</button>
+              </div>
+
+              <!-- Member list -->
+              <div class="os-member-list">
+                <div x-show="$store.auth.membersLoading" class="os-member-loading">Loading members…</div>
+                <template x-for="m in $store.auth.members" :key="m.userId">
+                  <div class="os-member-row">
+                    <div class="os-member-avatar" x-text="(m.name || m.email || '?')[0].toUpperCase()"></div>
+                    <div class="os-member-info">
+                      <div class="os-member-name" x-text="m.name || m.email"></div>
+                      <div class="os-member-email" x-show="m.name" x-text="m.email"></div>
+                    </div>
+                    <template x-if="['owner','admin'].includes($store.auth.workspaces.find(w => w.workspaceId === $store.auth.managingWs)?.role) && m.userId !== $store.auth.user?.userId">
+                      <select
+                        class="os-member-role-select"
+                        :value="m.role"
+                        @change="$store.auth.changeMemberRole(m.userId, $event.target.value)"
+                      >
+                        <template x-if="$store.auth.workspaces.find(w => w.workspaceId === $store.auth.managingWs)?.role === 'owner'">
+                          <option value="owner" :selected="m.role === 'owner'">owner</option>
+                        </template>
+                        <option value="admin" :selected="m.role === 'admin'">admin</option>
+                        <option value="member" :selected="m.role === 'member'">member</option>
+                      </select>
+                    </template>
+                    <template x-if="!((['owner','admin'].includes($store.auth.workspaces.find(w => w.workspaceId === $store.auth.managingWs)?.role)) && m.userId !== $store.auth.user?.userId)">
+                      <span class="os-member-role-badge" x-text="m.role"></span>
+                    </template>
+                    <button
+                      x-show="['owner','admin'].includes($store.auth.workspaces.find(w => w.workspaceId === $store.auth.managingWs)?.role) && m.userId !== $store.auth.user?.userId"
+                      class="os-member-remove"
+                      @click="$store.auth.removeMemberFromPanel(m.userId)"
+                      title="Remove member"
+                    >✕</button>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Invite button (owner / admin only) -->
+              <button
+                x-show="['owner','admin'].includes($store.auth.workspaces.find(w => w.workspaceId === $store.auth.managingWs)?.role)"
+                class="os-share-invite-btn"
+                @click="$store.auth.generateInvite()"
+              >🔗 Copy invite link</button>
+            </div>
+          </template>
+
         </div>
       </template>
     </div>
@@ -133,37 +271,60 @@
     class="os-desktop"
     @contextmenu.prevent="$store.os.buildDesktopContextMenu($event.clientX, $event.clientY)"
   >
-    <!-- Wallpaper gradient overlay -->
-    <div style="position:absolute;inset:0;background:linear-gradient(135deg,#0f0c29 0%,#302b63 50%,#24243e 100%);pointer-events:none;"></div>
+    <!-- Wallpaper gradient — tinted by --os-accent (see shell.css) -->
+    <div class="os-desktop-wallpaper" :class="{ animated: $store.os && $store.os.animatedBg, 'wallpaper-starfield': $store.os && $store.os.wallpaper === 'starfield' }"></div>
     <!-- Subtle texture -->
-    <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 20% 30%,rgba(96,165,250,0.08) 0%,transparent 60%),radial-gradient(ellipse at 80% 70%,rgba(139,92,246,0.08) 0%,transparent 60%);pointer-events:none;"></div>
+    <div class="os-desktop-texture"></div>
 
     <!-- Desktop Icons -->
-    <div style="position:absolute;top:16px;left:16px;display:flex;flex-direction:column;gap:8px;z-index:1;">
-      <!-- Regular (non-generator) apps -->
+    <div
+      style="position:absolute;top:16px;left:16px;bottom:64px;display:flex;flex-direction:column;flex-wrap:wrap;gap:8px;z-index:1;align-content:flex-start;"
+      @dragover.prevent="$store.os.dragInstanceId && $store.os.instances?.find(i => i.instanceId === $store.os.dragInstanceId)?.parentId ? $event.dataTransfer.dropEffect = 'move' : null"
+      @drop.prevent="$store.os.dragInstanceId && $store.os.instances?.find(i => i.instanceId === $store.os.dragInstanceId)?.parentId ? ($store.os.moveToDesktop($store.os.dragInstanceId), $store.os.dragInstanceId = null) : null"
+    >
       <template x-if="$store.os">
-        <template x-for="app in Object.values($store.os.apps).filter(a => !a.generator)" :key="app.appId">
+        <template x-for="item in $store.os.desktopItems()" :key="item.key">
           <button
             class="os-desktop-icon"
-            @click.stop="$store.os.launch(app.appId)"
+            :class="{
+              'icon-dragging':       $store.os.dragDesktopKey === item.key,
+              'icon-drag-over':      $store.os.dragInstanceId && item.acceptsDroppedInstances && $store.os.dragOverFolderId === item.id,
+              'icon-reorder-target': $store.os.dragOverDesktopKey === item.key
+            }"
+            draggable="true"
+            @dragstart.stop="
+              $store.os.dragDesktopKey = item.key;
+              $store.os.dragInstanceId = item.type === 'instance' ? item.id : null;
+              $event.dataTransfer.effectAllowed = 'move'
+            "
+            @dragend="
+              $store.os.dragDesktopKey = null;
+              $store.os.dragInstanceId = null;
+              $store.os.dragOverFolderId = null;
+              $store.os.dragOverDesktopKey = null
+            "
+            @dragover.prevent="
+              ($store.os.dragDesktopKey && $store.os.dragDesktopKey !== item.key) || ($store.os.dragInstanceId && !$store.os.dragDesktopKey)
+                ? (item.acceptsDroppedInstances
+                    ? ($store.os.dragOverFolderId = item.id, $store.os.dragOverDesktopKey = null)
+                    : ($store.os.dragDesktopKey ? ($store.os.dragOverDesktopKey = item.key, $store.os.dragOverFolderId = null) : null))
+                : null"
+            @dragleave="
+              if ($store.os.dragOverFolderId === item.id) $store.os.dragOverFolderId = null;
+              if ($store.os.dragOverDesktopKey === item.key) $store.os.dragOverDesktopKey = null
+            "
+            @drop.prevent="
+              $store.os.dragInstanceId && item.acceptsDroppedInstances
+                ? $store.os.dropOnFolder(item.id)
+                : ($store.os.dragDesktopKey ? $store.os.reorderDesktop($store.os.dragDesktopKey, item.key) : null)"
+            @click.stop="$store.os.clickDesktopIcon($event.currentTarget, item)"
+            @contextmenu.prevent.stop="item.type === 'instance' ? $store.os.buildInstanceContextMenu($event.clientX, $event.clientY, item) : null"
           >
-            <span class="os-desktop-icon-emoji" x-text="app.icon"></span>
-            <span class="os-desktop-icon-label" x-text="app.title"></span>
-          </button>
-        </template>
-      </template>
-      <!-- Generator instances -->
-      <template x-if="$store.os">
-        <template x-for="inst in $store.os.instances" :key="inst.instanceId">
-          <button
-            class="os-desktop-icon"
-            @click.stop="$store.os.launchInstance(inst.instanceId)"
-            @contextmenu.prevent.stop="$store.os.showContextMenu($event.clientX, $event.clientY, [
-              { label: '🗑 Delete', action: () => $store.os.removeInstance(inst.instanceId) }
-            ])"
-          >
-            <span class="os-desktop-icon-emoji" x-text="inst.icon"></span>
-            <span class="os-desktop-icon-label" x-text="inst.name"></span>
+            <span class="os-desktop-icon-emoji" x-text="item.icon"></span>
+            <span class="os-desktop-icon-label" x-text="item.label"></span>
+            <template x-if="$store.os.appBadges[item.id] > 0">
+              <span class="os-desktop-icon-badge" x-text="$store.os.appBadges[item.id] > 99 ? '99+' : $store.os.appBadges[item.id]"></span>
+            </template>
           </button>
         </template>
       </template>
@@ -175,7 +336,7 @@
     <template x-for="win in $store.os.windows" :key="win.id">
       <div
         x-show="win.state !== 'minimized'"
-        class="os-window animate-window-open"
+        class="os-window"
         :class="{
           'focused': win.focused,
           'maximized': win.state === 'maximized'
@@ -194,7 +355,25 @@
         >
           <!-- Icon + Title -->
           <span style="margin-right:6px;font-size:0.9rem;line-height:1;" x-text="win.icon"></span>
-          <span class="os-titlebar-title" x-text="win.title"></span>
+          <template x-if="win._instanceId">
+            <div style="display:contents">
+              <input
+                class="os-titlebar-title os-titlebar-title-edit"
+                :value="win.title"
+                @mousedown.stop
+                @input="win.title = $event.target.value"
+                @change="$store.os.renameInstance(win._instanceId, $event.target.value)"
+                spellcheck="false"
+              />
+              <div class="os-titlebar-instance-actions">
+                <button x-show="win.hasSettings" class="os-titlebar-action-btn" @click.stop="$store.os.toggleWindowSettings(win.id)" title="Settings">⚙️</button>
+                <button class="os-titlebar-action-btn os-titlebar-action-btn--delete" @click.stop="$store.os.removeInstance(win._instanceId)" title="Delete">🗑</button>
+              </div>
+            </div>
+          </template>
+          <template x-if="!win._instanceId">
+            <span class="os-titlebar-title" x-text="win.title"></span>
+          </template>
 
           <!-- Window controls (upper right, order: minimize → maximize → close) -->
           <div class="os-win-controls">
@@ -222,6 +401,15 @@
           :data-win-host="win.id"
         ></div>
 
+        <!-- Loading skeleton (shown until the module's first render) -->
+        <div class="os-skeleton" x-show="!win.ready">
+          <div class="os-skeleton-bar" style="width:40%;"></div>
+          <div class="os-skeleton-bar" style="width:90%;"></div>
+          <div class="os-skeleton-bar" style="width:75%;"></div>
+          <div class="os-skeleton-block"></div>
+          <div class="os-skeleton-bar" style="width:60%;"></div>
+        </div>
+
         <!-- Resize Handles (all 8 edges/corners) -->
         <template x-if="win.resizable && win.state !== 'maximized'">
           <div>
@@ -239,24 +427,22 @@
 
   <!-- ===== TASKBAR ===== -->
   <div class="os-taskbar" x-show="$store.auth && $store.auth.screen === 'desktop'">
-    <!-- Start / Launcher Button -->
+    <!-- Start Menu Button -->
     <button
       class="os-start-btn"
       :class="{ active: launcherOpen }"
       @click.stop="
         launcherOpen = !launcherOpen;
-        if (launcherOpen) $nextTick(() => $refs.launcherSearch && $refs.launcherSearch.focus());
+        if (launcherOpen) { $nextTick(() => $refs.launcherSearch && $refs.launcherSearch.focus()); $store.os.staggerLauncherTiles(); }
       "
-      title="Launcher (⌘K)"
-    >🏔️</button>
+      title="Start menu (⌘K)"
+    ><saturn-logo class="os-start-logo"></saturn-logo><span class="os-start-label">Spaces</span></button>
 
     <!-- Window Buttons -->
     <div class="os-taskbar-windows">
       <template x-for="win in ($store.os ? $store.os.windows : [])" :key="win.id">
         <button
           class="os-taskbar-btn"
-          x-transition:enter-active-class="taskbar-btn-in"
-          x-transition:leave-active-class="taskbar-btn-out"
           :class="{ active: win.focused && win.state !== 'minimized' }"
           @click.stop="$store.os.taskbarClick(win.id)"
         >
@@ -283,7 +469,7 @@
           @click.stop="$store.auth.screen = 'workspace-select'; $store.auth.workspaces.length || $store.auth.init()"
           :title="($store.auth.user?.name || '') + ' · ' + ($store.auth.workspace?.name || '')"
         >
-          <span x-text="$store.auth.workspace?.icon || '🏔️'"></span>
+          <span x-text="$store.auth.workspace?.icon || '🏢'"></span>
           <span style="font-size:0.75rem;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="$store.auth.workspace?.name || ''"></span>
         </button>
       </template>
@@ -305,7 +491,7 @@
     </div>
   </div>
 
-  <!-- ===== LAUNCHER ===== -->
+  <!-- ===== START MENU ===== -->
   <div
     class="os-launcher"
     x-show="launcherOpen && $store.auth && $store.auth.screen === 'desktop'"
@@ -318,7 +504,8 @@
     x-transition:leave-end="opacity-0"
   >
     <div
-      class="os-launcher-panel"
+      class="os-launcher-panel os-startmenu"
+      @click.stop
       x-transition:enter="transition duration-200 ease-out"
       x-transition:enter-start="opacity-0 scale-95"
       x-transition:enter-end="opacity-100 scale-100"
@@ -326,6 +513,12 @@
       x-transition:leave-start="opacity-100 scale-100"
       x-transition:leave-end="opacity-0 scale-95"
     >
+      <!-- Header -->
+      <div class="os-sm-header">
+        <span class="os-sm-brand">🪐 ODVI Spaces</span>
+        <span class="os-sm-ws" x-text="$store.auth?.workspace?.name || ''"></span>
+      </div>
+
       <!-- Search -->
       <input
         x-ref="launcherSearch"
@@ -336,7 +529,8 @@
         @keydown.escape="launcherOpen = false"
         @keydown.enter="
           const apps = Object.values($store.os.apps).filter(a =>
-            !searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase())
+            !a.generator && !$store.os.isAppHidden(a.appId) &&
+            (!searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()))
           );
           if (apps.length > 0) {
             $store.os.launch(apps[0].appId);
@@ -346,9 +540,36 @@
         "
       />
 
-      <!-- App grid -->
+      <!-- Recent apps -->
+      <template x-if="!searchQuery && $store.os && $store.os.recentApps.map(id => $store.os.apps[id]).filter(a => a && !a.generator && !$store.os.isAppHidden(a.appId)).length">
+        <div>
+          <div class="os-sm-label">Recent</div>
+          <div class="os-launcher-grid">
+            <template x-for="app in $store.os.recentApps.map(id => $store.os.apps[id]).filter(a => a && !a.generator && !$store.os.isAppHidden(a.appId)).slice(0,4)" :key="'recent-'+app.appId">
+              <button class="os-app-tile" @click="$store.os.launch(app.appId); launcherOpen = false; searchQuery = '';">
+                <span class="os-app-tile-icon" x-text="app.icon"></span>
+                <span class="os-app-tile-label" x-text="app.title"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <!-- ODVI ecosystem apps (external) -->
+      <div class="os-sm-label" x-show="!searchQuery">ODVI Apps</div>
+      <div class="os-launcher-grid" x-show="!searchQuery">
+        <template x-for="app in ($store.os ? $store.os.odviApps.filter(a => a.id !== 'spaces') : [])" :key="'odvi-'+app.id">
+          <button class="os-app-tile os-odvi-tile" :title="app.desc" @click="window.open(app.url, '_blank'); launcherOpen = false;">
+            <span class="os-app-tile-icon" x-text="app.icon"></span>
+            <span class="os-app-tile-label" x-text="app.name"></span>
+          </button>
+        </template>
+      </div>
+
+      <!-- All apps -->
+      <div class="os-sm-label" x-show="!searchQuery">All Apps</div>
       <div class="os-launcher-grid">
-        <template x-for="app in ($store.os ? Object.values($store.os.apps).filter(a => !a.generator && (!searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()))) : [])" :key="app.appId">
+        <template x-for="app in ($store.os ? Object.values($store.os.apps).filter(a => !a.generator && !$store.os.isAppHidden(a.appId) && (!searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()))) : [])" :key="app.appId">
           <button
             class="os-app-tile"
             @click="$store.os.launch(app.appId); launcherOpen = false; searchQuery = '';"
@@ -358,9 +579,25 @@
           </button>
         </template>
         <div
-          x-show="$store.os && Object.values($store.os.apps).filter(a => !searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase())).length === 0"
+          x-show="$store.os && Object.values($store.os.apps).filter(a => !a.generator && !$store.os.isAppHidden(a.appId) && (!searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()))).length === 0"
           style="grid-column:1/-1;text-align:center;padding:24px;color:#9ca3af;font-size:0.875rem;"
         >No apps found</div>
+      </div>
+
+      <!-- Quick actions -->
+      <div class="os-sm-actions">
+        <button class="os-sm-action" @click="$store.os.launch('settings'); launcherOpen = false;" title="Settings">
+          <span>⚙️</span><span>Settings</span>
+        </button>
+        <button class="os-sm-action" @click="$store.auth.screen = 'workspace-select'; launcherOpen = false;" title="Switch workspace">
+          <span>🔄</span><span>Switch</span>
+        </button>
+        <button class="os-sm-action" @click="$store.os.openOnboarding(); launcherOpen = false;" title="Help & tips">
+          <span>❓</span><span>Help</span>
+        </button>
+        <button class="os-sm-action" @click="$store.auth.signOut(); launcherOpen = false;" title="Sign out">
+          <span>🚪</span><span>Sign out</span>
+        </button>
       </div>
     </div>
   </div>
@@ -391,6 +628,142 @@
         </div>
       </template>
     </template>
+  </div>
+
+  <!-- ===== ONBOARDING MODAL ===== -->
+  <div
+    class="os-onboarding-backdrop"
+    x-show="$store.os && $store.os.showOnboarding"
+    x-transition:enter="transition duration-200 ease-out"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition duration-150 ease-in"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    style="display:none"
+  >
+    <div
+      class="os-onboarding-panel"
+      x-data="{
+        slide: 0,
+        showAlways: false,
+        hoverFeat: null,
+        hoverApp: null,
+        triviaIdx: 0,
+        trivia: [
+          'Saturn\'s rings are over 280,000 km wide but only ~10 m thick.',
+          'Sunlight takes about 80 minutes to reach Saturn.',
+          'A day on Saturn lasts just 10.7 hours.',
+          'Saturn has 146 confirmed moons — more than any planet.',
+          'The JWST can see galaxies over 13 billion light-years away.',
+          'Saturn is the least dense planet — it would float in water.',
+          'The Pillars of Creation are about 7 light-years tall.',
+          'Voyager 1 left our solar system in 2012 after 35 years of travel.',
+        ],
+        feats: [
+          { icon: '📂', name: 'Projects Hub', desc: 'Milestones, issues, action items, decisions, and docs per project.' },
+          { icon: '🗺️', name: 'Roadmap', desc: 'Milestone timelines across all projects at once.' },
+          { icon: '📊', name: 'Load', desc: 'Balance your team\'s workload across projects.' },
+          { icon: '🔧', name: 'Build App', desc: 'Generate custom AI-powered tools with a prompt.' },
+          { icon: '📁', name: 'Files', desc: 'Shared document storage for the workspace.' },
+          { icon: '💬', name: 'Chat', desc: 'Team messaging with channels and unread badges.' },
+        ],
+      }"
+      x-transition:enter="transition duration-250 ease-out"
+      x-transition:enter-start="opacity-0 scale-95"
+      x-transition:enter-end="opacity-100 scale-100"
+      @click.stop
+    >
+      <!-- Hero band — space window with CSS starfield, icon/logo changes per slide -->
+      <div class="os-ob-hero">
+        <template x-if="slide === 0">
+          <saturn-logo class="os-ob-hero-saturn"></saturn-logo>
+        </template>
+        <template x-if="slide !== 0">
+          <span class="os-ob-hero-icon" x-text="slide === 1 ? '🧩' : '⌨️'"></span>
+        </template>
+      </div>
+
+      <div class="os-onboarding-slide" x-show="slide === 0"
+        x-transition:enter="transition duration-200 ease-out"
+        x-transition:enter-start="opacity-0 translate-y-1"
+        x-transition:enter-end="opacity-100 translate-y-0"
+      >
+        <h2 class="os-ob-title">Welcome to ODVI Spaces</h2>
+        <p class="os-ob-body">A shared workspace for your team — part of the ODVI apps ecosystem. Everything in one place:</p>
+        <div class="os-ob-feat-row">
+          <template x-for="f in feats" :key="f.name">
+            <div class="os-ob-feat" @mouseenter="hoverFeat = f" @mouseleave="hoverFeat = null">
+              <span class="os-ob-feat-icon" x-text="f.icon"></span>
+              <span class="os-ob-feat-name" x-text="f.name"></span>
+            </div>
+          </template>
+        </div>
+        <div class="os-ob-hover-info">
+          <template x-if="hoverFeat"><span><strong x-text="hoverFeat.name"></strong> — <span x-text="hoverFeat.desc"></span></span></template>
+          <template x-if="!hoverFeat"><span class="os-ob-hover-hint">Hover an icon to learn more</span></template>
+        </div>
+      </div>
+      <div class="os-onboarding-slide" x-show="slide === 1"
+        x-transition:enter="transition duration-200 ease-out"
+        x-transition:enter-start="opacity-0 translate-y-1"
+        x-transition:enter-end="opacity-100 translate-y-0"
+      >
+        <h2 class="os-ob-title">The ODVI Ecosystem</h2>
+        <p class="os-ob-body">Spaces is one of a family of ODVI apps. Click any to open it.</p>
+        <div class="os-ob-feat-row">
+          <template x-for="app in ($store.os ? $store.os.odviApps : [])" :key="app.id">
+            <div
+              class="os-ob-feat"
+              :class="{ 'os-ob-feat--self': app.id === 'spaces' }"
+              @mouseenter="hoverApp = app" @mouseleave="hoverApp = null"
+              @click="app.id !== 'spaces' && window.open(app.url, '_blank')"
+            >
+              <span class="os-ob-feat-icon" x-text="app.icon"></span>
+              <span class="os-ob-feat-name" x-text="app.name"></span>
+              <span class="os-ob-feat-badge" x-show="app.badge" x-text="app.badge"></span>
+            </div>
+          </template>
+        </div>
+        <div class="os-ob-hover-info">
+          <template x-if="hoverApp"><span><strong x-text="hoverApp.name"></strong> — <span x-text="hoverApp.desc"></span></span></template>
+          <template x-if="!hoverApp"><span class="os-ob-hover-hint">Hover an icon to learn more · click to open</span></template>
+        </div>
+        <p class="os-ob-body" style="margin-top:8px;font-size:0.82rem;">
+          You can open any of these anytime from the <strong>Spaces menu</strong> in the lower-left corner.
+        </p>
+      </div>
+      <div class="os-onboarding-slide" x-show="slide === 2"
+        x-transition:enter="transition duration-200 ease-out"
+        x-transition:enter-start="opacity-0 translate-y-1"
+        x-transition:enter-end="opacity-100 translate-y-0"
+      >
+        <h2 class="os-ob-title">Pro Tips</h2>
+        <p class="os-ob-body">
+          <span class="os-ob-tip"><kbd>Ctrl / ⌘ K</kbd> — Open the app launcher</span>
+          <span class="os-ob-tip"><kbd>Ctrl / ⌘ W</kbd> — Close the focused window</span>
+          <span class="os-ob-tip">Right-click the desktop for quick actions &amp; shortcuts</span>
+          <span class="os-ob-tip">Drag desktop icons to reorder them</span>
+        </p>
+      </div>
+      <p class="os-ob-trivia" x-text="trivia[triviaIdx]"></p>
+      <div class="os-onboarding-footer">
+        <label class="os-ob-check">
+          <input type="checkbox" x-model="showAlways"> Show on startup
+        </label>
+        <div class="os-ob-dots">
+          <template x-for="i in [0,1,2]" :key="i">
+            <span class="os-ob-dot" :class="{ active: slide === i }"
+              @click="slide = i; triviaIdx = (triviaIdx + 1) % trivia.length"></span>
+          </template>
+        </div>
+        <button
+          class="os-ob-next-btn"
+          @click="slide < 2 ? (slide++, triviaIdx = (triviaIdx + 1) % trivia.length) : $store.os.closeOnboarding(showAlways)"
+          x-text="slide < 2 ? 'Next →' : 'Get Started'"
+        ></button>
+      </div>
+    </div>
   </div>
 
   <!-- ===== TOAST STACK ===== -->

@@ -312,12 +312,34 @@ false positives on the latter.
 
 **Known deviations (legacy debt — fix when touching the file, don't churn):**
 
-| File:line | Issue |
-|---|---|
-| `tier/index.js:30` | `windowId` fallback in `_appId` chain — latent fresh-state bug; drop the fallback |
-| `chat/index.js:40` | Direct `localStorage.getItem('os-user')` for identity — should come through the shell |
-| `data/index.js:63,66`, `load/index.js:155,160` | `window.Alpine.store('os')` where `this.api.store` is available |
-| `tier`, `folder` | Generators on raw `HTMLElement` instead of `AppModuleBase` |
+All deviations from the 2026-06 audit were fixed in the same session. The table is
+kept here for historical reference.
+
+| File:line | Issue | Fixed |
+|---|---|---|
+| `tier/index.js:30` | `windowId` fallback in `_appId` chain | ✅ 2026-06 |
+| `chat/index.js:40` | Direct `localStorage.getItem('os-user')` for identity | ✅ 2026-06 |
+| `data/index.js:63,66`, `load/index.js:155,160` | `window.Alpine.store('os')` where `this.api.store` available | ✅ 2026-06 |
+| `tier`, `folder` | Generators on raw `HTMLElement` instead of `AppModuleBase` | ✅ 2026-06 |
+
+**Overriding lifecycle methods:** When a module genuinely needs to attach/detach a
+`window` event listener (e.g. `os:instances-changed`), it is acceptable to override
+`connectedCallback` and `disconnectedCallback`. Always call the super methods:
+
+```js
+async connectedCallback() {
+  await super.connectedCallback(); // runs full AppModuleBase lifecycle first
+  window.addEventListener('os:instances-changed', this._handler);
+}
+
+disconnectedCallback() {
+  super.disconnectedCallback(); // cleans up theme effect and unsub
+  window.removeEventListener('os:instances-changed', this._handler);
+}
+```
+
+Do **not** call `_load()` or `_render()` manually in a `connectedCallback` override —
+`super.connectedCallback()` already does that.
 
 **Audit hygiene:** verify line-level claims with grep before recording them — the
 2026-06 audit's subagents produced several false positives (drag-ghost appends,

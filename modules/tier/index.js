@@ -1,56 +1,23 @@
-import { adoptTailwind } from '/shell/shadow-tailwind.js';
-import { getTierList, saveTierList, subscribe } from '/shell/api.js';
+import { AppModuleBase } from '/shell/module-base.js';
+import { getTierList, saveTierList } from '/shell/api.js';
 
-class AppTier extends HTMLElement {
+class AppTier extends AppModuleBase {
   constructor() {
     super();
-    this._state = null;
-    this._appId = null;
     this._dragCardId = null;
     this._editingCardId = null;
     this._settingsOpen = false;
-    this.addEventListener('os:toggle-settings', () => { this._settingsOpen = !this._settingsOpen; if (this._wrapper) this._render(); });
-  }
-
-  async connectedCallback() {
-    const shadow = this.attachShadow({ mode: 'open' });
-
-    const styleEl = document.createElement('style');
-    const css = await fetch('/modules/tier/styles.css').then(r => r.text());
-    styleEl.textContent = css;
-
-    this._wrapper = document.createElement('div');
-    this._wrapper.className = 'wrapper';
-    shadow.appendChild(styleEl);
-    shadow.appendChild(this._wrapper);
-    await adoptTailwind(shadow, this._wrapper);
-
-    await new Promise(r => setTimeout(r, 0));
-
-    this._appId = this.api?.instanceId || this.api?.windowId || ('tier-' + Date.now());
-    this._state = await getTierList(this._appId);
-    this._applyTheme();
-    this._render();
-
-    this._themeObserver = new MutationObserver(() => this._applyTheme());
-    this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-
-    if (this.api) this.api.setTitle(this._state.name);
-
-    this._unsub = subscribe('tierlists', this._appId, async () => {
-      this._state = await getTierList(this._appId);
-      this._render();
-      if (this.api) this.api.setTitle(this._state.name);
+    this.addEventListener('os:toggle-settings', () => {
+      this._settingsOpen = !this._settingsOpen;
+      if (this._wrapper) this._render();
     });
   }
 
-  disconnectedCallback() {
-    this._themeObserver?.disconnect();
-    this._unsub?.();
-  }
+  _collection() { return 'tierlists'; }
+  _getTitle() { return this._state?.name || 'Tier List'; }
 
-  _applyTheme() {
-    this._wrapper?.classList.toggle('dark', document.documentElement.classList.contains('dark'));
+  async _load() {
+    this._state = await getTierList(this._appId);
   }
 
   async _save() {
@@ -280,10 +247,6 @@ class AppTier extends HTMLElement {
         this._dragCardId = null;
       });
     });
-  }
-
-  _esc(str) {
-    return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 }
 

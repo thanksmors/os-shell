@@ -37,7 +37,7 @@ class AppChat extends HTMLElement {
     await adoptTailwind(shadow, this._wrapper);
     await new Promise(r => setTimeout(r, 0));
 
-    try { this._user = JSON.parse(localStorage.getItem('os-user') || 'null'); } catch {}
+    this._user = window.Alpine?.store('auth')?.user || null;
 
     this._applyTheme();
     this._themeObserver = new MutationObserver(() => this._applyTheme());

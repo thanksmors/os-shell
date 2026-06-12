@@ -60,10 +60,11 @@ class AppData extends AppModuleBase {
   _ownerBadge(col) {
     const owner = col?._owner;
     if (!owner?.instanceId) return '';
-    const instances = window.Alpine?.store('os')?.instances || [];
+    const store = this.api?.store;
+    const instances = store?.instances || [];
     const alive = instances.some(i => i.instanceId === owner.instanceId);
     if (alive) {
-      const app = window.Alpine?.store('os')?.apps?.[owner.appId];
+      const app = store?.apps?.[owner.appId];
       const label = app?.title || owner.appId;
       return `<span class="col-owner-badge" title="Created by ${this._esc(label)}">🔗 ${this._esc(label)}</span>`;
     }

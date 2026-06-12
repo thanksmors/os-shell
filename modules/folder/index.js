@@ -1,48 +1,31 @@
-import { adoptTailwind } from '/shell/shadow-tailwind.js';
+import { AppModuleBase } from '/shell/module-base.js';
 
-class AppFolder extends HTMLElement {
+class AppFolder extends AppModuleBase {
   constructor() {
     super();
     this._dragChildId = null;
     this._onInstancesChanged = () => this._render();
   }
 
+  // Override to add the window-level instances listener after base setup completes.
   async connectedCallback() {
-    const shadow = this.attachShadow({ mode: 'open' });
-
-    const styleEl = document.createElement('style');
-    const css = await fetch('/modules/folder/styles.css').then(r => r.text());
-    styleEl.textContent = css;
-
-    this._wrapper = document.createElement('div');
-    this._wrapper.className = 'wrapper';
-    shadow.appendChild(styleEl);
-    shadow.appendChild(this._wrapper);
-    await adoptTailwind(shadow, this._wrapper);
-
-    await new Promise(r => setTimeout(r, 0));
-
-    this._instanceId = this.api?.instanceId;
-    this._applyTheme();
-    this._render();
-
-    this._themeObserver = new MutationObserver(() => this._applyTheme());
-    this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-
+    await super.connectedCallback();
     window.addEventListener('os:instances-changed', this._onInstancesChanged);
   }
 
   disconnectedCallback() {
-    this._themeObserver?.disconnect();
+    super.disconnectedCallback();
     window.removeEventListener('os:instances-changed', this._onInstancesChanged);
   }
 
-  _applyTheme() {
-    this._wrapper?.classList.toggle('dark', document.documentElement.classList.contains('dark'));
+  async _load() {
+    this._state = {}; // no persistent data; identity comes from this._appId
   }
 
+  _getTitle() { return 'Folder'; }
+
   _children() {
-    return (this.api?.store?.instances || []).filter(i => i.parentId === this._instanceId);
+    return (this.api?.store?.instances || []).filter(i => i.parentId === this._appId);
   }
 
   _render() {
@@ -75,7 +58,7 @@ class AppFolder extends HTMLElement {
       const store = this.api?.store;
       if (!store?.dragInstanceId) return;
       const dragged = store.instances.find(i => i.instanceId === store.dragInstanceId);
-      if (dragged && dragged.parentId !== this._instanceId) {
+      if (dragged && dragged.parentId !== this._appId) {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         grid.classList.add('drop-target');
@@ -89,7 +72,7 @@ class AppFolder extends HTMLElement {
       grid.classList.remove('drop-target');
       const store = this.api?.store;
       if (!store?.dragInstanceId) return;
-      store.moveToFolder(store.dragInstanceId, this._instanceId);
+      store.moveToFolder(store.dragInstanceId, this._appId);
       store.dragInstanceId = null;
       store.dragDesktopKey = null;
       store.dragOverFolderId = null;
@@ -146,10 +129,6 @@ class AppFolder extends HTMLElement {
         }
       });
     });
-  }
-
-  _esc(str) {
-    return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 }
 

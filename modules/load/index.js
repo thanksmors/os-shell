@@ -152,13 +152,11 @@ class AppLoad extends AppModuleBase {
   }
 
   _peopleInstances() {
-    try { return (window.Alpine?.store('os')?.instances || []).filter(i => i.appId === 'people'); }
-    catch { return []; }
+    return (this.api?.store?.instances || []).filter(i => i.appId === 'people');
   }
 
   _roadmapInstances() {
-    try { return (window.Alpine?.store('os')?.instances || []).filter(i => i.appId === 'roadmap'); }
-    catch { return []; }
+    return (this.api?.store?.instances || []).filter(i => i.appId === 'roadmap');
   }
 
   async _loadRoadmapProjects() {

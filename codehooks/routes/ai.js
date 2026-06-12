@@ -5,7 +5,7 @@ import { kvSet, kvGet } from '../lib/db.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-12-worker-probe-inline-fallback';
+const AI_BUILD = '2026-06-12-health-routed-inline';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -209,7 +209,7 @@ function enforcePlanType(parsed, planType) {
 // invokes workers on this plan/space (the ai-generate-worker timeout assumes
 // PRO; if the queue is dead, builds stay 'pending' forever).
 app.worker('ping-worker', async (req, res) => {
-  await kvSet('worker_ping', { at: Date.now() }, { ttl: 600 }).catch(() => {});
+  await kvSet('worker_ping', { at: Date.now() }, { ttl: 7 * 24 * 60 * 60 }).catch(() => {});
   res.end();
 });
 
@@ -325,8 +325,10 @@ app.worker('ai-generate-worker', async (req, res) => {
 
   // Breadcrumb: mark the job as picked up BEFORE the slow LLM call. Polling can
   // now distinguish "worker never ran" (pending forever) from "LLM slow/killed"
-  // (building, then nothing).
+  // (building, then nothing). Also refresh the worker-health stamp the POST
+  // handler uses to route between worker and inline builds.
   await finish({ status: 'building', workerStartedAt: Date.now() });
+  await kvSet('worker_ping', { at: Date.now() }, { ttl: 7 * 24 * 60 * 60 }).catch(() => {});
 
   try {
     const systemPrompt = mode === 'revise' ? SYSTEM_PROMPT + REVISE_SUFFIX : SYSTEM_PROMPT;
@@ -409,11 +411,22 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
   if (mode === 'build' || mode === 'revise') {
     const planType = plan?.type === 'generator' ? 'generator' : 'singleton';
 
-    // Inline fallback: the frontend sets inline:true after detecting that the
-    // queue never picked the job up ('pending' past ~20s). Runs the build in
+    // Worker-health routing: any worker that runs (ping-worker via /ai/ping, or
+    // ai-generate-worker on pickup) stamps worker_ping. If no stamp in the last
+    // 24h, queue workers don't run on this plan — build inline directly instead
+    // of letting every job waste 20s discovering a dead queue. Self-healing: if
+    // the plan is upgraded later, one /ai/ping restores the M3 worker path.
+    let workerHealthy = false;
+    try {
+      const stamp = await kvGet('worker_ping');
+      workerHealthy = !!(stamp?.at && Date.now() - stamp.at < 24 * 60 * 60 * 1000);
+    } catch {}
+
+    // Inline path: explicit frontend fallback (inline:true after 20s of
+    // 'pending') or automatic when the queue is known-dead. Runs the build in
     // this request handler on the highspeed model — weaker than M3, but it
     // works even when queue workers are dead on this plan.
-    if (req.body?.inline) {
+    if (req.body?.inline || !workerHealthy) {
       try {
         const systemPrompt = mode === 'revise' ? SYSTEM_PROMPT + REVISE_SUFFIX : SYSTEM_PROMPT;
         const { jsonStr, finishReason } = await runMiniMax({

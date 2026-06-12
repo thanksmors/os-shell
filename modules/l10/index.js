@@ -46,6 +46,7 @@ class AppL10 extends AppModuleBase {
     this._showAllTodos = false;
     this._settingsOpen = false;
     this._saveTimer = null;
+    this._eventsBound = false;
     this.addEventListener('os:toggle-settings', () => {
       this._settingsOpen = !this._settingsOpen;
       this._render();
@@ -488,6 +489,8 @@ class AppL10 extends AppModuleBase {
   // ─── Events ────────────────────────────────────────────────────────────────
 
   _bindEvents() {
+    if (this._eventsBound) return;
+    this._eventsBound = true;
     const root = this._wrapper;
     const getMeeting = () => this._state.meetings.find(m => m.id === this._activeMeetingId);
 

@@ -3,6 +3,23 @@ import { iconUrl } from './icon.js';
 import { getInstances, saveInstances, subscribe, getData, deleteData } from './api.js';
 import { ODVI_APPS } from './odvi-apps.js';
 
+// Motion persists final keyframe styles inline, which permanently overrides
+// CSS :hover transforms. Clear them once an icon/tile animation settles.
+// Motion commits styles per property slightly AFTER `finished` resolves, so a
+// single clear gets re-pinned — sweep a few times to catch the late commits.
+function _unpinMotionStyles(el) {
+  const clear = () => {
+    el.style.transform = '';
+    el.style.scale = '';
+    el.style.translate = '';
+    el.style.opacity = '';
+  };
+  clear();
+  setTimeout(clear, 60);
+  setTimeout(clear, 300);
+  setTimeout(clear, 700);
+}
+
 export function registerOsStore() {
   Alpine.store('os', {
     windows: [],
@@ -394,7 +411,7 @@ export function registerOsStore() {
           motion(el,
             { opacity: [0, 1], y: [10, 0], scale: [0.82, 1] },
             { ...spring.snappy(), delay: i * 0.045 }
-          );
+          ).finished.then(() => _unpinMotionStyles(el));
         });
       });
     },
@@ -666,13 +683,14 @@ export function registerOsStore() {
           motion(el,
             { opacity: [0, 1], y: [10, 0], scale: [0.92, 1] },
             { ...spring.snappy(), delay: i * 0.035 }
-          );
+          ).finished.then(() => _unpinMotionStyles(el));
         });
       });
     },
 
     clickDesktopIcon(iconEl, item) {
-      motion(iconEl, { scale: [1, 0.84, 1.1, 1], y: [0, -6, 0] }, { ...spring.snappy() });
+      motion(iconEl, { scale: [1, 0.84, 1.1, 1], y: [0, -6, 0] }, { ...spring.snappy() })
+        .finished.then(() => _unpinMotionStyles(iconEl));
       if (item.type === 'app') this.launch(item.id);
       else this.launchInstance(item.id);
     },

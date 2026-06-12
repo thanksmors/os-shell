@@ -725,8 +725,9 @@
 }
 
 /* ── Night Sky wallpaper (photo) ───────────────────────────────────────────── */
-/* Photo: Unsplash Cq5NaI0yKBE (2268×4032). Fit to viewport width; the portrait
-   overflow gives the .animated pan its vertical travel. */
+/* Photo: Unsplash Cq5NaI0yKBE, rotated to landscape (4032×2268 — 16:9, so cover
+   ≈ fit-width with no big crop). Scale stays ≥1 during the drift so the photo
+   always covers the viewport. */
 .os-desktop-wallpaper.wallpaper-starfield {
   background: #08081a;
   overflow: hidden;
@@ -734,22 +735,19 @@
 .os-desktop-wallpaper.wallpaper-starfield::before {
   content: '';
   position: absolute;
-  left: 0; top: 0;
-  width: 100%;
-  height: calc(100vw * (4032 / 2268));
-  min-height: 100%;
-  background: url('/shell/assets/wallpaper-night-sky.jpg') top center / 100% auto no-repeat;
+  inset: 0;
+  background: url('/shell/assets/wallpaper-night-sky.jpg') center / cover no-repeat;
   will-change: transform;
 }
 .os-desktop-wallpaper.wallpaper-starfield.animated {
   animation: none; /* cancel the generic .animated aurora sweep */
 }
 .os-desktop-wallpaper.wallpaper-starfield.animated::before {
-  animation: os-sky-pan 180s ease-in-out infinite alternate;
+  animation: os-sky-drift 900s ease-in-out infinite alternate;
 }
-@keyframes os-sky-pan {
-  from { transform: translateY(0); }
-  to   { transform: translateY(min(0px, calc(100vh - 100vw * (4032 / 2268)))); }
+@keyframes os-sky-drift {
+  from { transform: scale(1.02); }
+  to   { transform: scale(1.14) translate(2%, -2%); }
 }
 @media (prefers-reduced-motion: reduce) {
   .os-desktop-wallpaper.wallpaper-starfield.animated::before { animation: none; }

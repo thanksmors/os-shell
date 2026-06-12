@@ -27,9 +27,11 @@ export function clearSession() {
 // with a session token. Google only ever sees our fixed backend redirect URI.
 
 // Send the browser to the backend, which redirects on to Google. `return` tells
-// the backend where to send the user back to once a session is minted.
+// the backend where to send the user back to once a session is minted. The full
+// query string is preserved so params like ?invite= survive the OAuth round trip
+// (the backend callback appends &session= when the URL already has a query).
 export function startGoogleLogin() {
-  const ret = window.location.origin + window.location.pathname;
+  const ret = window.location.origin + window.location.pathname + window.location.search;
   window.location.href = `${BACKEND_URL}/auth/google/login?return=${encodeURIComponent(ret)}`;
 }
 

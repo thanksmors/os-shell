@@ -333,56 +333,79 @@ export async function generateModule(prompt) {
   return aiRequest('build', { messages: [{ role: 'user', content: prompt }] });
 }
 
-export async function aiRequest(mode, payload = {}) {
+export async function aiRequest(mode, payload = {}, onPhase = null) {
   if (!useBackend() || !_workspaceId || !_session) {
     throw new Error('Backend required for AI generation — please log in first.');
   }
   const auth = `apikey=${API_KEY}&session=${encodeURIComponent(_session)}`;
+  const phase = (p) => { try { onPhase && onPhase(p); } catch {} };
 
-  const startUrl = `${BACKEND_URL}/w/${_workspaceId}/ai-generate?${auth}`;
-  const ac = new AbortController();
-  const startTimeout = setTimeout(() => ac.abort(), 65000);
-  let startRes;
-  try {
-    startRes = await fetch(startUrl, {
-      signal: ac.signal,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode, ...payload }),
-    });
-  } catch (err) {
-    if (err.name === 'AbortError') throw new Error('Generation did not finish within 65s — try a simpler prompt or retry.');
-    throw err;
-  } finally {
-    clearTimeout(startTimeout);
-  }
-  if (!startRes.ok) {
-    const raw = await startRes.text().catch(() => '');
-    let detail = raw.slice(0, 300);
-    try { const j = JSON.parse(raw); detail = j.error || JSON.stringify(j); } catch {}
-    throw new Error(`Server error ${startRes.status}${detail ? ': ' + detail : ''}`);
-  }
-  const startData = await startRes.json().catch(() => ({}));
-  if (startData.error) throw new Error(startData.error);
-  if (!startData.jobId) throw new Error('Server did not return a job id');
+  // POST the job. `extra` lets the fallback path re-submit with inline:true.
+  const startJob = async (extra = {}) => {
+    const startUrl = `${BACKEND_URL}/w/${_workspaceId}/ai-generate?${auth}`;
+    const ac = new AbortController();
+    const startTimeout = setTimeout(() => ac.abort(), 65000);
+    let startRes;
+    try {
+      startRes = await fetch(startUrl, {
+        signal: ac.signal,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode, ...payload, ...extra }),
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') throw new Error('Generation did not finish within 65s — try a simpler prompt or retry.');
+      throw err;
+    } finally {
+      clearTimeout(startTimeout);
+    }
+    if (!startRes.ok) {
+      const raw = await startRes.text().catch(() => '');
+      let detail = raw.slice(0, 300);
+      try { const j = JSON.parse(raw); detail = j.error || JSON.stringify(j); } catch {}
+      throw new Error(`Server error ${startRes.status}${detail ? ': ' + detail : ''}`);
+    }
+    const startData = await startRes.json().catch(() => ({}));
+    if (startData.error) throw new Error(startData.error);
+    if (!startData.jobId) throw new Error('Server did not return a job id');
+    return startData;
+  };
 
-  // Build/revise run in a backend worker with a 110s budget — allow 150s total.
-  const pollUrl = `${BACKEND_URL}/w/${_workspaceId}/ai-job?job=${encodeURIComponent(startData.jobId)}&${auth}`;
-  const deadline = Date.now() + 150000;
+  phase('queued');
+  let { jobId } = await startJob();
+
+  // Build/revise run in a backend worker (110s budget). Poll up to 4 minutes —
+  // job TTL is 10min so results always outlive the poll. If the job never
+  // leaves 'pending' (queue worker dead on this plan), fall back once to an
+  // inline build on the highspeed model.
+  const isBuild = mode === 'build' || mode === 'revise';
+  const deadline = Date.now() + 240000;
+  const queuedAt = Date.now();
+  let sawBuilding = false;
+  let usedFallback = false;
+
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 2000));
     let data;
     try {
-      const pr = await fetch(pollUrl);
+      const pr = await fetch(`${BACKEND_URL}/w/${_workspaceId}/ai-job?job=${encodeURIComponent(jobId)}&${auth}`);
       data = await pr.json();
     } catch { continue; }
+    if (data.status === 'building' && !sawBuilding) { sawBuilding = true; phase('building'); }
     if (data.status === 'done') return data.module;
     if (data.status === 'error') {
       const msg = data.raw ? `${data.error || 'Generation failed'} — raw: ${data.raw}` : (data.error || 'Generation failed');
       throw new Error(msg);
     }
+    // Stuck in 'pending' for 20s+ — the queue never picked the job up.
+    // Re-submit once with inline:true (built in the request handler instead).
+    if (isBuild && !sawBuilding && !usedFallback && Date.now() - queuedAt > 20000) {
+      usedFallback = true;
+      phase('retrying');
+      ({ jobId } = await startJob({ inline: true }));
+    }
   }
-  throw new Error('Generation timed out after 2.5 minutes. Try a simpler prompt.');
+  throw new Error('Generation timed out after 4 minutes. Try a simpler prompt.');
 }
 
 // ─── List helpers ──────────────────────────────────────────────────────────

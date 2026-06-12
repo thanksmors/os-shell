@@ -16,9 +16,12 @@ export function registerAuthStore() {
     membersLoading: false,
 
     async init() {
-      // Capture invite link (if any) before we scrub the query string.
+      // Capture invite link (if any) before we scrub the query string. Also
+      // stash it in localStorage as a fallback: the OAuth round trip or a retry
+      // can drop the query param, and the stash survives the redirect.
       const params = new URLSearchParams(window.location.search);
-      this.inviteId = params.get('invite') || null;
+      this.inviteId = params.get('invite') || localStorage.getItem('os-pending-invite') || null;
+      if (this.inviteId) localStorage.setItem('os-pending-invite', this.inviteId);
 
       // Pull a freshly-minted session (or error) from the backend OAuth redirect.
       const redirect = consumeAuthRedirect();
@@ -47,8 +50,19 @@ export function registerAuthStore() {
             const result = await acceptInvite(this.inviteId, session);
             if (result?.workspaceId) {
               this.workspaces = await fetchWorkspaces(session);
+              // Auto-activate the joined workspace instead of dropping the user
+              // on the picker.
+              localStorage.setItem('os-workspace', result.workspaceId);
+              Alpine.store('os').notify('Joined workspace!', 'success');
+            } else if (result?.error) {
+              console.error('Accept invite failed:', result.error);
+              Alpine.store('os').notify('Invite failed: ' + result.error, 'error');
             }
-          } catch {}
+          } catch (err) {
+            console.error('Accept invite failed:', err);
+            Alpine.store('os').notify('Invite failed — the link may have expired.', 'error');
+          }
+          localStorage.removeItem('os-pending-invite');
           const after = new URLSearchParams(window.location.search);
           after.delete('invite');
           const qs = after.toString();

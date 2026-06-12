@@ -37,9 +37,13 @@ app.post('/invites/:inviteId/accept', async (req, res) => {
   const invite = await kvGet(`invite:${req.params.inviteId}`);
   if (!invite) { res.json({ error: 'Invite not found' }); return; }
 
-  const membersDoc = await dbGet('ws_members', invite.workspaceId);
+  // Initialize the members doc if missing so the very first accepted invite on
+  // a workspace can't silently skip the member add.
+  let membersDoc = await dbGet('ws_members', invite.workspaceId);
+  if (!membersDoc) membersDoc = { workspaceId: invite.workspaceId, members: [] };
+  if (!Array.isArray(membersDoc.members)) membersDoc.members = [];
   const user = await dbGet('users', authUser.userId);
-  if (membersDoc && !membersDoc.members?.find(m => m.userId === authUser.userId)) {
+  if (!membersDoc.members.find(m => m.userId === authUser.userId)) {
     membersDoc.members.push({ userId: authUser.userId, role: invite.role, name: user?.name || '', email: user?.email || '', picture: user?.picture || '', addedAt: Date.now() });
     await dbUpsert('ws_members', invite.workspaceId, membersDoc);
   }

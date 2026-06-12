@@ -41,15 +41,16 @@ a `TOP_ARRAYS` entry in `lib/merge.js` — see Concurrent-edit merge below.)
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/ai/ping` | Deploy probe — returns `{ build, hasKey, ok }`. Bump `AI_BUILD` string on every change to verify deploys. |
-| POST | `/w/:workspaceId/ai-generate` | Runs MiniMax synchronously, writes result to `ai_jobs`, returns `{ jobId }`. Blocks until done (~10–55s). |
-| GET | `/w/:workspaceId/ai-job?job=` | Poll job status. Returns `{ status, module, error, raw }`. |
+| GET | `/ai/ping` | Deploy + worker probe — returns `{ build, hasKey, workerAlive, ok }`. Bump `AI_BUILD` string on every change to verify deploys. `workerAlive` enqueues `ping-worker` and checks a KV stamp 3s later — `false` means queue workers don't run on this plan/space. |
+| POST | `/w/:workspaceId/ai-generate` | clarify/plan run inline; build/revise enqueue to the worker and return `{ jobId }` instantly. `inline: true` in the body forces build/revise inline (highspeed model, 50s budget) — the frontend's queue-dead fallback. |
+| GET | `/w/:workspaceId/ai-job?job=` | Poll job status. Returns `{ status, module, error, raw, workerStartedAt }`. |
 
 **AI generation architecture (PRO plan, worker mode):**
 - `clarify`/`plan` modes run **synchronously** in the POST handler on `MiniMax-M2.7-highspeed` with a 55s `AbortController` — fast interactive modes, result written to the `ai_job:` KV before the POST returns.
-- `build`/`revise` modes are **enqueued to the real worker** (`ai-generate-worker`, `{ timeout: 120000, workers: 1 }`) which runs `MiniMax-M3` with a 110s `AbortController`. POST returns the jobId instantly; the frontend polls (`aiRequest` in `shell/api.js`, 150s cap).
-- Worker payload: `{ jobId, workspaceId, mode, convo, planType, maxTokens, model }` read from `req.body.payload`. The worker writes `done`/`error` to `ai_job:{jobId}` and calls `res.end()`.
-- The job/poll contract is unchanged: `POST → { jobId }`, `GET /w/:ws/ai-job?job= → { status, module, error, raw }`.
+- `build`/`revise` modes are **enqueued to the real worker** (`ai-generate-worker`, `{ timeout: 120000, workers: 1 }`) which runs `MiniMax-M3` with a 110s `AbortController`. POST returns the jobId instantly; the frontend polls (`aiRequest` in `shell/api.js`, 240s cap).
+- Worker payload is parsed defensively (`req.body?.payload ?? req.body`) — delivery shape varies. On pickup the worker writes `{ status: 'building', workerStartedAt }` BEFORE the LLM call, so polling distinguishes "worker never ran" (`pending` forever) from "LLM slow/killed" (`building`, then nothing). It writes `done`/`error` at the end and calls `res.end()`.
+- **Queue-dead fallback:** if the frontend sees `pending` for 20s+ (never `building`), it re-POSTs once with `inline: true` — the build then runs in the request handler on the highspeed model (50s budget). Weaker model, but works on plans where queue workers don't fire. `GET /ai/ping → workerAlive` tells you which world you're in.
+- The job/poll contract: `POST → { jobId }`, `GET /w/:ws/ai-job?job= → { status, module, error, raw, workerStartedAt }`.
 
 **Route path rule:** AI routes use 3-segment paths (`/w/:ws/ai-generate`, `/w/:ws/ai-job`). A 4-segment path like `/w/:ws/ai/generate` collides with the generic data route `/w/:ws/:collection/:id` — never use 4 segments for AI routes.
 

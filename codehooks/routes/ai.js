@@ -5,7 +5,7 @@ import { kvSet, kvGet } from '../lib/db.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-10-m3-worker';
+const AI_BUILD = '2026-06-12-worker-probe-inline-fallback';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -143,7 +143,7 @@ JSON output:
 
 // ─── Phase prompts (clarify → plan → build/revise) ────────────────────────────
 
-const CLARIFY_PROMPT = `You are a requirements analyst for "Alpine OS Shell" app modules (Web Components, shadow DOM, localStorage/Codehooks persistence — the tech stack is FIXED, never ask about it).
+const CLARIFY_PROMPT = `You are a requirements analyst for "ODVI Spaces" app modules (Web Components, shadow DOM, localStorage/Codehooks persistence — the tech stack is FIXED, never ask about it).
 
 Given the conversation, decide if the request is clear enough to plan. Output ONLY valid JSON, one of:
 
@@ -157,7 +157,7 @@ Given the conversation, decide if the request is clear enough to plan. Output ON
 2. If the request is already clear (or after questions were answered):
 {"ready":true,"summary":"one-paragraph restatement of what will be built"}`;
 
-const PLAN_PROMPT = `You are a software planner for "Alpine OS Shell" app modules (Web Components + AppModuleBase, getData/setData persistence — tech stack is FIXED).
+const PLAN_PROMPT = `You are a software planner for "ODVI Spaces" app modules (Web Components + AppModuleBase, getData/setData persistence — tech stack is FIXED).
 
 Given the conversation (user request + any clarification answers), output ONLY valid JSON:
 
@@ -205,16 +205,41 @@ function enforcePlanType(parsed, planType) {
 
 // ─── AI diagnostics ────────────────────────────────────────────────────────────
 
-app.get('/ai/ping', (req, res) => {
+// Trivial worker that just writes a KV timestamp — proves the queue actually
+// invokes workers on this plan/space (the ai-generate-worker timeout assumes
+// PRO; if the queue is dead, builds stay 'pending' forever).
+app.worker('ping-worker', async (req, res) => {
+  await kvSet('worker_ping', { at: Date.now() }, { ttl: 600 }).catch(() => {});
+  res.end();
+});
+
+app.get('/ai/ping', async (req, res) => {
   // List every POST/GET route key the live manifest actually contains, so we can
   // confirm whether "POST /w/:workspaceId/ai-generate" is really deployed.
   let routeKeys = [];
   try { routeKeys = Object.keys(app.routes || {}); } catch {}
+
+  // Worker-alive probe: enqueue ping-worker, give it ~3s, check the KV stamp.
+  let workerAlive = false;
+  let workerError = null;
+  try {
+    const probeStart = Date.now();
+    const conn = await datastore.open();
+    await conn.enqueue('ping-worker', { probe: probeStart });
+    await new Promise(r => setTimeout(r, 3000));
+    const stamp = await kvGet('worker_ping');
+    workerAlive = !!(stamp?.at && stamp.at >= probeStart);
+  } catch (err) {
+    workerError = err?.message || String(err);
+  }
+
   res.json({
     ok: true,
     build: AI_BUILD,
     hasKey: !!process.env.MINIMAX_API_KEY,
     workerMode: true,
+    workerAlive,
+    ...(workerError && { workerError }),
     aiGenerateRegistered: routeKeys.includes('POST /w/:workspaceId/ai-generate'),
     routes: routeKeys,
   });
@@ -285,11 +310,23 @@ function validateBuildResult(parsed, planType) {
 // ─── Worker: build/revise on MiniMax-M3 (110s budget under the 120s PRO limit) ─
 
 app.worker('ai-generate-worker', async (req, res) => {
-  const { jobId, workspaceId, mode, convo, planType, maxTokens, model } = req.body.payload || {};
+  // Defensive payload parse: handle both delivery shapes (body.payload and
+  // bare body) so a shape mismatch can't silently no-op the worker.
+  const payload = req.body?.payload ?? req.body ?? {};
+  const { jobId, workspaceId, mode, convo, planType, maxTokens, model } = payload;
   const finish = (patch) =>
     kvSet(`ai_job:${jobId}`, { jobId, workspaceId, ...patch }, { ttl: AI_JOB_TTL }).catch(() => {});
 
-  if (!jobId || !Array.isArray(convo)) { res.end(); return; }
+  if (!jobId || !Array.isArray(convo)) {
+    console.error('[ai-worker] bad payload shape:', JSON.stringify(req.body || {}).slice(0, 300));
+    res.end();
+    return;
+  }
+
+  // Breadcrumb: mark the job as picked up BEFORE the slow LLM call. Polling can
+  // now distinguish "worker never ran" (pending forever) from "LLM slow/killed"
+  // (building, then nothing).
+  await finish({ status: 'building', workerStartedAt: Date.now() });
 
   try {
     const systemPrompt = mode === 'revise' ? SYSTEM_PROMPT + REVISE_SUFFIX : SYSTEM_PROMPT;
@@ -370,12 +407,51 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
 
   // ── build/revise: hand off to the worker (M3, 110s budget) and return now ──
   if (mode === 'build' || mode === 'revise') {
+    const planType = plan?.type === 'generator' ? 'generator' : 'singleton';
+
+    // Inline fallback: the frontend sets inline:true after detecting that the
+    // queue never picked the job up ('pending' past ~20s). Runs the build in
+    // this request handler on the highspeed model — weaker than M3, but it
+    // works even when queue workers are dead on this plan.
+    if (req.body?.inline) {
+      try {
+        const systemPrompt = mode === 'revise' ? SYSTEM_PROMPT + REVISE_SUFFIX : SYSTEM_PROMPT;
+        const { jsonStr, finishReason } = await runMiniMax({
+          model: 'MiniMax-M2.7-highspeed',
+          systemPrompt,
+          convo,
+          maxTokens: 16384,
+          budgetMs: 50000,
+        });
+        let parsed;
+        try { parsed = JSON.parse(jsonStr); }
+        catch {
+          await finish({
+            status: 'error',
+            error: finishReason === 'length'
+              ? 'Module too large — the AI response was cut off at the token limit. Try a simpler/smaller app.'
+              : 'AI returned invalid JSON',
+            raw: jsonStr.slice(0, 800),
+          });
+          res.json({ jobId });
+          return;
+        }
+        const typeErr = validateBuildResult(parsed, planType);
+        if (typeErr) { await finish({ status: 'error', error: typeErr }); res.json({ jobId }); return; }
+        await finish({ status: 'done', module: parsed });
+      } catch (err) {
+        await finish({ status: 'error', error: err.message || 'AI request failed' });
+      }
+      res.json({ jobId });
+      return;
+    }
+
     await conn.enqueue('ai-generate-worker', {
       jobId,
       workspaceId,
       mode,
       convo,
-      planType: plan?.type === 'generator' ? 'generator' : 'singleton',
+      planType,
       maxTokens: 16384,
       model: 'MiniMax-M3',
     });
@@ -437,5 +513,5 @@ app.get('/w/:workspaceId/ai-job', async (req, res) => {
 
   const job = await kvGet(`ai_job:${jobId}`);
   if (!job) { res.json({ status: 'unknown' }); return; }
-  res.json({ status: job.status, module: job.module, error: job.error, raw: job.raw });
+  res.json({ status: job.status, module: job.module, error: job.error, raw: job.raw, workerStartedAt: job.workerStartedAt });
 });

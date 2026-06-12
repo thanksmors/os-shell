@@ -1,0 +1,11 @@
+{
+  "appId": "read",
+  "title": "Read",
+  "icon": "📖",
+  "tag": "app-read",
+  "entry": "/modules/read/index.js",
+  "singleton": true,
+  "resizable": true,
+  "defaultSize": { "w": 1000, "h": 700 },
+  "minSize": { "w": 360, "h": 400 }
+}

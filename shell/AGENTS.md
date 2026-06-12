@@ -262,6 +262,13 @@ Spring presets: `snappy` (stiffness 520 / damping 30), `smooth` (280/30), `gentl
 Login screen, Google OAuth, and workspace selection. After login, `auth-store.js`
 calls `os.loadWorkspaceData()` to load the correct instance registry.
 
+**OAuth return URL must keep the query string.** `startGoogleLogin()` builds the
+`return=` URL from `origin + pathname + search`. Do not "simplify" away `search`:
+`?invite=<id>` has to survive the Google round trip or invite links silently do
+nothing for users who aren't signed in yet (which is every invited user). As a
+second layer, `store-auth.js` stashes the invite id in localStorage
+(`os-pending-invite`) before login and consumes it after.
+
 ---
 
 ### `icon.js`

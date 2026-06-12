@@ -189,9 +189,15 @@ class AppBuilder extends HTMLElement {
   }
 
   _renderJobRow(job) {
+    // While building, surface the live polling phase so users see progress.
+    const buildingLabel = {
+      queued:   '⏳ waiting for worker…',
+      building: '🔨 building…',
+      retrying: '🔁 retrying without queue…',
+    }[job.phase] || '🔨 building…';
     const badge = {
       queued:    '<span class="status-badge queued">⏳ queued</span>',
-      building:  '<span class="status-badge building">🔨 building…</span>',
+      building:  `<span class="status-badge building">${buildingLabel}</span>`,
       done:      '<span class="status-badge done">✅ ready</span>',
       installed: '<span class="status-badge installed">📦 installed</span>',
       error:     '<span class="status-badge error">❌ error</span>',
@@ -418,6 +424,12 @@ class AppBuilder extends HTMLElement {
         messages: next.messages,
         plan: next.plan,
         ...(existing && { existing }),
+      }, (phase) => {
+        // Live phase from the polling loop: queued → building (worker picked it
+        // up) → retrying (queue dead, inline fallback). Render so users see
+        // progress instead of an opaque spinner.
+        next.phase = phase;
+        this._render();
       });
       if (!result?.manifest || !result?.js) throw new Error('Build returned no module');
       // Revisions must keep the original appId so user data survives

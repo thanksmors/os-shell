@@ -3,9 +3,11 @@ import { SETTINGS_CSS } from './tabs/styles.js';
 import { renderAppearanceTab } from './tabs/appearance.js';
 import { renderAboutTab } from './tabs/about.js';
 import { renderWorkspaceTab } from './tabs/workspace.js';
+import { renderAppsTab } from './tabs/apps.js';
 
 const TABS = [
   { id: 'appearance', icon: '🎨', label: 'Appearance' },
+  { id: 'apps', icon: '🧩', label: 'Apps' },
   { id: 'workspace', icon: '🏢', label: 'Workspace' },
   { id: 'about', icon: 'ℹ️', label: 'About' },
 ];
@@ -72,6 +74,8 @@ class AppSettings extends HTMLElement {
 
     if (tabId === 'appearance') {
       renderAppearanceTab(this, content);
+    } else if (tabId === 'apps') {
+      renderAppsTab(this, content);
     } else if (tabId === 'workspace') {
       renderWorkspaceTab(this, content);
     } else if (tabId === 'about') {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Capsule</title>
+  <title>ODVI Spaces</title>
   <link rel="stylesheet" href="/shell/css/utils.css" />
   <link rel="stylesheet" href="/shell/css/shell.css" />
   <link rel="stylesheet" href="/shell/css/auth.css" />
@@ -44,9 +44,9 @@
       if (fam && fonts[fam]) document.documentElement.style.fontFamily = fonts[fam];
       var accent = localStorage.getItem('os:accent');
       if (accent) document.documentElement.style.setProperty('--os-accent', accent);
-      var iconSizes  = [56,68,80,96];
-      var iconEmojis = ['1.5rem','1.75rem','2rem','2.5rem'];
-      var ii = parseInt(localStorage.getItem('os:icon-size') ?? '2', 10);
+      var iconSizes  = [80,96,112,128];
+      var iconEmojis = ['2rem','2.5rem','3rem','3.5rem'];
+      var ii = parseInt(localStorage.getItem('os:icon-size') ?? '0', 10);
       if (ii >= 0 && ii < 4) {
         document.documentElement.style.setProperty('--os-icon-size',  iconSizes[ii] + 'px');
         document.documentElement.style.setProperty('--os-icon-emoji', iconEmojis[ii]);
@@ -88,8 +88,8 @@
       <!-- Loading -->
       <template x-if="!$store.auth || $store.auth.screen === 'loading'">
         <div class="os-auth-card">
-          <div class="os-auth-logo">💊</div>
-          <div class="os-auth-title">Capsule</div>
+          <div class="os-auth-logo">🪐</div>
+          <div class="os-auth-title">ODVI Spaces</div>
           <div class="os-auth-spinner"></div>
         </div>
       </template>
@@ -97,8 +97,8 @@
       <!-- Login -->
       <template x-if="$store.auth && $store.auth.screen === 'login'">
         <div class="os-auth-card">
-          <div class="os-auth-logo">💊</div>
-          <div class="os-auth-title">Capsule</div>
+          <div class="os-auth-logo">🪐</div>
+          <div class="os-auth-title">ODVI Spaces</div>
           <div class="os-auth-subtitle">Sign in to continue</div>
           <button class="os-google-btn" @click="$store.auth.login()">
             <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
@@ -123,8 +123,8 @@
               <div class="os-auth-header">
                 <div>
                   <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
-                    <span style="font-size:1.2rem;">💊</span>
-                    <span style="font-size:0.7rem;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#9ca3af;">Capsule Workspaces</span>
+                    <span style="font-size:1.2rem;">🪐</span>
+                    <span style="font-size:0.7rem;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#9ca3af;">ODVI Spaces</span>
                   </div>
                   <div class="os-auth-title" style="font-size:1.1rem;">Choose a Workspace</div>
                   <div class="os-auth-subtitle" x-text="'Signed in as ' + ($store.auth.user?.email || '')"></div>
@@ -152,7 +152,8 @@
               <div class="os-ws-create" x-data="{ open: false, name: '', icon: '🏢' }">
                 <button class="os-ws-create-btn" @click="open = !open">＋ New Workspace</button>
                 <div x-show="open" x-collapse class="ws-create-row" style="margin-top:12px;">
-                  <input class="os-auth-input" style="width:60px;" maxlength="4" x-model="icon" placeholder="🏢" />
+                  <button type="button" class="os-auth-input os-icon-pick" style="width:60px;cursor:pointer;" title="Pick an icon"
+                    @click="$store.os.pickIcon($event.currentTarget, icon, e => icon = e)" x-text="icon"></button>
                   <input class="os-auth-input" style="flex:1;" x-model="name" placeholder="Workspace name…" @keydown.enter="name.trim() && $store.auth.createWorkspace(name.trim(), icon)" />
                   <button class="os-ws-create-go" @click="name.trim() && $store.auth.createWorkspace(name.trim(), icon)">Create</button>
                 </div>
@@ -382,16 +383,16 @@
 
   <!-- ===== TASKBAR ===== -->
   <div class="os-taskbar" x-show="$store.auth && $store.auth.screen === 'desktop'">
-    <!-- Start / Launcher Button -->
+    <!-- Start Menu Button -->
     <button
       class="os-start-btn"
       :class="{ active: launcherOpen }"
       @click.stop="
         launcherOpen = !launcherOpen;
-        if (launcherOpen) $nextTick(() => $refs.launcherSearch && $refs.launcherSearch.focus());
+        if (launcherOpen) { $nextTick(() => $refs.launcherSearch && $refs.launcherSearch.focus()); $store.os.staggerLauncherTiles(); }
       "
-      title="Launcher (⌘K)"
-    >💊</button>
+      title="Start menu (⌘K)"
+    >🪐</button>
 
     <!-- Window Buttons -->
     <div class="os-taskbar-windows">
@@ -446,7 +447,7 @@
     </div>
   </div>
 
-  <!-- ===== LAUNCHER ===== -->
+  <!-- ===== START MENU ===== -->
   <div
     class="os-launcher"
     x-show="launcherOpen && $store.auth && $store.auth.screen === 'desktop'"
@@ -459,7 +460,8 @@
     x-transition:leave-end="opacity-0"
   >
     <div
-      class="os-launcher-panel"
+      class="os-launcher-panel os-startmenu"
+      @click.stop
       x-transition:enter="transition duration-200 ease-out"
       x-transition:enter-start="opacity-0 scale-95"
       x-transition:enter-end="opacity-100 scale-100"
@@ -467,6 +469,12 @@
       x-transition:leave-start="opacity-100 scale-100"
       x-transition:leave-end="opacity-0 scale-95"
     >
+      <!-- Header -->
+      <div class="os-sm-header">
+        <span class="os-sm-brand">🪐 ODVI Spaces</span>
+        <span class="os-sm-ws" x-text="$store.auth?.workspace?.name || ''"></span>
+      </div>
+
       <!-- Search -->
       <input
         x-ref="launcherSearch"
@@ -477,7 +485,8 @@
         @keydown.escape="launcherOpen = false"
         @keydown.enter="
           const apps = Object.values($store.os.apps).filter(a =>
-            !searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase())
+            !a.generator && !$store.os.isAppHidden(a.appId) &&
+            (!searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()))
           );
           if (apps.length > 0) {
             $store.os.launch(apps[0].appId);
@@ -487,9 +496,25 @@
         "
       />
 
-      <!-- App grid -->
+      <!-- Recent apps -->
+      <template x-if="!searchQuery && $store.os && $store.os.recentApps.map(id => $store.os.apps[id]).filter(a => a && !a.generator && !$store.os.isAppHidden(a.appId)).length">
+        <div>
+          <div class="os-sm-label">Recent</div>
+          <div class="os-launcher-grid">
+            <template x-for="app in $store.os.recentApps.map(id => $store.os.apps[id]).filter(a => a && !a.generator && !$store.os.isAppHidden(a.appId)).slice(0,4)" :key="'recent-'+app.appId">
+              <button class="os-app-tile" @click="$store.os.launch(app.appId); launcherOpen = false; searchQuery = '';">
+                <span class="os-app-tile-icon" x-text="app.icon"></span>
+                <span class="os-app-tile-label" x-text="app.title"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <!-- All apps -->
+      <div class="os-sm-label" x-show="!searchQuery">All Apps</div>
       <div class="os-launcher-grid">
-        <template x-for="app in ($store.os ? Object.values($store.os.apps).filter(a => !a.generator && (!searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()))) : [])" :key="app.appId">
+        <template x-for="app in ($store.os ? Object.values($store.os.apps).filter(a => !a.generator && !$store.os.isAppHidden(a.appId) && (!searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()))) : [])" :key="app.appId">
           <button
             class="os-app-tile"
             @click="$store.os.launch(app.appId); launcherOpen = false; searchQuery = '';"
@@ -499,9 +524,25 @@
           </button>
         </template>
         <div
-          x-show="$store.os && Object.values($store.os.apps).filter(a => !searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase())).length === 0"
+          x-show="$store.os && Object.values($store.os.apps).filter(a => !a.generator && !$store.os.isAppHidden(a.appId) && (!searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()))).length === 0"
           style="grid-column:1/-1;text-align:center;padding:24px;color:#9ca3af;font-size:0.875rem;"
         >No apps found</div>
+      </div>
+
+      <!-- Quick actions -->
+      <div class="os-sm-actions">
+        <button class="os-sm-action" @click="$store.os.launch('settings'); launcherOpen = false;" title="Settings">
+          <span>⚙️</span><span>Settings</span>
+        </button>
+        <button class="os-sm-action" @click="$store.auth.screen = 'workspace-select'; launcherOpen = false;" title="Switch workspace">
+          <span>🔄</span><span>Switch</span>
+        </button>
+        <button class="os-sm-action" @click="$store.os.openOnboarding(); launcherOpen = false;" title="Help & tips">
+          <span>❓</span><span>Help</span>
+        </button>
+        <button class="os-sm-action" @click="$store.auth.signOut(); launcherOpen = false;" title="Sign out">
+          <span>🚪</span><span>Sign out</span>
+        </button>
       </div>
     </div>
   </div>
@@ -555,8 +596,8 @@
       @click.stop
     >
       <div class="os-onboarding-slide" x-show="slide === 0">
-        <div class="os-ob-icon">💊</div>
-        <h2 class="os-ob-title">Welcome to Capsule</h2>
+        <div class="os-ob-icon">🪐</div>
+        <h2 class="os-ob-title">Welcome to ODVI Spaces</h2>
         <p class="os-ob-body">A shared workspace for your team. Everything in one place — projects, roadmaps, workload, files, and chat.</p>
       </div>
       <div class="os-onboarding-slide" x-show="slide === 1">

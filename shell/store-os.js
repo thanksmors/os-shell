@@ -20,6 +20,10 @@ export function registerOsStore() {
     desktopOrder: JSON.parse(localStorage.getItem('os:desktopOrder') || '[]'),
     showOnboarding: false,
     animatedBg: localStorage.getItem('os:animated-bg') === '1',
+    startMenuOpen: false,
+    recentApps: JSON.parse(localStorage.getItem('os:recent-apps') || '[]'),
+    hiddenApps: JSON.parse(localStorage.getItem('os:hidden-apps') ??
+      (localStorage.setItem('os:hidden-apps', '["data"]'), '["data"]')),
 
     init() {
       // keep <html class="dark"> in sync with reactive theme, and persist it
@@ -54,6 +58,26 @@ export function registerOsStore() {
     toggleAnimatedBg() {
       this.animatedBg = !this.animatedBg;
       localStorage.setItem('os:animated-bg', this.animatedBg ? '1' : '');
+    },
+
+    _pushRecent(appId) {
+      if (!appId) return;
+      this.recentApps = [appId, ...this.recentApps.filter(a => a !== appId)].slice(0, 6);
+      localStorage.setItem('os:recent-apps', JSON.stringify(this.recentApps));
+    },
+
+    isAppHidden(appId) { return this.hiddenApps.includes(appId); },
+
+    toggleAppHidden(appId) {
+      this.hiddenApps = this.isAppHidden(appId)
+        ? this.hiddenApps.filter(a => a !== appId)
+        : [...this.hiddenApps, appId];
+      localStorage.setItem('os:hidden-apps', JSON.stringify(this.hiddenApps));
+    },
+
+    async pickIcon(anchorEl, current, onPick) {
+      const { showEmojiPicker } = await import('/shell/emoji-picker.js');
+      showEmojiPicker(anchorEl, current, onPick);
     },
 
     // Called by auth store after workspace is activated
@@ -158,6 +182,7 @@ export function registerOsStore() {
     async launch(appId, config = {}) {
       const app = this.apps[appId];
       if (!app) return;
+      this._pushRecent(appId);
       if (app.singleton) {
         const existing = this.windows.find(w => w.appId === appId);
         if (existing) { this.focus(existing.id); return; }
@@ -369,6 +394,7 @@ export function registerOsStore() {
     async createInstance(appId, config = {}) {
       const instanceId = 'inst-' + Date.now();
       const app = this.apps[appId];
+      this._pushRecent(appId);
       const instance = {
         instanceId,
         appId,
@@ -531,7 +557,7 @@ export function registerOsStore() {
     // Merged ordered list of all desktop items (non-generator apps + root instances)
     desktopItems() {
       const map = {};
-      Object.values(this.apps).filter(a => !a.generator).forEach(a => {
+      Object.values(this.apps).filter(a => !a.generator && !this.isAppHidden(a.appId)).forEach(a => {
         map[`app:${a.appId}`] = { key: `app:${a.appId}`, type: 'app', id: a.appId, icon: a.icon, label: a.title };
       });
       this.instances.filter(i => !i.parentId).forEach(i => {
@@ -621,7 +647,7 @@ export function registerOsStore() {
       }
       if (items.length) items.push({ separator: true });
       items.push({ label: '🎨 Change Theme', action: () => this.toggleTheme() });
-      items.push({ label: '💊 About', action: () => this.launch('about') });
+      items.push({ label: '🪐 About', action: () => this.launch('about') });
       this.showContextMenu(x, y, items);
     },
 

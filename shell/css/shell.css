@@ -281,32 +281,95 @@
 .os-rh-sw { bottom: 0; left: 0;    width: 10px; height: 10px; cursor: sw-resize; }
 .os-rh-se { bottom: 0; right: 0;   width: 10px; height: 10px; cursor: se-resize; }
 
-/* Launcher overlay */
+/* Start-menu overlay — backdrop fills the screen for click-to-close, but the
+   panel anchors to the bottom-left, just above the taskbar start button. */
 .os-launcher {
   position: fixed;
   inset: 0;
   bottom: 48px;
   z-index: 9500;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0,0,0,0.4);
-  backdrop-filter: blur(4px);
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 0 0 8px 8px;
+  background: transparent;
 }
 
 .os-launcher-panel {
-  background: rgba(255,255,255,0.95);
+  background: rgba(255,255,255,0.97);
   backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-radius: 16px;
-  box-shadow: 0 32px 64px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.06);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.32), 0 0 0 1px rgba(0,0,0,0.08);
   padding: 16px;
-  width: 480px;
-  max-width: calc(100vw - 32px);
+  width: 380px;
+  max-width: calc(100vw - 16px);
 }
 .dark .os-launcher-panel {
-  background: rgba(30,36,51,0.97);
-  box-shadow: 0 32px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08);
+  background: rgba(30,36,51,0.98);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08);
 }
+
+/* Start menu specifics */
+.os-startmenu {
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.os-sm-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.os-sm-brand { font-size: 0.9rem; font-weight: 700; color: #111827; }
+.dark .os-sm-brand { color: #f3f4f6; }
+.os-sm-ws {
+  font-size: 0.75rem;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50%;
+}
+.dark .os-sm-ws { color: #9ca3af; }
+.os-sm-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #9ca3af;
+  margin: 8px 2px 6px;
+}
+.os-sm-actions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f3;
+}
+.dark .os-sm-actions { border-top-color: rgba(255,255,255,0.08); }
+.os-sm-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.7rem;
+  color: #374151;
+  transition: background 150ms, transform 100ms;
+}
+.os-sm-action span:first-child { font-size: 1.15rem; line-height: 1; }
+.os-sm-action:hover { background: rgba(59,130,246,0.08); }
+.dark .os-sm-action { color: #d1d5db; }
+.dark .os-sm-action:hover { background: rgba(255,255,255,0.06); }
+.os-sm-action:active { transform: scale(0.95); }
 
 .os-launcher-search {
   width: 100%;

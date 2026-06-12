@@ -16,8 +16,8 @@ class AppAbout extends HTMLElement {
 
     wrapper.innerHTML = `
       <div class="about-hero">
-        <div class="about-logo">💊</div>
-        <h1 class="about-title">Capsule</h1>
+        <div class="about-logo">🪐</div>
+        <h1 class="about-title">ODVI Spaces</h1>
         <p class="about-tagline">A shared workspace for your team.</p>
         <p class="about-version">Version 1.0.0</p>
       </div>
@@ -63,7 +63,7 @@ class AppAbout extends HTMLElement {
         </div>
 
         <div class="about-footer">
-          <span>© 2025 Capsule</span>
+          <span>© 2026 ODVI Spaces</span>
           <span class="about-dot">·</span>
           <span>Open Source</span>
         </div>

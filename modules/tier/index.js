@@ -103,7 +103,7 @@ class AppTier extends HTMLElement {
           </div>
           <div class="settings-row">
             <label class="settings-label">Icon</label>
-            <input class="settings-input settings-icon" id="settings-icon" value="${this._esc(instanceIcon)}" placeholder="Emoji…" maxlength="4" />
+            <button type="button" class="settings-input settings-icon" id="settings-icon" data-icon="${this._esc(instanceIcon)}" title="Pick an icon" style="cursor:pointer;">${this._esc(instanceIcon)}</button>
           </div>
           <div class="settings-row" style="justify-content:flex-end;gap:8px;">
             <button class="settings-cancel" data-action="toggle-settings">Cancel</button>
@@ -144,6 +144,15 @@ class AppTier extends HTMLElement {
 
   _bindEvents() {
     const w = this._wrapper;
+
+    // Settings icon picker (reuses the shared emoji picker)
+    const iconBtn = w.querySelector('#settings-icon');
+    if (iconBtn) iconBtn.addEventListener('click', () => {
+      this.api?.store?.pickIcon(iconBtn, iconBtn.dataset.icon || '🏆', emoji => {
+        iconBtn.dataset.icon = emoji;
+        iconBtn.textContent = emoji;
+      });
+    });
 
     // Inline card text editing
     w.querySelectorAll('.card-text').forEach(span => {
@@ -224,7 +233,7 @@ class AppTier extends HTMLElement {
           const nameEl = w.querySelector('#settings-name');
           const iconEl = w.querySelector('#settings-icon');
           const newName = nameEl?.value.trim() || this._state.name;
-          const newIcon = iconEl?.value.trim() || '🏆';
+          const newIcon = iconEl?.dataset.icon?.trim() || '🏆';
           this._state.name = newName;
           await this._save();
           if (this.api?.updateInstance) await this.api.updateInstance(newName, newIcon);

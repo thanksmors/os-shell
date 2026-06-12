@@ -43,7 +43,7 @@ export async function renderWorkspaceTab(host, content) {
         ${['owner','admin'].includes(ws.role) ? `
         <div id="edit-ws-form" style="display:none;" class="settings-row" style="flex-direction:column;gap:8px;">
           <div style="display:flex;gap:8px;">
-            <input class="settings-input" id="ws-icon" value="${host._esc(ws.icon||'🏢')}" maxlength="4" style="width:56px;" />
+            <button type="button" class="settings-input" id="ws-icon" data-icon="${host._esc(ws.icon||'🏢')}" style="width:56px;cursor:pointer;" title="Pick an icon">${host._esc(ws.icon||'🏢')}</button>
             <input class="settings-input" id="ws-name" value="${host._esc(ws.name)}" placeholder="Workspace name…" style="flex:1;" />
           </div>
           <button class="settings-save" id="btn-save-ws">Save</button>
@@ -109,10 +109,19 @@ export async function renderWorkspaceTab(host, content) {
     editForm.style.display = editForm.style.display === 'none' ? 'flex' : 'none';
   });
 
+  // Workspace icon picker
+  const wsIconBtn = content.querySelector('#ws-icon');
+  wsIconBtn?.addEventListener('click', () => {
+    host.api?.store?.pickIcon(wsIconBtn, wsIconBtn.dataset.icon || '🏢', emoji => {
+      wsIconBtn.dataset.icon = emoji;
+      wsIconBtn.textContent = emoji;
+    });
+  });
+
   // Save workspace name/icon
   content.querySelector('#btn-save-ws')?.addEventListener('click', async () => {
     const name = content.querySelector('#ws-name')?.value.trim();
-    const icon = content.querySelector('#ws-icon')?.value.trim();
+    const icon = content.querySelector('#ws-icon')?.dataset.icon?.trim();
     if (!name) return;
     try {
       const { updateWorkspace } = await import('/shell/workspace.js');

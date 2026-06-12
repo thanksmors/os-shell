@@ -1,7 +1,7 @@
 const FONT_SIZES   = ['87.5%', '93.75%', '100%', '112.5%'];
 const SIZE_LABELS  = ['XSmall', 'Small', 'Medium', 'Large'];
-const ICON_SIZES   = [56, 68, 80, 96];
-const ICON_EMOJIS  = ['1.5rem', '1.75rem', '2rem', '2.5rem'];
+const ICON_SIZES   = [80, 96, 112, 128];
+const ICON_EMOJIS  = ['2rem', '2.5rem', '3rem', '3.5rem'];
 const ICON_LABELS  = ['XSmall', 'Small', 'Medium', 'Large'];
 const FONT_FAMILIES = {
   system: { label: 'System UI',   value: 'system-ui,-apple-system,sans-serif' },
@@ -20,7 +20,7 @@ const ACCENTS = [
 export function renderAppearanceTab(host, content) {
   const isDark      = document.documentElement.classList.contains('dark');
   const sizeIdx     = Math.min(3, Math.max(0, parseInt(localStorage.getItem('os:font-size') ?? '2', 10)));
-  const iconIdx     = Math.min(3, Math.max(0, parseInt(localStorage.getItem('os:icon-size') ?? '2', 10)));
+  const iconIdx     = Math.min(3, Math.max(0, parseInt(localStorage.getItem('os:icon-size') ?? '0', 10)));
   const savedFamily = localStorage.getItem('os:font-family') || 'system';
   const savedAccent = localStorage.getItem('os:accent') || '#3b82f6';
   const animBg      = localStorage.getItem('os:animated-bg') === '1';

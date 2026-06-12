@@ -1,8 +1,8 @@
 export function renderAboutTab(host, content) {
   content.innerHTML = `
     <div class="about-hero">
-      <div class="about-logo">💊</div>
-      <div class="about-title">Capsule</div>
+      <div class="about-logo">🪐</div>
+      <div class="about-title">ODVI Spaces</div>
       <div class="about-subtitle">A shared workspace for your team.</div>
       <div class="about-version">Version 1.0.0</div>
     </div>

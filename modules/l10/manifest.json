@@ -1,0 +1,17 @@
+{
+  "appId": "l10",
+  "title": "L10",
+  "icon": "🔵",
+  "tag": "app-l10",
+  "entry": "/modules/l10/index.js",
+  "generator": true,
+  "hasSettings": true,
+  "sync": true,
+  "resizable": true,
+  "defaultSize": { "w": 900, "h": 620 },
+  "minSize": { "w": 640, "h": 440 },
+  "dataCollections": ["l10"],
+  "contextMenu": [
+    { "label": "🔵 New L10 Board", "config": { "name": "L10" } }
+  ]
+}

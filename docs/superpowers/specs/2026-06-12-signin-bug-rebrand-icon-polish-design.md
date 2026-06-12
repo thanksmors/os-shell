@@ -20,14 +20,14 @@ The coho log shows the bug is not isolated to the new sign-in: 100+ `5 NOT_FOUND
 
 The error message in coho log does not identify which route threw. We have a strong guess (`realtime.createListener` for a brand-new workspaceId in `codehooks/routes/data.js:25` is not wrapped in try/catch), but we should not fix on a guess.
 
-**Step 1 — add a temporary capture route + error middleware.**
+**Step 1 — add a temporary capture route + process-level error listener.**
 
 New file `codehooks/routes/debug.js`, imported by `codehooks/index.js`. It registers:
 
-- An Express-style error middleware via `app.use((err, req, res, next) => { ... })` that, on any unhandled throw, stashes the most recent error into a KV record under `last_error` with shape `{ route, method, stack, ts }`.
+- Node's `process.on('unhandledRejection')` and `process.on('uncaughtException')` listeners that stash the most recent error into a KV record under `last_error` with shape `{ source, message, stack, ts }`. **Why not Express-style error middleware (`app.use((err, req, res, next) => ...)`)?** The suspect failure is async — `realtime.createListener` is awaited inside a route handler. Even in a fully-Express-compatible framework, async rejections do not auto-route to error middleware; they become unhandled promise rejections unless the handler explicitly calls `next(err)`. Node's process-level listeners are the only capture guaranteed to fire.
 - `GET /debug/last-error` — returns the stored record (or `{ error: 'none' }` if nothing has been captured). Read-after-triggers pattern, like the prior `a3194de` / `de866a8` / `a26a195` debug routes.
 
-The middleware uses `console.error` first (cheap, surfaces in `coho log` if it works) and persists to KV as the source of truth (reliable even if coho log truncates async errors).
+The listener uses `console.error` first (cheap, surfaces in `coho log` if it works) and persists to KV as the source of truth (reliable even if coho log truncates async errors).
 
 **Step 2 — trigger and read.**
 

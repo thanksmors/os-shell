@@ -899,14 +899,24 @@
     510px 615px rgba(255,255,255,0.65),
     1672px 668px rgba(255,255,255,0.58);
 }
-/* Subtle twinkle when "Animated Background" is on */
+/* Animated starfield: gradient sweep + obvious star twinkle */
+.os-desktop-wallpaper.wallpaper-starfield.animated {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--os-accent, #3b82f6) 12%, #07071a) 0%,
+    color-mix(in srgb, var(--os-accent, #3b82f6)  6%, #0a0a22) 33%,
+    color-mix(in srgb, var(--os-accent, #3b82f6) 18%, #0f0f38) 66%,
+    color-mix(in srgb, var(--os-accent, #3b82f6)  8%, #080820) 100%);
+  background-size: 300% 300%;
+  animation: os-aurora 18s ease infinite;
+}
 @keyframes os-stars-twinkle {
   0%, 100% { opacity: 1; }
-  50%      { opacity: 0.55; }
+  50%      { opacity: 0.2; }
 }
-.os-desktop-wallpaper.wallpaper-starfield.animated::before { animation: os-stars-twinkle 7s ease-in-out infinite; }
-.os-desktop-wallpaper.wallpaper-starfield.animated::after  { animation: os-stars-twinkle 11s ease-in-out infinite 2s; }
+.os-desktop-wallpaper.wallpaper-starfield.animated::before { animation: os-stars-twinkle 4s ease-in-out infinite; }
+.os-desktop-wallpaper.wallpaper-starfield.animated::after  { animation: os-stars-twinkle 6s ease-in-out infinite 1s; }
 @media (prefers-reduced-motion: reduce) {
+  .os-desktop-wallpaper.wallpaper-starfield.animated { animation: none; }
   .os-desktop-wallpaper.wallpaper-starfield::before,
   .os-desktop-wallpaper.wallpaper-starfield::after { animation: none; }
 }
@@ -1104,6 +1114,29 @@
 
 /* Start menu ODVI ecosystem tiles — external-link hint */
 .os-odvi-tile .os-app-tile-label::after { content: ' ↗'; opacity: 0.5; }
+
+/* Onboarding title beta badge */
+.os-ob-title-badge {
+  display: inline-block;
+  font-size: 0.5rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #818cf8;
+  background: rgba(99,102,241,0.12);
+  border: 1px solid rgba(99,102,241,0.28);
+  border-radius: 999px;
+  padding: 2px 7px;
+  vertical-align: middle;
+  margin-left: 6px;
+  position: relative;
+  top: -2px;
+}
+.dark .os-ob-title-badge {
+  color: #a5b4fc;
+  background: rgba(99,102,241,0.2);
+  border-color: rgba(99,102,241,0.4);
+}
 
 /* Space trivia line */
 .os-ob-trivia {

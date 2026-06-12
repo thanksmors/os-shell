@@ -651,14 +651,14 @@
         hoverApp: null,
         triviaIdx: 0,
         trivia: [
+          'There are more stars in the observable universe than grains of sand on Earth.',
+          'Light from the Sun takes about 8 minutes to reach us.',
+          'A neutron star can spin over 700 times per second.',
+          'The Milky Way is about 100,000 light-years across.',
+          'The JWST can see galaxies formed just 300 million years after the Big Bang.',
           'Saturn\'s rings are over 280,000 km wide but only ~10 m thick.',
-          'Sunlight takes about 80 minutes to reach Saturn.',
-          'A day on Saturn lasts just 10.7 hours.',
-          'Saturn has 146 confirmed moons — more than any planet.',
-          'The JWST can see galaxies over 13 billion light-years away.',
-          'Saturn is the least dense planet — it would float in water.',
           'The Pillars of Creation are about 7 light-years tall.',
-          'Voyager 1 left our solar system in 2012 after 35 years of travel.',
+          'Voyager 1 — launched in 1977 — is now over 23 billion km from Earth.',
         ],
         feats: [
           { icon: '📂', name: 'Projects Hub', desc: 'Milestones, issues, action items, decisions, and docs per project.' },
@@ -699,7 +699,7 @@
         x-transition:enter-start="opacity-0 translate-y-1"
         x-transition:enter-end="opacity-100 translate-y-0"
       >
-        <h2 class="os-ob-title">The ODVI Ecosystem</h2>
+        <h2 class="os-ob-title">The ODVI Ecosystem <span class="os-ob-title-badge">beta</span></h2>
         <p class="os-ob-body">Spaces is one of a family of ODVI apps. Click any to open it.</p>
         <div class="os-ob-feat-row">
           <template x-for="app in ($store.os ? $store.os.odviApps : [])" :key="app.id">

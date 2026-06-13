@@ -5,7 +5,7 @@ import { kvSet, kvGet } from '../lib/db.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-13-multifile';
+const AI_BUILD = '2026-06-13-multifile-logs';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -412,12 +412,15 @@ async function generateCss(files, budgetMs) {
 // Generate one feature file for a multi-file app against the fixed contract
 // (manifest + main.js + the file's required exports). Throws on failure.
 async function generateFeature({ model, manifest, main, feat, budgetMs }) {
+  const t0 = Date.now();
+  console.log(`[ai] feature start: ${feat.name}`);
   const convo = [{ role: 'user', content:
     `APP manifest + main.js (context — do NOT rewrite these):\n${JSON.stringify({ manifest, main })}\n\n` +
     `Write file "${feat.name}" exporting: ${(feat.exports || []).join(', ')}\nSPEC: ${feat.spec || ''}` }];
   const { jsonStr } = await runMiniMax({ model, systemPrompt: FEATURE_PROMPT, convo, maxTokens: 16384, budgetMs });
   const parsed = JSON.parse(jsonStr);
   if (typeof parsed?.js !== 'string') throw new Error(`feature ${feat.name} returned no js`);
+  console.log(`[ai] feature done: ${feat.name} +${Date.now() - t0}ms`);
   return parsed.js;
 }
 
@@ -437,6 +440,7 @@ async function buildModule({ jsModel, mode, convo, jsBudget, featureBudget, cssB
   const specs = Array.isArray(arch.files)
     ? arch.files.filter(f => f && f.name && f.name !== 'main.js')
     : [];
+  console.log(`[ai] architect → ${specs.length ? `multi-file: main.js + [${specs.map(s => s.name).join(', ')}]` : 'single-file'} (main ${arch.main.length} chars)`);
 
   // Single-file: main.js is the whole module (legacy { js } shape).
   if (!specs.length) {

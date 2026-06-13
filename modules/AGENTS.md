@@ -206,6 +206,12 @@ queue runner). Past jobs live in the `build-jobs` collection and can be **revise
 another clarify/plan round, then a `revise` build that keeps the same `appId` so
 user data survives; the revised code auto-reinstalls.
 
+**Auto-retry on timeout.** `_processQueue` re-queues a build **once** (`autoRetried`
+flag) when it fails with a `took over …s` timeout — M3 latency is variable, so a
+fresh attempt often succeeds. Truncation ("Module too large") and invalid-JSON are
+deterministic and are surfaced as errors immediately, not retried. The manual Retry
+button resets `autoRetried` so a retried job gets its own auto-retry budget.
+
 **Singleton is the default.** The backend (`codehooks/routes/ai.js`) enforces
 `plan.type` after generation: anything not explicitly planned as `generator` is
 forced to `singleton: true, generator: false` with `contextMenu` removed.

@@ -5,7 +5,7 @@ import { kvSet, kvGet } from '../lib/db.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-13-clarify-retry';
+const AI_BUILD = '2026-06-13-css-split';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -90,8 +90,7 @@ JSON output:
     "dataCollections": ["counters"],
     "contextMenu": [{ "label": "🔢 New Counter", "config": { "name": "Counter", "icon": "🔢" } }]
   },
-  "js": "import { AppModuleBase } from '/shell/module-base.js';\\nimport { getData, setData } from '/shell/api.js';\\n\\nclass AppCounter extends AppModuleBase {\\n  async _load() {\\n    this._state = await getData('counters', this._appId) || { name: this.api?.config?.name || 'Counter', count: 0 };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"body\\"><div class=\\"count\\">\${this._state.count}</div><div class=\\"btns\\"><button class=\\"btn dec\\">−</button><button class=\\"btn rst\\">Reset</button><button class=\\"btn inc\\">+</button></div></div>\`;\\n    this._wrapper.querySelector('.dec').addEventListener('click', () => this._change(-1));\\n    this._wrapper.querySelector('.inc').addEventListener('click', () => this._change(1));\\n    this._wrapper.querySelector('.rst').addEventListener('click', () => this._change(0, true));\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  async _change(delta, reset = false) {\\n    if (reset) this._state.count = 0; else this._state.count += delta;\\n    await setData('counters', this._appId, this._state);\\n    this._render();\\n  }\\n}\\n\\nif (!customElements.get('app-counter')) customElements.define('app-counter', AppCounter);",
-  "css": ".wrapper { display:flex; flex-direction:column; min-height:100%; height:auto; align-items:center; justify-content:center; background:#f2f2f7; color:#1c1c1e; }\\n.wrapper.dark { background:#1c1c1e; color:#f5f5f7; }\\n.body { display:flex; flex-direction:column; align-items:center; gap:20px; }\\n.count { font-size:5rem; font-weight:700; }\\n.btns { display:flex; gap:8px; }\\n.btn { padding:10px 22px; border:none; border-radius:8px; background:var(--os-accent, #3b82f6); color:#fff; font-size:1rem; cursor:pointer; }\\n.btn:hover { opacity:.85; }\\n.rst { background:#8e8e93; }"
+  "js": "import { AppModuleBase } from '/shell/module-base.js';\\nimport { getData, setData } from '/shell/api.js';\\n\\nclass AppCounter extends AppModuleBase {\\n  async _load() {\\n    this._state = await getData('counters', this._appId) || { name: this.api?.config?.name || 'Counter', count: 0 };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"body\\"><div class=\\"count\\">\${this._state.count}</div><div class=\\"btns\\"><button class=\\"btn dec\\">−</button><button class=\\"btn rst\\">Reset</button><button class=\\"btn inc\\">+</button></div></div>\`;\\n    this._wrapper.querySelector('.dec').addEventListener('click', () => this._change(-1));\\n    this._wrapper.querySelector('.inc').addEventListener('click', () => this._change(1));\\n    this._wrapper.querySelector('.rst').addEventListener('click', () => this._change(0, true));\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  async _change(delta, reset = false) {\\n    if (reset) this._state.count = 0; else this._state.count += delta;\\n    await setData('counters', this._appId, this._state);\\n    this._render();\\n  }\\n}\\n\\nif (!customElements.get('app-counter')) customElements.define('app-counter', AppCounter);"
 }
 
 ## EXAMPLE — Complete singleton module (one shared window)
@@ -113,9 +112,13 @@ JSON output:
     "generator": false,
     "resizable": true
   },
-  "js": "import { AppModuleBase } from '/shell/module-base.js';\\n\\nclass AppClock extends AppModuleBase {\\n  async _load() {\\n    this._state = { name: 'Clock', now: new Date().toLocaleTimeString() };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"body\\"><div class=\\"time\\">\${this._state.now}</div></div>\`;\\n    clearInterval(this._timer);\\n    this._timer = setInterval(() => {\\n      const t = this._wrapper.querySelector('.time');\\n      if (t) t.textContent = new Date().toLocaleTimeString();\\n    }, 1000);\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  disconnectedCallback() { super.disconnectedCallback(); clearInterval(this._timer); }\\n}\\n\\nif (!customElements.get('app-clock')) customElements.define('app-clock', AppClock);",
-  "css": ".wrapper { display:flex; align-items:center; justify-content:center; min-height:100%; height:auto; background:#f2f2f7; color:#1c1c1e; }\\n.wrapper.dark { background:#1c1c1e; color:#f5f5f7; }\\n.body { text-align:center; }\\n.time { font-size:3rem; font-weight:700; font-variant-numeric:tabular-nums; }"
+  "js": "import { AppModuleBase } from '/shell/module-base.js';\\n\\nclass AppClock extends AppModuleBase {\\n  async _load() {\\n    this._state = { name: 'Clock', now: new Date().toLocaleTimeString() };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"body\\"><div class=\\"time\\">\${this._state.now}</div></div>\`;\\n    clearInterval(this._timer);\\n    this._timer = setInterval(() => {\\n      const t = this._wrapper.querySelector('.time');\\n      if (t) t.textContent = new Date().toLocaleTimeString();\\n    }, 1000);\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  disconnectedCallback() { super.disconnectedCallback(); clearInterval(this._timer); }\\n}\\n\\nif (!customElements.get('app-clock')) customElements.define('app-clock', AppClock);"
 }
+
+## Output shape
+
+Output ONLY valid JSON of the form { "manifest": {...}, "js": "..." }.
+Do NOT include a "css" field — styling is generated in a separate step.
 
 ## Rules
 
@@ -126,21 +129,33 @@ JSON output:
 5. JS must start with: import { AppModuleBase } from '/shell/module-base.js';
 6. JS must end with: if (!customElements.get('app-{appId}')) customElements.define('app-{appId}', ClassName);
 7. Only use absolute /shell/ imports — no relative paths, no external URLs, no npm packages
-8. All CSS selectors must be scoped under .wrapper
-9. Dark mode: add .wrapper.dark selectors for every background/color rule
-10. Use this.api?.config?.name for the initial name when available
-11. The collection name in dataCollections must match what getData/setData use
-12. Keep JS and CSS as single-line strings with \\n for newlines (valid JSON string)
-13. ALL modules (generator AND singleton) extend AppModuleBase. NEVER write your own constructor or connectedCallback — AppModuleBase already awaits _load() (which sets this._state) BEFORE calling _render(). Writing your own connectedCallback runs _render() before _state exists and crashes with "this._state is null".
-14. _load() MUST always assign this._state before it returns — to persisted data OR a default object. Use: this._state = await getData(coll, key) || { ...defaults }. Singletons with no saved data just do: this._state = { ...defaults };
-15. _render() may safely assume this._state is set. Always null-check elements from querySelector before using them.
-16. If you override disconnectedCallback (e.g. to clear a setInterval), call super.disconnectedCallback() first.
-17. Singletons have no per-instance id — persist with a fixed literal key, e.g. getData('myapp', 'data') / setData('myapp', 'data', this._state). Do NOT use this._appId for singleton persistence.
-18. Font sizes in CSS must use rem units (the shell scales html font-size from user settings) — never px for text.
-19. Primary action colors must use var(--os-accent, #3b82f6) — the user picks the accent in OS settings.
-20. NEVER declare font-family in CSS — it inherits the user's chosen font from the shell.
-21. SINGLETON IS THE DEFAULT. Only produce a generator module if the approved plan's type is "generator". Follow the plan's "type" field EXACTLY.
-22. Be economical with output: no code comments, no dead code, no decorative whitespace. Implement exactly the planned features and nothing extra — your response is cut off at a hard token limit, so every wasted token risks truncating the module.`;
+8. Give rendered elements clear, semantic class names (e.g. .body, .btn, .count) and keep all content inside this._wrapper (".wrapper") — the separate styling step targets those class names
+9. Use this.api?.config?.name for the initial name when available
+10. The collection name in dataCollections must match what getData/setData use
+11. Keep JS as a single-line string with \\n for newlines (valid JSON string)
+12. ALL modules (generator AND singleton) extend AppModuleBase. NEVER write your own constructor or connectedCallback — AppModuleBase already awaits _load() (which sets this._state) BEFORE calling _render(). Writing your own connectedCallback runs _render() before _state exists and crashes with "this._state is null".
+13. _load() MUST always assign this._state before it returns — to persisted data OR a default object. Use: this._state = await getData(coll, key) || { ...defaults }. Singletons with no saved data just do: this._state = { ...defaults };
+14. _render() may safely assume this._state is set. Always null-check elements from querySelector before using them.
+15. If you override disconnectedCallback (e.g. to clear a setInterval), call super.disconnectedCallback() first.
+16. Singletons have no per-instance id — persist with a fixed literal key, e.g. getData('myapp', 'data') / setData('myapp', 'data', this._state). Do NOT use this._appId for singleton persistence.
+17. SINGLETON IS THE DEFAULT. Only produce a generator module if the approved plan's type is "generator". Follow the plan's "type" field EXACTLY.
+18. Be economical with output: no code comments, no dead code, no decorative whitespace. Implement exactly the planned features and nothing extra — your response is cut off at a hard token limit, so every wasted token risks truncating the module.`;
+
+// Styling runs as a second, cheaper call so the build call only emits {manifest,
+// js} — CSS is often a big share of output, so splitting it out cuts truncation
+// and speeds the JS call. The model sees the generated js and styles its classes.
+const STYLE_PROMPT = `You are a CSS author for "ODVI Spaces" app modules (Web Components with Shadow DOM). You receive a module's manifest and js. Write the CSS that styles the markup the js renders into this._wrapper (the ".wrapper" root).
+
+Output ONLY valid JSON of the form { "css": "..." } — a single-line string with \\n for newlines. No markdown, no code fences, no extra text.
+
+Rules:
+1. Inspect the js and style the exact class names it renders. Every selector must be scoped under .wrapper.
+2. Dark mode: add .wrapper.dark selectors for every background/color rule.
+3. The root should fill the window: .wrapper { min-height:100%; height:auto; } with a light background, plus a .wrapper.dark background.
+4. Font sizes must use rem units (the shell scales html font-size) — never px for text.
+5. Primary action colors must use var(--os-accent, #3b82f6) — the user picks the accent.
+6. NEVER declare font-family — it inherits the user's chosen font from the shell.
+7. Be economical: style only what the js renders, no dead rules.`;
 
 // ─── Phase prompts (clarify → plan → build/revise) ────────────────────────────
 
@@ -188,10 +203,10 @@ const REVISE_SUFFIX = `
 
 ## Revision mode
 
-You are REVISING an existing installed module. You will receive its current manifest, js, and css plus an approved change plan.
+You are REVISING an existing installed module. You will receive its current manifest and js plus an approved change plan.
 - Keep the SAME appId and tag (user data is keyed by them).
-- Apply only the planned changes; preserve all other behavior and styling.
-- Output the COMPLETE updated module JSON (manifest + js + css), not a diff.`;
+- Apply only the planned changes; preserve all other behavior.
+- Output the COMPLETE updated module JSON ({manifest, js}), not a diff. Do NOT include a "css" field — styling is regenerated separately from your js.`;
 
 // Enforce the approved plan's instance model — the model occasionally drifts.
 function enforcePlanType(parsed, planType) {
@@ -320,6 +335,49 @@ function validateBuildResult(parsed, planType) {
   return enforcePlanType(parsed, planType === 'generator' ? 'generator' : 'singleton');
 }
 
+const TRUNCATION_MSG = 'Module too large — the AI response was cut off at the token limit. Try fewer features, or build a basic version first and use Revise to add more.';
+
+// Durable build-outcome counters (timeout | truncation | invalid_json | success)
+// so the true failure mix can be read with `coho` later. Best-effort: a failed
+// bump must never break a build. No ttl → permanent.
+async function bumpStat(kind) {
+  try {
+    const key = `ai_stat:${kind}`;
+    const cur = await kvGet(key);
+    await kvSet(key, { count: (cur?.count || 0) + 1, at: Date.now() });
+  } catch (e) {
+    console.error('[ai] bumpStat failed:', e.message);
+  }
+}
+
+// Generate CSS for an already-built {manifest, js} on the fast model. Non-fatal:
+// a failure returns '' so a working module ships unstyled rather than being lost.
+async function generateCss(parsed, budgetMs) {
+  try {
+    const convo = [{ role: 'user', content: `MODULE manifest and js:\n${JSON.stringify({ manifest: parsed.manifest, js: parsed.js })}` }];
+    const { jsonStr } = await runMiniMax({ model: 'MiniMax-M2.7-highspeed', systemPrompt: STYLE_PROMPT, convo, maxTokens: 4096, budgetMs });
+    const styled = JSON.parse(jsonStr);
+    return typeof styled?.css === 'string' ? styled.css : '';
+  } catch (e) {
+    console.error('[ai] CSS generation failed, shipping unstyled:', e.message);
+    return '';
+  }
+}
+
+// Two-call build: JS (reasoning model) then CSS (fast model). Returns
+// { ok:true, module } with css attached, or { ok:false, finishReason, raw } when
+// the JS JSON won't parse (caller maps finishReason 'length' → truncation). A JS
+// timeout throws out of runMiniMax and propagates to the caller's catch.
+async function buildModule({ jsModel, mode, convo, jsBudget, cssBudget }) {
+  const systemPrompt = mode === 'revise' ? SYSTEM_PROMPT + REVISE_SUFFIX : SYSTEM_PROMPT;
+  const { jsonStr, finishReason } = await runMiniMax({ model: jsModel, systemPrompt, convo, maxTokens: 32768, budgetMs: jsBudget });
+  let parsed;
+  try { parsed = JSON.parse(jsonStr); }
+  catch { return { ok: false, finishReason, raw: jsonStr.slice(0, 800) }; }
+  parsed.css = await generateCss(parsed, cssBudget);
+  return { ok: true, module: parsed };
+}
+
 // ─── Worker: build/revise on MiniMax-M3 (300s LLM budget, 330s worker timeout —
 // paid plans allow worker timeouts up to 10 minutes) ───────────────────────────
 
@@ -327,7 +385,7 @@ app.worker('ai-generate-worker', async (req, res) => {
   // Defensive payload parse: handle both delivery shapes (body.payload and
   // bare body) so a shape mismatch can't silently no-op the worker.
   const payload = req.body?.payload ?? req.body ?? {};
-  const { jobId, workspaceId, mode, convo, planType, maxTokens, model } = payload;
+  const { jobId, workspaceId, mode, convo, planType, model } = payload;
   const startedAt = Date.now();
   const finish = (patch) => {
     console.log(`[ai-worker] job ${jobId} → ${patch.status}${patch.error ? ` (${patch.error})` : ''} +${Date.now() - startedAt}ms`);
@@ -356,37 +414,26 @@ app.worker('ai-generate-worker', async (req, res) => {
   // The platform worker timeout (330s) is the backstop for a hung LLM call.
 
   try {
-    const systemPrompt = mode === 'revise' ? SYSTEM_PROMPT + REVISE_SUFFIX : SYSTEM_PROMPT;
     console.log(`[ai-worker] job ${jobId} LLM call start (${model || 'MiniMax-M3'}, mode=${mode}, convo=${convo.length})`);
-    const { jsonStr, finishReason } = await runMiniMax({
-      model: model || 'MiniMax-M3',
-      systemPrompt,
-      convo,
-      maxTokens: maxTokens || 32768,
-      budgetMs: 300000,
-    });
-    console.log(`[ai-worker] job ${jobId} LLM done +${Date.now() - startedAt}ms (finish_reason=${finishReason}, len=${jsonStr.length})`);
+    // JS on M3 (~260s) then CSS on the fast model (~45s) — both fit the 330s worker.
+    const result = await buildModule({ jsModel: model || 'MiniMax-M3', mode, convo, jsBudget: 260000, cssBudget: 45000 });
+    console.log(`[ai-worker] job ${jobId} LLM done +${Date.now() - startedAt}ms`);
 
-    let parsed;
-    try { parsed = JSON.parse(jsonStr); }
-    catch {
-      const truncated = finishReason === 'length';
-      await finish({
-        status: 'error',
-        error: truncated
-          ? 'Module too large — the AI response was cut off at the token limit. Try fewer features, or build a basic version first and use Revise to add more.'
-          : 'AI returned invalid JSON',
-        raw: jsonStr.slice(0, 800),
-      });
+    if (!result.ok) {
+      const truncated = result.finishReason === 'length';
+      await bumpStat(truncated ? 'truncation' : 'invalid_json');
+      await finish({ status: 'error', error: truncated ? TRUNCATION_MSG : 'AI returned invalid JSON', raw: result.raw });
       res.end();
       return;
     }
 
-    const typeErr = validateBuildResult(parsed, planType);
+    const typeErr = validateBuildResult(result.module, planType);
     if (typeErr) { await finish({ status: 'error', error: typeErr }); res.end(); return; }
 
-    await finish({ status: 'done', module: parsed });
+    await bumpStat('success');
+    await finish({ status: 'done', module: result.module });
   } catch (err) {
+    if (/took over/.test(err.message || '')) await bumpStat('timeout');
     await finish({ status: 'error', error: err.message || 'AI request failed' });
   }
   res.end();
@@ -422,7 +469,10 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
     convo = [...convo, { role: 'user', content: `APPROVED PLAN (follow "type" exactly):\n${JSON.stringify(plan)}` }];
   }
   if (mode === 'revise' && existing) {
-    convo = [...convo, { role: 'user', content: `EXISTING MODULE (keep appId/tag, apply only planned changes):\n${JSON.stringify(existing)}` }];
+    // Send only what the JS call can use — css is regenerated, and the stored
+    // entry also carries a `prev` snapshot. Both would just waste input tokens.
+    const slim = { manifest: existing.manifest, js: existing.js };
+    convo = [...convo, { role: 'user', content: `EXISTING MODULE (keep appId/tag, apply only planned changes):\n${JSON.stringify(slim)}` }];
   }
 
   const workspaceId = req.params.workspaceId;
@@ -438,7 +488,7 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
       .catch((e) => console.error(`[ai] kvSet failed for job ${jobId}:`, e.message));
   };
 
-  // ── build/revise: hand off to the worker (M3, 110s budget) and return now ──
+  // ── build/revise: hand off to the worker (M3 JS ~260s + fast CSS ~45s) and return now ──
   if (mode === 'build' || mode === 'revise') {
     const planType = plan?.type === 'generator' ? 'generator' : 'singleton';
 
@@ -460,31 +510,23 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
     if (req.body?.inline || !workerHealthy) {
       console.log(`[ai] job ${jobId} building INLINE (${req.body?.inline ? 'frontend fallback' : 'queue dead'})`);
       try {
-        const systemPrompt = mode === 'revise' ? SYSTEM_PROMPT + REVISE_SUFFIX : SYSTEM_PROMPT;
-        const { jsonStr, finishReason } = await runMiniMax({
-          model: 'MiniMax-M2.7-highspeed',
-          systemPrompt,
-          convo,
-          maxTokens: 32768,
-          budgetMs: 50000,
-        });
-        let parsed;
-        try { parsed = JSON.parse(jsonStr); }
-        catch {
-          await finish({
-            status: 'error',
-            error: finishReason === 'length'
-              ? 'Module too large — the AI response was cut off at the token limit. Try fewer features, or build a basic version first and use Revise to add more.'
-              : 'AI returned invalid JSON',
-            raw: jsonStr.slice(0, 800),
-          });
+        // Inline runs synchronously in the POST, which the frontend aborts at 65s
+        // — keep JS + CSS budgets summing well under that so a finished build is
+        // never orphaned by a client abort. Highspeed is fast, so this is ample.
+        const result = await buildModule({ jsModel: 'MiniMax-M2.7-highspeed', mode, convo, jsBudget: 38000, cssBudget: 15000 });
+        if (!result.ok) {
+          const truncated = result.finishReason === 'length';
+          await bumpStat(truncated ? 'truncation' : 'invalid_json');
+          await finish({ status: 'error', error: truncated ? TRUNCATION_MSG : 'AI returned invalid JSON', raw: result.raw });
           res.json({ jobId });
           return;
         }
-        const typeErr = validateBuildResult(parsed, planType);
+        const typeErr = validateBuildResult(result.module, planType);
         if (typeErr) { await finish({ status: 'error', error: typeErr }); res.json({ jobId }); return; }
-        await finish({ status: 'done', module: parsed });
+        await bumpStat('success');
+        await finish({ status: 'done', module: result.module });
       } catch (err) {
+        if (/took over/.test(err.message || '')) await bumpStat('timeout');
         await finish({ status: 'error', error: err.message || 'AI request failed' });
       }
       res.json({ jobId });
@@ -498,7 +540,6 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
       mode,
       convo,
       planType,
-      maxTokens: 32768,
       model: 'MiniMax-M3',
     });
     res.json({ jobId });

@@ -268,7 +268,7 @@ class AppBuilder extends HTMLElement {
         'install': () => this._install(job),
         'revise': () => this._startRevise(job),
         'revert': () => this._revert(job),
-        'retry': () => { job.status = 'queued'; job.error = null; this._saveJobs(); this._render(); this._processQueue(); },
+        'retry': () => { job.status = 'queued'; job.error = null; job.autoRetried = false; this._saveJobs(); this._render(); this._processQueue(); },
         'cancel': () => { delete this._jobs[job.jobId]; this._saveJobs(); this._render(); },
         'delete': () => this._deleteInstalled(job),
         'toggle-code': () => {
@@ -455,9 +455,20 @@ class AppBuilder extends HTMLElement {
       // Revisions of installed apps auto-reinstall (code overwrite, data kept)
       if (next.revise) await this._install(next, { quiet: true });
     } catch (err) {
-      next.status = 'error';
-      next.error = err.message;
-      this.api?.notify(`Build failed: ${next.title}`, 'error');
+      // A 300s timeout is variable (M3 latency) — a fresh attempt often succeeds.
+      // Auto-retry once by re-queueing; the cleanup below re-picks the job. Don't
+      // retry truncation ("too large") or invalid JSON — those are deterministic.
+      if (/took over/.test(err.message || '') && !next.autoRetried) {
+        next.autoRetried = true;
+        next.error = null;
+        next.phase = null;
+        next.status = 'queued';
+        this.api?.notify(`${next.icon} ${next.title} timed out — retrying once…`, 'info');
+      } else {
+        next.status = 'error';
+        next.error = err.message;
+        this.api?.notify(`Build failed: ${next.title}`, 'error');
+      }
     }
 
     await this._saveJobs();

@@ -382,6 +382,7 @@ export async function aiRequest(mode, payload = {}, onPhase = null) {
   const deadline = Date.now() + 360000;
   const queuedAt = Date.now();
   let sawBuilding = false;
+  let buildingSince = 0;
   let usedFallback = false;
   let lastStatus = 'queued';
   let unknownPolls = 0;
@@ -405,11 +406,18 @@ export async function aiRequest(mode, payload = {}, onPhase = null) {
     if (unknownPolls >= 10 && (!isBuild || usedFallback)) {
       throw new Error(`Job record disappeared on the server (job ${jobId}) — check backend logs (coho log).`);
     }
-    if (data.status === 'building' && !sawBuilding) { sawBuilding = true; phase('building'); }
+    if (data.status === 'building' && !sawBuilding) { sawBuilding = true; buildingSince = Date.now(); phase('building'); }
     if (data.status === 'done') return data.module;
     if (data.status === 'error') {
       const msg = data.raw ? `${data.error || 'Generation failed'} — raw: ${data.raw}` : (data.error || 'Generation failed');
       throw new Error(msg);
+    }
+    // Stuck 'building' past the worker's max life (330s platform kill) means the
+    // worker died without writing an error (its abort setTimeout is unreliable —
+    // AGENTS gotcha 8). Fail fast with a clear message instead of waiting out the
+    // 360s deadline. Don't auto-retry: a too-big app would just hang again.
+    if (buildingSince && Date.now() - buildingSince > 340000) {
+      throw new Error('Build is too complex and timed out. Try a smaller scope, or build a basic version and use Revise to add features.');
     }
     // Stuck in 'pending' for 20s+ — the queue never picked the job up.
     // Re-submit once with inline:true (built in the request handler instead).

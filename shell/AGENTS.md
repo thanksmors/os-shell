@@ -223,6 +223,11 @@ boilerplate lives in one place — composition, not a deeper class hierarchy.
   dark-mode flips; store the returned cleanup and call it in `disconnectedCallback`.
 - `fetchCssCached(url)` → session-level CSS text cache (moved here from
   `module-base.js`; `store-os._prefetchModules` imports it from here).
+- `assembleModuleBlobs({ files, entryFile, fromTag, toTag })` / `moduleFiles(mod)`
+  → build runtime blob URLs for generated apps (single- or multi-file), rewriting
+  absolute + relative imports and optionally swapping the custom-element tag. Used
+  by `store-os._loadGeneratedModules` and `builder._registerModule`. See
+  `modules/AGENTS.md` → "Blob assembly".
 
 **Why not collapse the standalone components into `AppModuleBase`?** Their
 lifecycles differ (tabs/queues/SSE/no persisted state) and re-parenting them would

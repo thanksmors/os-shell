@@ -175,7 +175,7 @@ All reads/writes via `getData(collection, id)` / `setData(collection, id, data)`
 | `files-data` | files | `fileId` — base64 file blobs |
 | `module-settings` | AppModuleBase | `instanceId` (slot resolutions for `requiredCollections`) |
 | `meta` | shell | `'instances'` (desktop instance registry) |
-| `generated-modules` | builder | `'index'` — `{ [appId]: { manifest, js, css, prev } }` |
+| `generated-modules` | builder | `'index'` — `{ [appId]: { manifest, js?, files?, entryFile?, css, prev } }` |
 | `build-jobs` | builder | `'index'` — `{ [jobId]: { status, plan, messages, module, … } }` |
 
 Collections backing **collaborative** modules (`load-plans`, `roadmaps`, `pm-data`,
@@ -224,27 +224,24 @@ messages, plan, existing }` (frontend wrapper: `aiRequest(mode, payload)` in
 
 **Storage:** Generated module code lives in the `generated-modules` collection under the key `'index'`:
 ```js
-// shape: { [appId]: { manifest, js, css, prev: { manifest, js, css } | null } }
+// shape: { [appId]: { manifest, css, prev, ...code } } where code is either
+//   single-file: { js }   or   multi-file: { files: {name:code}, entryFile }
 getData('generated-modules', 'index')
 ```
 
-**Blob URL import rewriting — critical:** Generated JS contains imports like
-`import { AppModuleBase } from '/shell/module-base.js'`. Blob URLs have no origin,
-so the browser cannot resolve bare absolute paths from them. Before creating a blob,
-rewrite all absolute imports to full URLs:
-
-```js
-const origin = window.location.origin;
-const absoluteJs = js
-  .replace(/from '\/shell\//g, `from '${origin}/shell/`)
-  .replace(/from "\/shell\//g, `from "${origin}/shell/`)
-  .replace(/from '\/modules\//g, `from '${origin}/modules/`)
-  .replace(/from "\/modules\//g, `from "${origin}/modules/`);
-const blobUrl = URL.createObjectURL(new Blob([absoluteJs], { type: 'application/javascript' }));
-```
-
-This must be applied in **two places**: `modules/builder/index.js` (install) and
-`shell/store-os.js` (`_loadGeneratedModules`, page-load replay).
+**Blob assembly — `shell-setup.js`:** Generated JS imports `/shell/`,`/modules/`
+paths and (multi-file) sibling `./feature.js` files. Blob URLs have no origin and
+relative specifiers can't resolve from them, so `assembleModuleBlobs({ files,
+entryFile, fromTag, toTag })` (in `shell/shell-setup.js`) creates a blob per file,
+rewrites absolute imports to full origin URLs, rewrites the entry's `./name.js`
+specifiers to the feature blob URLs, and optionally swaps the custom-element tag.
+`moduleFiles(mod)` normalizes legacy single-file `{ js }` to `{ files:{'index.js'},
+entryFile:'index.js' }` so single- and multi-file share one path. Both
+`modules/builder/index.js` (`_registerModule`) and `shell/store-os.js`
+(`_loadGeneratedModules`, page-load replay) call these helpers. **Star topology,
+depth 1:** only the entry imports feature files; feature files import only
+`/shell/`. Files are namespaced under the app's `appId`, so two apps can share a
+`tasks.js` with no collision.
 
 **CSS blob URL:** Generated CSS is stored as a string and also turned into a blob
 URL, then passed as `cssUrl` on the manifest so `AppModuleBase` loads it:
@@ -256,10 +253,13 @@ this.api?.store?.registerApp({ ...manifest, entry: blobUrl, ...(cssUrl && { cssU
 the default `/modules/{id}/styles.css` path.
 
 **Registration on reload:** `shell/store-os.js._loadGeneratedModules()` runs at
-workspace load and re-registers all stored modules from the `generated-modules`
-collection. The rewrite + blob URL creation must happen here too. It registers
-under the **canonical** `app-{id}` tag — fine because the registry is empty on a
-fresh page load.
+workspace load and re-registers all stored modules via `assembleModuleBlobs`. It
+registers under the **canonical** `app-{id}` tag (no `fromTag/toTag` swap) — fine
+because the registry is empty on a fresh page load.
+
+**Code viewer:** the Jobs tab shows generated code in a per-file switcher
+(`_renderCodePanel`): a `<select>` over the files (+ a `CSS` entry) feeding one
+`<pre>`; the change handler swaps `<code>` text from `moduleFiles(job.module)`.
 
 **Hot-swap via unique runtime tags — critical:** Custom-element tags are immutable
 once defined in a page session, so re-registering a revised module under the same

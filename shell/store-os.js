@@ -162,19 +162,18 @@ export function registerOsStore() {
       try {
         const stored = await getData('generated-modules', 'index');
         if (!stored || typeof stored !== 'object') return;
-        const origin = window.location.origin;
+        const { assembleModuleBlobs, moduleFiles } = await import('/shell/shell-setup.js');
         for (const [appId, mod] of Object.entries(stored)) {
-          if (!mod?.manifest || !mod?.js) continue;
-          const absoluteJs = mod.js
-            .replace(/from '\/shell\//g, `from '${origin}/shell/`)
-            .replace(/from "\/shell\//g, `from "${origin}/shell/`)
-            .replace(/from '\/modules\//g, `from '${origin}/modules/`)
-            .replace(/from "\/modules\//g, `from "${origin}/modules/`);
-          const blobUrl = URL.createObjectURL(new Blob([absoluteJs], { type: 'application/javascript' }));
+          if (!mod?.manifest) continue;
+          const { files, entryFile } = moduleFiles(mod);
+          if (!files[entryFile]) continue;
+          // Base tag on a fresh page load (registry is empty); the builder mints
+          // versioned tags only for in-session re-installs.
+          const entry = assembleModuleBlobs({ files, entryFile });
           const cssUrl = mod.css
             ? URL.createObjectURL(new Blob([mod.css], { type: 'text/css' }))
             : null;
-          this.registerApp({ ...mod.manifest, entry: blobUrl, ...(cssUrl && { cssUrl }) });
+          this.registerApp({ ...mod.manifest, entry, ...(cssUrl && { cssUrl }) });
         }
       } catch(e) {
         console.warn('Could not load generated modules', e);

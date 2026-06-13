@@ -1,4 +1,4 @@
-import { setupShell, observeTheme } from '/shell/shell-setup.js';
+import { setupShell, observeTheme, assembleModuleBlobs, moduleFiles } from '/shell/shell-setup.js';
 import { getData, setData, deleteData, aiRequest } from '/shell/api.js';
 
 const MODULES_COLLECTION = 'generated-modules';
@@ -6,6 +6,15 @@ const JOBS_COLLECTION = 'build-jobs';
 const INDEX_KEY = 'index';
 
 const GREETING = "Hi! Describe the app you want to build. I'll ask a couple of quick questions, write up a plan for your approval, then build it.";
+
+// Snapshot a module's code + manifest without its `prev` (keeps history one
+// level deep). Carries a multi-file `files`/`entryFile` map or a legacy `js`.
+function moduleSnapshot(m) {
+  const s = { manifest: m.manifest, css: m.css };
+  if (m.files) { s.files = m.files; s.entryFile = m.entryFile || 'main.js'; }
+  else { s.js = m.js; }
+  return s;
+}
 
 // Session-global monotonic counter. Custom-element tags are immutable per page
 // session, so every (re)install must register under a brand-new tag for the
@@ -68,7 +77,7 @@ class AppBuilder extends HTMLElement {
           status: 'installed',
           plan: null,
           messages: [],
-          module: { manifest: mod.manifest, js: mod.js, css: mod.css },
+          module: moduleSnapshot(mod),
           createdAt: Date.now(),
           migrated: true,
         };
@@ -224,8 +233,21 @@ class AppBuilder extends HTMLElement {
         ${badge}
         <div class="job-actions">${actions}</div>
       </div>
-      ${job.module ? `<pre class="code-panel" id="code-${job.jobId}" style="display:none"><code>${this._esc(job.module.js)}\n\n/* CSS */\n${this._esc(job.module.css || '')}</code></pre>` : ''}
+      ${this._renderCodePanel(job)}
     `;
+  }
+
+  // Code viewer: a file switcher (entry + feature files + CSS) over one <pre>.
+  _renderCodePanel(job) {
+    if (!job.module) return '';
+    const { files, entryFile } = moduleFiles(job.module);
+    const names = Object.keys(files);
+    const first = files[entryFile] != null ? entryFile : names[0];
+    const opts = [...names, 'CSS'];
+    return `<div class="code-panel" id="code-${job.jobId}" style="display:none">
+      <select class="code-file" data-job="${job.jobId}">${opts.map(n => `<option value="${this._esc(n)}"${n === first ? ' selected' : ''}>${this._esc(n)}</option>`).join('')}</select>
+      <pre><code data-code="${job.jobId}">${this._esc(files[first] || '')}</code></pre>
+    </div>`;
   }
 
   // ─── Events ────────────────────────────────────────────────────────────────
@@ -268,6 +290,16 @@ class AppBuilder extends HTMLElement {
         },
       };
       btn.addEventListener('click', handlers[btn.dataset.action] || (() => {}));
+    });
+
+    this._wrapper.querySelectorAll('.code-file[data-job]').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const job = this._jobs[sel.dataset.job];
+        if (!job?.module) return;
+        const { files } = moduleFiles(job.module);
+        const code = this._wrapper.querySelector(`code[data-code="${sel.dataset.job}"]`);
+        if (code) code.textContent = sel.value === 'CSS' ? (job.module.css || '') : (files[sel.value] || '');
+      });
     });
 
     const msgs = this._wrapper.querySelector('#messages');
@@ -471,21 +503,21 @@ class AppBuilder extends HTMLElement {
   // ─── Install / revise / delete ─────────────────────────────────────────────
 
   async _install(job, { quiet = false } = {}) {
-    const { manifest, js, css } = job.module || {};
-    if (!manifest || !js) return;
+    const mod = job.module || {};
+    if (!mod.manifest || (!mod.js && !mod.files)) return;
     try {
+      const appId = mod.manifest.appId;
       // Keep one previous version so a bad revision can be rolled back.
-      const cur = this._modules[manifest.appId];
-      const prev = cur ? { manifest: cur.manifest, js: cur.js, css: cur.css } : null;
-      this._modules[manifest.appId] = { manifest, js, css, prev };
+      const cur = this._modules[appId];
+      this._modules[appId] = { ...moduleSnapshot(mod), prev: cur ? moduleSnapshot(cur) : null };
       await setData(MODULES_COLLECTION, INDEX_KEY, this._modules);
 
-      this._registerModule(manifest, js, css);
-      this._refreshOpenWindows(manifest.appId);
+      this._registerModule(this._modules[appId]);
+      this._refreshOpenWindows(appId);
 
       job.status = 'installed';
       await this._saveJobs();
-      if (!quiet) this.api?.notify(`${manifest.icon} ${manifest.title} installed!`, 'success');
+      if (!quiet) this.api?.notify(`${mod.manifest.icon} ${mod.manifest.title} installed!`, 'success');
       this._render();
     } catch (err) {
       this.api?.notify('Install failed: ' + err.message, 'error');
@@ -496,20 +528,14 @@ class AppBuilder extends HTMLElement {
   // class can be defined this session (tags are immutable once defined). The
   // stored code keeps the canonical base tag (manifest.tag); only the runtime
   // blob is rewritten. _moduleId() strips the --v{n} suffix to recover the appId.
-  _registerModule(manifest, js, css) {
+  // Handles multi-file modules (entry + feature files) via assembleModuleBlobs.
+  _registerModule(mod) {
+    const { manifest } = mod;
+    const { files, entryFile } = moduleFiles(mod);
     const tag = `${manifest.tag}--v${++TAG_SEQ}`;
-    const origin = window.location.origin;
-    // Blob URLs have no origin — rewrite absolute imports to full URLs first.
-    const absoluteJs = js
-      .replaceAll(`'${manifest.tag}'`, `'${tag}'`)
-      .replaceAll(`"${manifest.tag}"`, `"${tag}"`)
-      .replace(/from '\/shell\//g, `from '${origin}/shell/`)
-      .replace(/from "\/shell\//g, `from "${origin}/shell/`)
-      .replace(/from '\/modules\//g, `from '${origin}/modules/`)
-      .replace(/from "\/modules\//g, `from "${origin}/modules/`);
-    const blobUrl = URL.createObjectURL(new Blob([absoluteJs], { type: 'application/javascript' }));
-    const cssUrl = css ? URL.createObjectURL(new Blob([css], { type: 'text/css' })) : null;
-    this.api?.store?.registerApp({ ...manifest, tag, entry: blobUrl, ...(cssUrl && { cssUrl }) });
+    const entry = assembleModuleBlobs({ files, entryFile, fromTag: manifest.tag, toTag: tag });
+    const cssUrl = mod.css ? URL.createObjectURL(new Blob([mod.css], { type: 'text/css' })) : null;
+    this.api?.store?.registerApp({ ...manifest, tag, entry, ...(cssUrl && { cssUrl }) });
   }
 
   // Close any open windows of an app after (re)install so the next open mounts
@@ -524,18 +550,17 @@ class AppBuilder extends HTMLElement {
     const cur = this._modules[job.appId];
     if (!cur?.prev) { this.api?.notify('No previous version to revert to', 'info'); return; }
     try {
-      const { manifest, js, css } = cur.prev;
       // Swap so revert is itself reversible (toggle between the two versions).
-      const prev = { manifest: cur.manifest, js: cur.js, css: cur.css };
-      this._modules[job.appId] = { manifest, js, css, prev };
+      const restored = { ...moduleSnapshot(cur.prev), prev: moduleSnapshot(cur) };
+      this._modules[job.appId] = restored;
       await setData(MODULES_COLLECTION, INDEX_KEY, this._modules);
 
-      this._registerModule(manifest, js, css);
+      this._registerModule(restored);
       this._refreshOpenWindows(job.appId);
 
-      job.module = { manifest, js, css };
+      job.module = moduleSnapshot(restored);
       await this._saveJobs();
-      this.api?.notify(`${manifest.icon} ${manifest.title} reverted to previous version`, 'success');
+      this.api?.notify(`${restored.manifest.icon} ${restored.manifest.title} reverted to previous version`, 'success');
       this._render();
     } catch (err) {
       this.api?.notify('Revert failed: ' + err.message, 'error');

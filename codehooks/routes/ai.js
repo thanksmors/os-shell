@@ -5,7 +5,7 @@ import { kvSet, kvGet } from '../lib/db.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-13-multifile-v3-plan';
+const AI_BUILD = '2026-06-13-multifile-v4';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -487,7 +487,7 @@ app.worker('ai-generate-worker', async (req, res) => {
     console.log(`[ai-worker] job ${jobId} LLM call start (${model || 'MiniMax-M3'}, mode=${mode}, convo=${convo.length})`);
     // Architect (M3) → parallel feature files → CSS (fast). Budgets are ceilings;
     // a multi-file architect returns a thin main fast, leaving room for features.
-    const result = await buildModule({ jsModel: model || 'MiniMax-M3', mode, convo, planBudget: 120000, codeBudget: 160000, cssBudget: 35000 });
+    const result = await buildModule({ jsModel: model || 'MiniMax-M3', mode, convo, planBudget: 110000, codeBudget: 230000, cssBudget: 35000 });
     console.log(`[ai-worker] job ${jobId} LLM done +${Date.now() - startedAt}ms`);
 
     if (!result.ok) {

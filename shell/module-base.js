@@ -256,7 +256,9 @@ export class AppModuleBase extends HTMLElement {
 
   _moduleId() {
     const tag = this.tagName.toLowerCase();
-    return tag.replace(/^app-/, '');
+    // Generated modules get a unique runtime tag per (re)install — app-{id}--v{n}.
+    // Strip the suffix to recover the stable appId for manifest/cssUrl/appId lookup.
+    return tag.replace(/^app-/, '').replace(/--v\d+$/, '');
   }
 
   _manifestId() {

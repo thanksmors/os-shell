@@ -7,6 +7,14 @@ const INDEX_KEY = 'index';
 
 const GREETING = "Hi! Describe the app you want to build. I'll ask a couple of quick questions, write up a plan for your approval, then build it.";
 
+// Session-global monotonic counter. Custom-element tags are immutable per page
+// session, so every (re)install must register under a brand-new tag for the
+// revised class to be defined and run. Module-level so it survives the builder
+// element being closed/reopened; resets only on reload (where the registry is
+// empty anyway). Never derive the suffix from a per-app version — revert→revise
+// would reuse an already-defined tag and bring back the stale-code bug.
+let TAG_SEQ = 0;
+
 class AppBuilder extends HTMLElement {
   constructor() {
     super();
@@ -209,6 +217,7 @@ class AppBuilder extends HTMLElement {
       done:      `<button class="job-btn primary" data-action="install" data-job="${job.jobId}">⬇ Install</button>
                   <button class="job-btn" data-action="toggle-code" data-job="${job.jobId}">Code ▾</button>`,
       installed: `<button class="job-btn" data-action="revise" data-job="${job.jobId}">✏️ Revise</button>
+                  ${this._modules[job.appId]?.prev ? `<button class="job-btn" data-action="revert" data-job="${job.jobId}" title="Restore the previous version">↩ Revert</button>` : ''}
                   <button class="job-btn" data-action="toggle-code" data-job="${job.jobId}">Code ▾</button>
                   <button class="del-btn" data-action="delete" data-job="${job.jobId}" title="Uninstall + remove job">🗑</button>`,
       error:     `<button class="job-btn primary" data-action="retry" data-job="${job.jobId}">↻ Retry</button>
@@ -258,6 +267,7 @@ class AppBuilder extends HTMLElement {
       const handlers = {
         'install': () => this._install(job),
         'revise': () => this._startRevise(job),
+        'revert': () => this._revert(job),
         'retry': () => { job.status = 'queued'; job.error = null; this._saveJobs(); this._render(); this._processQueue(); },
         'cancel': () => { delete this._jobs[job.jobId]; this._saveJobs(); this._render(); },
         'delete': () => this._deleteInstalled(job),
@@ -462,19 +472,14 @@ class AppBuilder extends HTMLElement {
     const { manifest, js, css } = job.module || {};
     if (!manifest || !js) return;
     try {
-      this._modules[manifest.appId] = { manifest, js, css };
+      // Keep one previous version so a bad revision can be rolled back.
+      const cur = this._modules[manifest.appId];
+      const prev = cur ? { manifest: cur.manifest, js: cur.js, css: cur.css } : null;
+      this._modules[manifest.appId] = { manifest, js, css, prev };
       await setData(MODULES_COLLECTION, INDEX_KEY, this._modules);
 
-      // Blob URLs have no origin — rewrite absolute imports to full URLs first.
-      const origin = window.location.origin;
-      const absoluteJs = js
-        .replace(/from '\/shell\//g, `from '${origin}/shell/`)
-        .replace(/from "\/shell\//g, `from "${origin}/shell/`)
-        .replace(/from '\/modules\//g, `from '${origin}/modules/`)
-        .replace(/from "\/modules\//g, `from "${origin}/modules/`);
-      const blobUrl = URL.createObjectURL(new Blob([absoluteJs], { type: 'application/javascript' }));
-      const cssUrl = css ? URL.createObjectURL(new Blob([css], { type: 'text/css' })) : null;
-      this.api?.store?.registerApp({ ...manifest, entry: blobUrl, ...(cssUrl && { cssUrl }) });
+      this._registerModule(manifest, js, css);
+      this._refreshOpenWindows(manifest.appId);
 
       job.status = 'installed';
       await this._saveJobs();
@@ -482,6 +487,56 @@ class AppBuilder extends HTMLElement {
       this._render();
     } catch (err) {
       this.api?.notify('Install failed: ' + err.message, 'error');
+    }
+  }
+
+  // Register generated code under a fresh, unique custom-element tag so the new
+  // class can be defined this session (tags are immutable once defined). The
+  // stored code keeps the canonical base tag (manifest.tag); only the runtime
+  // blob is rewritten. _moduleId() strips the --v{n} suffix to recover the appId.
+  _registerModule(manifest, js, css) {
+    const tag = `${manifest.tag}--v${++TAG_SEQ}`;
+    const origin = window.location.origin;
+    // Blob URLs have no origin — rewrite absolute imports to full URLs first.
+    const absoluteJs = js
+      .replaceAll(`'${manifest.tag}'`, `'${tag}'`)
+      .replaceAll(`"${manifest.tag}"`, `"${tag}"`)
+      .replace(/from '\/shell\//g, `from '${origin}/shell/`)
+      .replace(/from "\/shell\//g, `from "${origin}/shell/`)
+      .replace(/from '\/modules\//g, `from '${origin}/modules/`)
+      .replace(/from "\/modules\//g, `from "${origin}/modules/`);
+    const blobUrl = URL.createObjectURL(new Blob([absoluteJs], { type: 'application/javascript' }));
+    const cssUrl = css ? URL.createObjectURL(new Blob([css], { type: 'text/css' })) : null;
+    this.api?.store?.registerApp({ ...manifest, tag, entry: blobUrl, ...(cssUrl && { cssUrl }) });
+  }
+
+  // Close any open windows of an app after (re)install so the next open mounts
+  // the fresh code instead of the already-running old element.
+  _refreshOpenWindows(appId) {
+    const store = this.api?.store;
+    if (!store) return;
+    store.windows.filter(w => w.appId === appId).forEach(w => store.close(w.id));
+  }
+
+  async _revert(job) {
+    const cur = this._modules[job.appId];
+    if (!cur?.prev) { this.api?.notify('No previous version to revert to', 'info'); return; }
+    try {
+      const { manifest, js, css } = cur.prev;
+      // Swap so revert is itself reversible (toggle between the two versions).
+      const prev = { manifest: cur.manifest, js: cur.js, css: cur.css };
+      this._modules[job.appId] = { manifest, js, css, prev };
+      await setData(MODULES_COLLECTION, INDEX_KEY, this._modules);
+
+      this._registerModule(manifest, js, css);
+      this._refreshOpenWindows(job.appId);
+
+      job.module = { manifest, js, css };
+      await this._saveJobs();
+      this.api?.notify(`${manifest.icon} ${manifest.title} reverted to previous version`, 'success');
+      this._render();
+    } catch (err) {
+      this.api?.notify('Revert failed: ' + err.message, 'error');
     }
   }
 

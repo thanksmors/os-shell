@@ -203,6 +203,13 @@ const cssUrl = window.Alpine?.store('os')?.apps?.[moduleId]?.cssUrl
 ```
 See `modules/AGENTS.md` → "Generated modules" for how to create the CSS blob URL.
 
+**Runtime tag suffix:** `_moduleId()` strips a trailing `--v{n}` from the tag name
+(`app-{id}--v3` → `id`). The builder registers each revision under a unique
+`app-{id}--v{n}` tag so a custom element can't get stuck on a stale definition
+(tags are immutable per session). `_moduleId` recovers the stable appId for
+manifest/cssUrl/appId resolution. Stored code keeps the canonical `app-{id}` tag;
+only the runtime blob is suffixed.
+
 ---
 
 ### `shadow-tailwind.js`

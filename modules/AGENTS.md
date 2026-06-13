@@ -175,7 +175,7 @@ All reads/writes via `getData(collection, id)` / `setData(collection, id, data)`
 | `files-data` | files | `fileId` — base64 file blobs |
 | `module-settings` | AppModuleBase | `instanceId` (slot resolutions for `requiredCollections`) |
 | `meta` | shell | `'instances'` (desktop instance registry) |
-| `generated-modules` | builder | `'index'` — `{ [appId]: { manifest, js, css } }` |
+| `generated-modules` | builder | `'index'` — `{ [appId]: { manifest, js, css, prev } }` |
 | `build-jobs` | builder | `'index'` — `{ [jobId]: { status, plan, messages, module, … } }` |
 
 Collections backing **collaborative** modules (`load-plans`, `roadmaps`, `pm-data`,
@@ -218,7 +218,7 @@ messages, plan, existing }` (frontend wrapper: `aiRequest(mode, payload)` in
 
 **Storage:** Generated module code lives in the `generated-modules` collection under the key `'index'`:
 ```js
-// shape: { [appId]: { manifest, js, css } }
+// shape: { [appId]: { manifest, js, css, prev: { manifest, js, css } | null } }
 getData('generated-modules', 'index')
 ```
 
@@ -251,7 +251,26 @@ the default `/modules/{id}/styles.css` path.
 
 **Registration on reload:** `shell/store-os.js._loadGeneratedModules()` runs at
 workspace load and re-registers all stored modules from the `generated-modules`
-collection. The rewrite + blob URL creation must happen here too.
+collection. The rewrite + blob URL creation must happen here too. It registers
+under the **canonical** `app-{id}` tag — fine because the registry is empty on a
+fresh page load.
+
+**Hot-swap via unique runtime tags — critical:** Custom-element tags are immutable
+once defined in a page session, so re-registering a revised module under the same
+tag silently keeps the OLD class (the launch path skips `import()` when
+`customElements.get(tag)` is truthy). `_registerModule()` mints a fresh
+`app-{id}--v{n}` tag (module-level `TAG_SEQ` counter — never derived from a
+per-app version, or revert→revise would reuse a defined tag) and rewrites the tag
+in the runtime blob only; stored code keeps the canonical `app-{id}` tag.
+`shell/module-base.js._moduleId()` strips the `--v{n}` suffix to recover the appId.
+Data is unaffected — generated apps key storage on `instanceId`/a fixed literal,
+never the tag. After (re)install or revert, `_refreshOpenWindows(appId)` closes
+open windows of that app so the next open mounts the fresh code. Reload is **not**
+used to pick up new code because open windows aren't persisted.
+
+**Revert:** Each install keeps a one-level `prev` snapshot. The installed job row
+shows **↩ Revert** when `_modules[appId].prev` exists; `_revert()` swaps current ↔
+prev (so it toggles) and re-registers via `_registerModule`.
 
 ---
 

@@ -161,7 +161,13 @@ legitimate raw read is a deliberate "dump exactly what's stored" diagnostic.
 callers can fail closed — e.g. `getSessionUser` rejects any session without a
 `userId`.
 
-TTL is in **seconds**; expired keys auto-delete. Current KV users (all via the
+⚠️ TTL is in **MILLISECONDS**, not seconds (confirmed in `codehooks-js` types and
+the official TTL tutorial); expired keys auto-delete. This doc previously said
+"seconds" and that error propagated into every call site: `{ ttl: 600 }` meant AI
+job records expired **0.6s** after each write, so polling always read `unknown`
+and every Build App run "timed out after 4 minutes" — while sessions silently
+lasted 43 minutes and invites 10 minutes. Always write TTLs as explicit
+millisecond math, e.g. `{ ttl: 10 * 60 * 1000 }`. Current KV users (all via the
 helpers): sessions (`lib/session.js`), invites (`routes/invites.js`), AI jobs
 (`routes/ai.js`), changes feed (`lib/changes.js`).
 

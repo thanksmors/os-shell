@@ -5,7 +5,7 @@ import { kvSet, kvGet } from '../lib/db.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-13-remove-gantt-merge';
+const AI_BUILD = '2026-06-13-kv-ttl-ms-fix';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -209,7 +209,8 @@ function enforcePlanType(parsed, planType) {
 // invokes workers on this plan/space (the ai-generate-worker timeout assumes
 // PRO; if the queue is dead, builds stay 'pending' forever).
 app.worker('ping-worker', async (req, res) => {
-  await kvSet('worker_ping', { at: Date.now() }, { ttl: 7 * 24 * 60 * 60 }).catch(() => {});
+  await kvSet('worker_ping', { at: Date.now() }, { ttl: WORKER_PING_TTL })
+    .catch((e) => console.error('[ai] kvSet worker_ping failed:', e.message));
   res.end();
 });
 
@@ -254,8 +255,11 @@ app.get('/ai/ping', async (req, res) => {
 //   110s budget (PRO plan worker timeout is 120s). POST enqueues and returns
 //   the jobId instantly; the frontend polls.
 
-// AI job TTL: 10 minutes — frontend polls max ~2.5min, so jobs always outlive polling.
-const AI_JOB_TTL = 10 * 60;
+// ⚠️ Codehooks KV ttl is MILLISECONDS, not seconds. `10 * 60` (600ms) expired
+// every job record before the frontend's first 2s poll — every build "timed out".
+// AI job TTL: 10 minutes — frontend polls max 4min, so jobs always outlive polling.
+const AI_JOB_TTL = 10 * 60 * 1000;
+const WORKER_PING_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days, ms
 
 // Shared cleaner: strip <think> reasoning blocks + markdown fences, then extract
 // the outermost {...} so stray prose can't break JSON.parse. (M3 emits <think>.)
@@ -314,8 +318,12 @@ app.worker('ai-generate-worker', async (req, res) => {
   // bare body) so a shape mismatch can't silently no-op the worker.
   const payload = req.body?.payload ?? req.body ?? {};
   const { jobId, workspaceId, mode, convo, planType, maxTokens, model } = payload;
-  const finish = (patch) =>
-    kvSet(`ai_job:${jobId}`, { jobId, workspaceId, ...patch }, { ttl: AI_JOB_TTL }).catch(() => {});
+  const startedAt = Date.now();
+  const finish = (patch) => {
+    console.log(`[ai-worker] job ${jobId} → ${patch.status}${patch.error ? ` (${patch.error})` : ''} +${Date.now() - startedAt}ms`);
+    return kvSet(`ai_job:${jobId}`, { jobId, workspaceId, ...patch }, { ttl: AI_JOB_TTL })
+      .catch((e) => console.error(`[ai-worker] kvSet failed for job ${jobId}:`, e.message));
+  };
 
   if (!jobId || !Array.isArray(convo)) {
     console.error('[ai-worker] bad payload shape:', JSON.stringify(req.body || {}).slice(0, 300));
@@ -328,10 +336,12 @@ app.worker('ai-generate-worker', async (req, res) => {
   // (building, then nothing). Also refresh the worker-health stamp the POST
   // handler uses to route between worker and inline builds.
   await finish({ status: 'building', workerStartedAt: Date.now() });
-  await kvSet('worker_ping', { at: Date.now() }, { ttl: 7 * 24 * 60 * 60 }).catch(() => {});
+  await kvSet('worker_ping', { at: Date.now() }, { ttl: WORKER_PING_TTL })
+    .catch((e) => console.error('[ai] kvSet worker_ping failed:', e.message));
 
   try {
     const systemPrompt = mode === 'revise' ? SYSTEM_PROMPT + REVISE_SUFFIX : SYSTEM_PROMPT;
+    console.log(`[ai-worker] job ${jobId} LLM call start (${model || 'MiniMax-M3'}, mode=${mode}, convo=${convo.length})`);
     const { jsonStr, finishReason } = await runMiniMax({
       model: model || 'MiniMax-M3',
       systemPrompt,
@@ -339,6 +349,7 @@ app.worker('ai-generate-worker', async (req, res) => {
       maxTokens: maxTokens || 16384,
       budgetMs: 110000,
     });
+    console.log(`[ai-worker] job ${jobId} LLM done +${Date.now() - startedAt}ms (finish_reason=${finishReason}, len=${jsonStr.length})`);
 
     let parsed;
     try { parsed = JSON.parse(jsonStr); }
@@ -400,11 +411,15 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
 
   const workspaceId = req.params.workspaceId;
   const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const createdAt = Date.now();
   const conn = await datastore.open();
-  await kvSet(`ai_job:${jobId}`, { jobId, workspaceId, status: 'pending', createdAt: Date.now() }, { ttl: AI_JOB_TTL });
+  await kvSet(`ai_job:${jobId}`, { jobId, workspaceId, status: 'pending', createdAt }, { ttl: AI_JOB_TTL });
+  console.log(`[ai] job ${jobId} created (mode=${mode}, convo=${convo.length})`);
 
   const finish = async (patch) => {
-    await kvSet(`ai_job:${jobId}`, { jobId, workspaceId, ...patch }, { ttl: AI_JOB_TTL }).catch(() => {});
+    console.log(`[ai] job ${jobId} → ${patch.status}${patch.error ? ` (${patch.error})` : ''} +${Date.now() - createdAt}ms`);
+    await kvSet(`ai_job:${jobId}`, { jobId, workspaceId, ...patch }, { ttl: AI_JOB_TTL })
+      .catch((e) => console.error(`[ai] kvSet failed for job ${jobId}:`, e.message));
   };
 
   // ── build/revise: hand off to the worker (M3, 110s budget) and return now ──
@@ -427,6 +442,7 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
     // this request handler on the highspeed model — weaker than M3, but it
     // works even when queue workers are dead on this plan.
     if (req.body?.inline || !workerHealthy) {
+      console.log(`[ai] job ${jobId} building INLINE (${req.body?.inline ? 'frontend fallback' : 'queue dead'})`);
       try {
         const systemPrompt = mode === 'revise' ? SYSTEM_PROMPT + REVISE_SUFFIX : SYSTEM_PROMPT;
         const { jsonStr, finishReason } = await runMiniMax({
@@ -459,6 +475,7 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
       return;
     }
 
+    console.log(`[ai] job ${jobId} enqueued to ai-generate-worker`);
     await conn.enqueue('ai-generate-worker', {
       jobId,
       workspaceId,
@@ -525,6 +542,10 @@ app.get('/w/:workspaceId/ai-job', async (req, res) => {
   if (!jobId) { res.json({ status: 'error', error: 'job query param required' }); return; }
 
   const job = await kvGet(`ai_job:${jobId}`);
-  if (!job) { res.json({ status: 'unknown' }); return; }
+  if (!job) {
+    console.log(`[ai] poll miss — job ${jobId} not in KV (expired or never written)`);
+    res.json({ status: 'unknown' });
+    return;
+  }
   res.json({ status: job.status, module: job.module, error: job.error, raw: job.raw, workerStartedAt: job.workerStartedAt });
 });

@@ -26,7 +26,7 @@ export async function bootstrapSession(gData) {
   await dbUpsert('users', userId, { userId, email, name: name || email, picture: picture || '' });
 
   const sessionToken = genId('sess');
-  await kvSet(`session:${sessionToken}`, { sessionToken, userId }, { ttl: 30 * 24 * 60 * 60 });
+  await kvSet(`session:${sessionToken}`, { sessionToken, userId }, { ttl: 30 * 24 * 60 * 60 * 1000 });
 
   const userWs = await dbGet('user_workspaces', userId) || { workspaceIds: [] };
   if (!userWs.workspaceIds?.length) {

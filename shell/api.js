@@ -383,6 +383,8 @@ export async function aiRequest(mode, payload = {}, onPhase = null) {
   const queuedAt = Date.now();
   let sawBuilding = false;
   let usedFallback = false;
+  let lastStatus = 'queued';
+  let unknownPolls = 0;
 
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 2000));
@@ -391,6 +393,18 @@ export async function aiRequest(mode, payload = {}, onPhase = null) {
       const pr = await fetch(`${BACKEND_URL}/w/${_workspaceId}/ai-job?job=${encodeURIComponent(jobId)}&${auth}`);
       data = await pr.json();
     } catch { continue; }
+    if (data.status !== lastStatus) {
+      console.debug(`[ai] job ${jobId} status ${lastStatus} → ${data.status} +${Date.now() - queuedAt}ms`);
+      lastStatus = data.status;
+    }
+    // 'unknown' means the job record vanished from KV. The job was created
+    // before polling started, so a sustained run of misses is a server-side
+    // loss (expiry/KV failure) — fail fast instead of spinning to the deadline.
+    unknownPolls = data.status === 'unknown' ? unknownPolls + 1 : 0;
+    // For builds, let the 20s inline fallback below try once first.
+    if (unknownPolls >= 10 && (!isBuild || usedFallback)) {
+      throw new Error(`Job record disappeared on the server (job ${jobId}) — check backend logs (coho log).`);
+    }
     if (data.status === 'building' && !sawBuilding) { sawBuilding = true; phase('building'); }
     if (data.status === 'done') return data.module;
     if (data.status === 'error') {
@@ -402,10 +416,12 @@ export async function aiRequest(mode, payload = {}, onPhase = null) {
     if (isBuild && !sawBuilding && !usedFallback && Date.now() - queuedAt > 20000) {
       usedFallback = true;
       phase('retrying');
+      console.debug(`[ai] job ${jobId} stuck in '${lastStatus}' for 20s — falling back to inline build`);
       ({ jobId } = await startJob({ inline: true }));
+      unknownPolls = 0;
     }
   }
-  throw new Error('Generation timed out after 4 minutes. Try a simpler prompt.');
+  throw new Error(`Generation timed out after 4 minutes (job ${jobId}, last status: ${lastStatus}). Try a simpler prompt.`);
 }
 
 // ─── List helpers ──────────────────────────────────────────────────────────

@@ -18,7 +18,7 @@ app.post('/workspaces/:workspaceId/invites', async (req, res) => {
 
   const inviteId = genId('inv');
   const invite = { inviteId, workspaceId, role: req.body.role || 'member', invitedBy: authUser.userId, createdAt: Date.now() };
-  await kvSet(`invite:${inviteId}`, invite, { ttl: 7 * 24 * 60 * 60 });
+  await kvSet(`invite:${inviteId}`, invite, { ttl: 7 * 24 * 60 * 60 * 1000 });
   res.json({ ...invite, expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 });
 });
 

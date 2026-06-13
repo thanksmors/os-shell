@@ -5,7 +5,7 @@ import { kvSet, kvGet } from '../lib/db.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-13-multifile-v2';
+const AI_BUILD = '2026-06-13-multifile-v3-plan';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -72,70 +72,29 @@ _render() {
 }
 \`\`\`
 
-## EXAMPLE — Complete counter module
+## EXAMPLE — main.js for a single-file counter (plan had no feature files)
 
 JSON output:
 {
-  "manifest": {
-    "appId": "counter",
-    "tag": "app-counter",
-    "entry": "/modules/placeholder/index.js",
-    "title": "Counter",
-    "icon": "🔢",
-    "defaultSize": { "w": 320, "h": 260 },
-    "minSize": { "w": 240, "h": 200 },
-    "singleton": false,
-    "generator": true,
-    "resizable": true,
-    "dataCollections": ["counters"],
-    "contextMenu": [{ "label": "🔢 New Counter", "config": { "name": "Counter", "icon": "🔢" } }]
-  },
-  "main": "import { AppModuleBase } from '/shell/module-base.js';\\nimport { getData, setData } from '/shell/api.js';\\n\\nclass AppCounter extends AppModuleBase {\\n  async _load() {\\n    this._state = await getData('counters', this._appId) || { name: this.api?.config?.name || 'Counter', count: 0 };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"body\\"><div class=\\"count\\">\${this._state.count}</div><div class=\\"btns\\"><button class=\\"btn dec\\">−</button><button class=\\"btn rst\\">Reset</button><button class=\\"btn inc\\">+</button></div></div>\`;\\n    this._wrapper.querySelector('.dec').addEventListener('click', () => this._change(-1));\\n    this._wrapper.querySelector('.inc').addEventListener('click', () => this._change(1));\\n    this._wrapper.querySelector('.rst').addEventListener('click', () => this._change(0, true));\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  async _change(delta, reset = false) {\\n    if (reset) this._state.count = 0; else this._state.count += delta;\\n    await setData('counters', this._appId, this._state);\\n    this._render();\\n  }\\n}\\n\\nif (!customElements.get('app-counter')) customElements.define('app-counter', AppCounter);",
-  "files": []
+  "js": "import { AppModuleBase } from '/shell/module-base.js';\\nimport { getData, setData } from '/shell/api.js';\\n\\nclass AppCounter extends AppModuleBase {\\n  async _load() {\\n    this._state = await getData('counters', this._appId) || { name: this.api?.config?.name || 'Counter', count: 0 };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"body\\"><div class=\\"count\\">\${this._state.count}</div><div class=\\"btns\\"><button class=\\"btn dec\\">−</button><button class=\\"btn rst\\">Reset</button><button class=\\"btn inc\\">+</button></div></div>\`;\\n    this._wrapper.querySelector('.dec').addEventListener('click', () => this._change(-1));\\n    this._wrapper.querySelector('.inc').addEventListener('click', () => this._change(1));\\n    this._wrapper.querySelector('.rst').addEventListener('click', () => this._change(0, true));\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  async _change(delta, reset = false) {\\n    if (reset) this._state.count = 0; else this._state.count += delta;\\n    await setData('counters', this._appId, this._state);\\n    this._render();\\n  }\\n}\\n\\nif (!customElements.get('app-counter')) customElements.define('app-counter', AppCounter);"
 }
 
-## EXAMPLE — Complete singleton module (one shared window)
-
-Singletons ALSO extend AppModuleBase. Set generator:false, singleton:true, NO contextMenu.
-If the app needs no saved data, just set this._state to a default object in _load().
+## EXAMPLE — thin main.js that delegates to feature files (plan listed feature-deck.js, feature-board.js)
 
 JSON output:
 {
-  "manifest": {
-    "appId": "clock",
-    "tag": "app-clock",
-    "entry": "/modules/placeholder/index.js",
-    "title": "Clock",
-    "icon": "🕐",
-    "defaultSize": { "w": 300, "h": 200 },
-    "minSize": { "w": 220, "h": 160 },
-    "singleton": true,
-    "generator": false,
-    "resizable": true
-  },
-  "main": "import { AppModuleBase } from '/shell/module-base.js';\\n\\nclass AppClock extends AppModuleBase {\\n  async _load() {\\n    this._state = { name: 'Clock', now: new Date().toLocaleTimeString() };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"body\\"><div class=\\"time\\">\${this._state.now}</div></div>\`;\\n    clearInterval(this._timer);\\n    this._timer = setInterval(() => {\\n      const t = this._wrapper.querySelector('.time');\\n      if (t) t.textContent = new Date().toLocaleTimeString();\\n    }, 1000);\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  disconnectedCallback() { super.disconnectedCallback(); clearInterval(this._timer); }\\n}\\n\\nif (!customElements.get('app-clock')) customElements.define('app-clock', AppClock);",
-  "files": []
+  "js": "import { AppModuleBase } from '/shell/module-base.js';\\nimport { getData, setData } from '/shell/api.js';\\nimport { renderDeck, bindDeck } from './feature-deck.js';\\nimport { renderBoard, bindBoard } from './feature-board.js';\\n\\nclass AppGame extends AppModuleBase {\\n  async _load() {\\n    this._state = await getData('games', this._appId) || { name: this.api?.config?.name || 'Game', deck: [], board: [] };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"body\\"><div class=\\"deck\\"></div><div class=\\"board\\"></div></div>\`;\\n    renderDeck(this); bindDeck(this);\\n    renderBoard(this); bindBoard(this);\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  async _save() { await setData('games', this._appId, this._state); }\\n}\\n\\nif (!customElements.get('app-game')) customElements.define('app-game', AppGame);"
 }
 
 ## Output shape
 
-Output ONLY valid JSON: { "manifest": {...}, "main": "<main.js source>", "files": [ ... ] }.
-- "main" is the entry module — the class extending AppModuleBase, ending with customElements.define. This file runs.
-- "files" lists EXTRA source files (for large apps). For a small/simple app use "files": [] and put the whole implementation in "main".
-- Do NOT include a "css" field — styling is generated in a separate step.
-
-## When to split into files
-
-If the app is large or has several distinct feature areas (one file would exceed ~200 lines of JS), split each feature area into its own file. This is REQUIRED, not optional, for anything beyond a basic single-purpose tool — a fat "main" defeats the purpose and will time out. When you split, "main" MUST stay a THIN orchestrator (target under ~120 lines): it does _load (state), a layout skeleton in _render that calls the imported feature render functions, _getTitle, and delegation — it MUST NOT contain feature implementation logic. For each extra file add to "files":
-  { "name": "feature-<area>.js", "exports": ["fnA","fnB"], "spec": "one line: what it does + what each export does" }
-- "main" imports each by relative name and calls it: import { renderTasks, bindTasks } from './feature-tasks.js';
-- Feature functions take the module INSTANCE as their first arg ("host"): they read/write host._state, set host._wrapper.innerHTML, call host._render(), use host.api. e.g. export function renderTasks(host){ ... }
-- main.js's _load/_render/_getTitle delegate to these functions.
-- Feature files import ONLY from '/shell/...'. They MUST NOT import each other or main — everything shared flows through the host instance. (Only "main" may import feature files.)
+You are given an approved FILE PLAN (manifest, state shape, mainSpec, and a list of feature files). Write **main.js**, the entry module. Output ONLY valid JSON: { "js": "<main.js source>" } — no manifest, no css, no markdown.
+- Implement the class extending AppModuleBase per the plan, ending with customElements.define('app-{appId}', Class).
+- When the plan lists feature files: import each by relative name and call it, passing the module instance — import { renderTasks, bindTasks } from './feature-tasks.js'; then renderTasks(this). Keep main THIN: _load (state), a layout skeleton in _render that calls the feature render/bind functions, _getTitle, delegation — NO feature implementation logic.
+- When the plan has no feature files: main.js IS the whole app — implement everything here.
+- Match the plan's state shape and the exact export names of each feature file. Feature functions take the module instance ("host") as first arg.
 
 ## Rules
-
-(Rules below describe "main"; feature files follow the same conventions except they export functions instead of defining the element.)
 
 1. Output ONLY valid JSON — no markdown, no code fences, no extra text
 2. The "entry" field must always be exactly "/modules/placeholder/index.js" (the shell replaces it)
@@ -172,21 +131,35 @@ Rules:
 6. NEVER declare font-family — it inherits the user's chosen font from the shell.
 7. Be economical: style only what the js renders, no dead rules.`;
 
-// Per-feature-file generation for large (multi-file) apps. The architect call
-// produces main.js + a list of feature files; each file is then generated here
-// against the fixed contract (main.js + the file's required exports) so no single
-// call is large enough to truncate.
-const FEATURE_PROMPT = `You are writing ONE source file of a larger "ODVI Spaces" app module (a Web Component extending AppModuleBase). You receive the app's manifest, its main.js, and the file to write (name + required exports + spec).
+// Per-feature-file generation for large (multi-file) apps. Generated in parallel
+// with main.js from the shared FILE PLAN (state shape + this file's exports/spec),
+// so no single call is large enough to truncate and they cohere via the contract.
+const FEATURE_PROMPT = `You are writing ONE source file of a larger "ODVI Spaces" app module (a Web Component extending AppModuleBase). You receive the FILE PLAN (manifest, state shape, all files) and the file to write (name + required exports + spec).
 
 Output ONLY valid JSON: { "js": "<file source>" } — a single-line string with \\n for newlines. No markdown, no code fences.
 
 Rules:
 1. Export EXACTLY the named functions. Each takes the module INSTANCE as its first argument ("host").
-2. Work through the host: host._state (data), host._wrapper (shadow content — set innerHTML, querySelector), host._render() (re-render), host.api (shell API), host._esc(str) if needed. Keep NO module-level mutable state.
+2. Work through the host: host._state (matches the plan's state shape), host._wrapper (shadow content — set innerHTML, querySelector), host._render() (re-render), host.api (shell API), host._esc(str) if needed. Keep NO module-level mutable state.
 3. Import ONLY from '/shell/...' (e.g. import { getData, setData } from '/shell/api.js'). NEVER import sibling feature files or main — everything shared flows through host.
-4. Match how main.js calls your exports (same names, same argument usage, same host fields).
+4. Honor your exact export names + spec from the plan; main.js calls them passing the host. Use the same host._state fields the plan describes.
 5. No customElements.define here — only main.js defines the element.
 6. Font sizes in rem (CSS is generated separately — just use clear class names). Be economical: implement exactly the spec, nothing extra.`;
+
+// Architect = call 1: plan the FILE STRUCTURE only, NO code. Tiny output → fast,
+// so it never becomes the bottleneck (writing a full module in one call was). It
+// decides single- vs multi-file and the contract every code call then fills.
+const ARCHITECT_PROMPT = `You are the architect for an "ODVI Spaces" app module — a Web Component extending AppModuleBase (singleton by default; generator only if the approved plan says so). Decide the FILE STRUCTURE. Output ONLY JSON and absolutely NO code:
+{ "manifest": { "appId": "kebab-id", "tag": "app-<appId>", "entry": "/modules/placeholder/index.js", "title": "...", "icon": "single emoji", "defaultSize": {"w":..,"h":..}, "minSize": {"w":..,"h":..}, "singleton": true, "generator": false, "resizable": true, "dataCollections": ["..."], "contextMenu": [ ... only if generator ... ] },
+  "state": "one line: the host._state shape (the shared data object all files read/write)",
+  "mainSpec": "one line: what main.js renders/orchestrates and which feature functions it calls",
+  "files": [ { "name": "feature-<area>.js", "exports": ["fnA","fnB"], "spec": "one line: what it does + what each export does" } ] }
+
+Rules:
+- Follow the approved plan's type EXACTLY: singleton (generator:false, no contextMenu) unless it explicitly asked for multiple named instances (then generator:true with a contextMenu). entry is literally "/modules/placeholder/index.js". tag is "app-" + appId.
+- SPLIT aggressively: every distinct feature area becomes its own file so no file is large. A genuinely simple, single-purpose tool may use "files": [] (everything in main). Anything with multiple feature areas MUST split.
+- Feature functions take the module instance ("host") and work via host._state/host._wrapper/host._render(); main imports them by ./name. Feature files import ONLY /shell/, never each other.
+- Output the PLAN ONLY — short, no JavaScript. This call must be fast.`;
 
 // ─── Phase prompts (clarify → plan → build/revise) ────────────────────────────
 
@@ -236,8 +209,7 @@ const REVISE_SUFFIX = `
 
 You are REVISING an existing installed module. You will receive its current manifest, main, and any feature files, plus an approved change plan.
 - Keep the SAME appId and tag (user data is keyed by them).
-- Apply only the planned changes; preserve all other behavior.
-- Output the COMPLETE updated module in the standard { manifest, main, files } shape (keep the split if it had one; main thin + feature files for large apps). Do NOT include a "css" field — styling is regenerated separately.`;
+- Output the updated FILE PLAN (the { manifest, state, mainSpec, files } shape above) reflecting the change — keep the existing file split where it still fits. The code for each file is regenerated from your plan, so describe specs/exports accurately; do NOT write code here.`;
 
 // Enforce the approved plan's instance model — the model occasionally drifts.
 function enforcePlanType(parsed, planType) {
@@ -409,67 +381,69 @@ async function generateCss(files, budgetMs) {
   return parts.filter(Boolean).join('\n');
 }
 
-// Generate one feature file for a multi-file app against the fixed contract
-// (manifest + main.js + the file's required exports). Throws on failure.
-async function generateFeature({ model, manifest, main, feat, budgetMs }) {
+// Generate one code file from the shared FILE PLAN. `systemPrompt` is SYSTEM_PROMPT
+// (main.js) or FEATURE_PROMPT (a feature file). Throws on failure.
+async function generateCode({ model, systemPrompt, planCtx, instruction, label, budgetMs }) {
   const t0 = Date.now();
-  console.log(`[ai] feature start: ${feat.name}`);
-  const convo = [{ role: 'user', content:
-    `APP manifest + main.js (context — do NOT rewrite these):\n${JSON.stringify({ manifest, main })}\n\n` +
-    `Write file "${feat.name}" exporting: ${(feat.exports || []).join(', ')}\nSPEC: ${feat.spec || ''}` }];
-  const { jsonStr } = await runMiniMax({ model, systemPrompt: FEATURE_PROMPT, convo, maxTokens: 16384, budgetMs });
+  console.log(`[ai] code start: ${label}`);
+  const convo = [{ role: 'user', content: `FILE PLAN:\n${planCtx}\n\n${instruction}` }];
+  const { jsonStr } = await runMiniMax({ model, systemPrompt, convo, maxTokens: 32768, budgetMs });
   const parsed = JSON.parse(jsonStr);
-  if (typeof parsed?.js !== 'string') throw new Error(`feature ${feat.name} returned no js`);
-  console.log(`[ai] feature done: ${feat.name} +${Date.now() - t0}ms`);
+  if (typeof parsed?.js !== 'string') throw new Error(`${label} returned no js`);
+  console.log(`[ai] code done: ${label} +${Date.now() - t0}ms`);
   return parsed.js;
 }
 
-// Build: architect call (M3) emits main.js + optional feature-file manifest; small
-// apps come back single-file (no features). Each feature file is then generated in
-// its own bounded call (parallel) so no single call truncates. Finally CSS (fast
-// model). Returns { ok:true, module } or { ok:false, finishReason?, raw?, error? }
-// (caller maps finishReason 'length' → truncation, or surfaces error verbatim).
-async function buildModule({ jsModel, mode, convo, jsBudget, featureBudget, cssBudget }) {
-  const systemPrompt = mode === 'revise' ? SYSTEM_PROMPT + REVISE_SUFFIX : SYSTEM_PROMPT;
-  const { jsonStr, finishReason } = await runMiniMax({ model: jsModel, systemPrompt, convo, maxTokens: 32768, budgetMs: jsBudget });
-  let arch;
-  try { arch = JSON.parse(jsonStr); }
+// Build: call 1 = architect plans the FILE STRUCTURE only (tiny output → fast, so
+// it's never the bottleneck). Then main.js + each feature file are generated in
+// PARALLEL from that fixed plan — every code call is bounded, so none truncates.
+// Finally CSS (per-file, parallel, fast model). Returns { ok:true, module } or
+// { ok:false, finishReason?, raw?, error? }.
+async function buildModule({ jsModel, mode, convo, planBudget, codeBudget, cssBudget }) {
+  // 1. Architect — plan only, no code.
+  const planSys = mode === 'revise' ? ARCHITECT_PROMPT + REVISE_SUFFIX : ARCHITECT_PROMPT;
+  const { jsonStr, finishReason } = await runMiniMax({ model: jsModel, systemPrompt: planSys, convo, maxTokens: 8192, budgetMs: planBudget });
+  let plan;
+  try { plan = JSON.parse(jsonStr); }
   catch { return { ok: false, finishReason, raw: jsonStr.slice(0, 800) }; }
-  if (!arch.manifest || !arch.main) return { ok: false, finishReason, raw: jsonStr.slice(0, 800) };
+  if (!plan.manifest) return { ok: false, finishReason, raw: jsonStr.slice(0, 800) };
 
-  const specs = Array.isArray(arch.files)
-    ? arch.files.filter(f => f && f.name && f.name !== 'main.js')
-    : [];
-  console.log(`[ai] architect → ${specs.length ? `multi-file: main.js + [${specs.map(s => s.name).join(', ')}]` : 'single-file'} (main ${arch.main.length} chars)`);
+  const specs = Array.isArray(plan.files) ? plan.files.filter(f => f && f.name && f.name !== 'main.js') : [];
+  console.log(`[ai] plan → ${specs.length ? `multi-file: main.js + [${specs.map(s => s.name).join(', ')}]` : 'single-file'}`);
+
+  // 2. Generate main.js + every feature file in parallel from the fixed plan.
+  const planCtx = JSON.stringify({ manifest: plan.manifest, state: plan.state, mainSpec: plan.mainSpec, files: specs });
+  let mainCode, featureCodes;
+  try {
+    [mainCode, ...featureCodes] = await Promise.all([
+      generateCode({ model: jsModel, systemPrompt: SYSTEM_PROMPT, planCtx, instruction: 'Write main.js per this plan.', label: 'main.js', budgetMs: codeBudget }),
+      ...specs.map(feat => generateCode({
+        model: jsModel, systemPrompt: FEATURE_PROMPT, planCtx,
+        instruction: `Write file "${feat.name}" exporting: ${(feat.exports || []).join(', ')}\nSPEC: ${feat.spec || ''}`,
+        label: feat.name, budgetMs: codeBudget })),
+    ]);
+  } catch (e) {
+    return { ok: false, error: `Code generation failed: ${e.message}` };
+  }
 
   // Single-file: main.js is the whole module (legacy { js } shape).
   if (!specs.length) {
-    const module = { manifest: arch.manifest, js: arch.main };
-    module.css = await generateCss({ 'main.js': arch.main }, cssBudget);
+    const module = { manifest: plan.manifest, js: mainCode };
+    module.css = await generateCss({ 'main.js': mainCode }, cssBudget);
     return { ok: true, module };
   }
 
-  // Multi-file: generate feature files in parallel against the fixed main.js.
-  let codes;
-  try {
-    codes = await Promise.all(specs.map(feat =>
-      generateFeature({ model: jsModel, manifest: arch.manifest, main: arch.main, feat, budgetMs: featureBudget })));
-  } catch (e) {
-    return { ok: false, error: `Feature generation failed: ${e.message}` };
-  }
-  const files = { 'main.js': arch.main };
+  const files = { 'main.js': mainCode };
   for (let i = 0; i < specs.length; i++) {
     // Star topology: feature files must import only /shell/ — assembleModuleBlobs
-    // wires only the entry's relative imports, so a sibling/main import would ship
-    // broken. Reject rather than install something that won't load.
-    if (/\bfrom\s+['"]\.\.?\//.test(codes[i])) {
+    // wires only the entry's relative imports, so a sibling/main import ships broken.
+    if (/\bfrom\s+['"]\.\.?\//.test(featureCodes[i])) {
       return { ok: false, error: `Feature file ${specs[i].name} used a relative import (only main.js may import feature files) — Retry.` };
     }
-    files[specs[i].name] = codes[i];
+    files[specs[i].name] = featureCodes[i];
   }
-  const module = { manifest: arch.manifest, files, entryFile: 'main.js' };
-  // One CSS chunk per file (parallel) — entry owns globals, features style their
-  // own sections — so CSS scales with the app instead of one capped call.
+  const module = { manifest: plan.manifest, files, entryFile: 'main.js' };
+  // One CSS chunk per file (parallel) — entry owns globals, features style sections.
   module.css = await generateCss(files, cssBudget);
   return { ok: true, module };
 }
@@ -513,7 +487,7 @@ app.worker('ai-generate-worker', async (req, res) => {
     console.log(`[ai-worker] job ${jobId} LLM call start (${model || 'MiniMax-M3'}, mode=${mode}, convo=${convo.length})`);
     // Architect (M3) → parallel feature files → CSS (fast). Budgets are ceilings;
     // a multi-file architect returns a thin main fast, leaving room for features.
-    const result = await buildModule({ jsModel: model || 'MiniMax-M3', mode, convo, jsBudget: 255000, featureBudget: 60000, cssBudget: 35000 });
+    const result = await buildModule({ jsModel: model || 'MiniMax-M3', mode, convo, planBudget: 120000, codeBudget: 160000, cssBudget: 35000 });
     console.log(`[ai-worker] job ${jobId} LLM done +${Date.now() - startedAt}ms`);
 
     if (!result.ok) {
@@ -612,7 +586,7 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
         // Inline runs synchronously in the POST, which the frontend aborts at 65s.
         // Keep architect + (parallel) features + CSS summing under that; features
         // run in parallel so the feature budget counts once, not per file.
-        const result = await buildModule({ jsModel: 'MiniMax-M2.7-highspeed', mode, convo, jsBudget: 38000, featureBudget: 12000, cssBudget: 12000 });
+        const result = await buildModule({ jsModel: 'MiniMax-M2.7-highspeed', mode, convo, planBudget: 18000, codeBudget: 25000, cssBudget: 12000 });
         if (!result.ok) {
           const truncated = result.finishReason === 'length';
           await bumpStat(truncated ? 'truncation' : 'invalid_json');

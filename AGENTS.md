@@ -144,6 +144,7 @@ localStorage entries.
 7. Generator modules — must have a non-empty `contextMenu` array or they are completely unreachable
 8. Codehooks KV — never raw `db.set`/`db.get` for objects; it stores `"[object Object]"` and silently breaks reads. Always use `kvSet`/`kvGet` (detail: `codehooks/AGENTS.md`)
 9. Deploy verify — `coho deploy` ships *local* code, not git. `git pull` first, then confirm with a build probe (detail: `codehooks/AGENTS.md`)
+10. Codehooks KV `ttl` is **milliseconds**, not seconds — `ttl: 600` expires the key in 0.6s. This broke every AI build, plus sessions and invites (detail: `codehooks/AGENTS.md`)
 
 ## Verification
 

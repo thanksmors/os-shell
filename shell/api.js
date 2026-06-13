@@ -385,8 +385,6 @@ export async function aiRequest(mode, payload = {}, onPhase = null) {
   let usedFallback = false;
   let lastStatus = 'queued';
   let unknownPolls = 0;
-  let lastBeatValue = 0;
-  let lastBeatSeenAt = 0;
 
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 2000));
@@ -408,17 +406,6 @@ export async function aiRequest(mode, payload = {}, onPhase = null) {
       throw new Error(`Job record disappeared on the server (job ${jobId}) — check backend logs (coho log).`);
     }
     if (data.status === 'building' && !sawBuilding) { sawBuilding = true; phase('building'); }
-    // The worker stamps heartbeatAt every 15s while the LLM runs. If the stamp
-    // stops changing for 45s the worker process died silently — fail fast with
-    // a real message instead of spinning to the deadline. (Compared in client
-    // time across polls, so server/client clock skew can't false-trigger.)
-    if (data.status === 'building') {
-      const beat = data.heartbeatAt || data.workerStartedAt || 0;
-      if (beat !== lastBeatValue) { lastBeatValue = beat; lastBeatSeenAt = Date.now(); }
-      else if (lastBeatSeenAt && Date.now() - lastBeatSeenAt > 45000) {
-        throw new Error(`Build worker died mid-generation (job ${jobId}) — check backend logs (coho log).`);
-      }
-    }
     if (data.status === 'done') return data.module;
     if (data.status === 'error') {
       const msg = data.raw ? `${data.error || 'Generation failed'} — raw: ${data.raw}` : (data.error || 'Generation failed');

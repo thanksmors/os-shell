@@ -43,15 +43,15 @@ a `TOP_ARRAYS` entry in `lib/merge.js` — see Concurrent-edit merge below.)
 |---|---|---|
 | GET | `/ai/ping` | Deploy + worker probe — returns `{ build, hasKey, workerAlive, ok }`. Bump `AI_BUILD` string on every change to verify deploys. `workerAlive` enqueues `ping-worker` and checks a KV stamp 3s later — `false` means queue workers don't run on this plan/space. |
 | POST | `/w/:workspaceId/ai-generate` | clarify/plan run inline; build/revise enqueue to the worker and return `{ jobId }` instantly. `inline: true` in the body forces build/revise inline (highspeed model, 50s budget) — the frontend's queue-dead fallback. |
-| GET | `/w/:workspaceId/ai-job?job=` | Poll job status. Returns `{ status, module, error, raw, workerStartedAt, heartbeatAt }`. |
+| GET | `/w/:workspaceId/ai-job?job=` | Poll job status. Returns `{ status, module, error, raw, workerStartedAt }`. |
 
 **AI generation architecture (PRO plan, worker mode):**
 - `clarify`/`plan` modes run **synchronously** in the POST handler on `MiniMax-M2.7-highspeed` with a 55s `AbortController` — fast interactive modes, result written to the `ai_job:` KV before the POST returns.
 - `build`/`revise` modes are **enqueued to the real worker** (`ai-generate-worker`, `{ timeout: 330000, workers: 1 }`) which runs `MiniMax-M3` with a 300s `AbortController`. POST returns the jobId instantly; the frontend polls (`aiRequest` in `shell/api.js`, 360s cap). Timeout ordering contract: LLM budget (300s) < worker timeout (330s) < frontend poll deadline (360s) < job TTL (10min). Per the Codehooks docs, paid plans allow worker timeouts up to **10 minutes** — an earlier "PRO limit is 120s" belief here was wrong and made every nontrivial M3 build die at 110s.
-- Worker payload is parsed defensively (`req.body?.payload ?? req.body`) — delivery shape varies. On pickup the worker writes `{ status: 'building', workerStartedAt }` BEFORE the LLM call, then stamps `heartbeatAt` into the job record every 15s while the LLM runs. Polling distinguishes "worker never ran" (`pending` forever), "LLM running" (fresh heartbeat), and "worker silently killed" (heartbeat stops changing for 45s → frontend fails fast). It writes `done`/`error` at the end and calls `res.end()`.
+- Worker payload is parsed defensively (`req.body?.payload ?? req.body`) — delivery shape varies. On pickup the worker writes `{ status: 'building', workerStartedAt }` BEFORE the LLM call, so polling distinguishes "worker never ran" (`pending` forever) from "LLM running/killed" (`building`). It writes `done`/`error` at the end and calls `res.end()`. There is deliberately NO liveness heartbeat — timers inside workers are unreliable (see gotcha 8) and a heartbeat-staleness check on the frontend aborted builds that were actually succeeding. A hung LLM call is bounded by the worker timeout; a silently-killed worker surfaces as the frontend's poll deadline.
 - **Logs are lossy and out-of-order.** `coho log` drops lines under load and interleaves timestamps; a missing `→ done` line does not mean the write didn't happen. The `ai_job:` KV record is the source of truth for job state, not the log stream.
 - **Worker-health routing (queue-dead fallback):** every worker that runs stamps KV `worker_ping`. The POST handler checks the stamp: no stamp in 24h → queue workers don't fire on this plan → build/revise run **inline directly** (highspeed model, 50s budget) with no 20s discovery penalty. Self-healing: after a plan upgrade, one `GET /ai/ping` (its `ping-worker` stamps on success) restores the M3 worker path. The frontend's 20s `pending` → `inline: true` retry remains as a second safety net. `GET /ai/ping → workerAlive` tells you which world you're in. **Confirmed 2026-06-13: workerAlive=true — the M3 worker path is active.**
-- The job/poll contract: `POST → { jobId }`, `GET /w/:ws/ai-job?job= → { status, module, error, raw, workerStartedAt, heartbeatAt }`.
+- The job/poll contract: `POST → { jobId }`, `GET /w/:ws/ai-job?job= → { status, module, error, raw, workerStartedAt }`.
 
 **Route path rule:** AI routes use 3-segment paths (`/w/:ws/ai-generate`, `/w/:ws/ai-job`). A 4-segment path like `/w/:ws/ai/generate` collides with the generic data route `/w/:ws/:collection/:id` — never use 4 segments for AI routes.
 
@@ -134,13 +134,16 @@ res.json({ error: 'Insufficient permissions' });
 ```
 `sendUnauth` in `lib/session.js` already does this correctly for 401. Apply the same pattern for 403 in route handlers.
 
-**8. `setInterval` is disabled in the runtime — it throws**
+**8. Timers are hostile in this runtime — `setInterval` throws, worker `setTimeout` is unreliable**
 
-`setInterval is disabled, use a cron job instead` — an unhandled exception that
-kills the calling function (this crashed the AI worker's heartbeat on first
-tick). `setTimeout` works fine; for repeating work inside one invocation use a
-self-rescheduling `setTimeout` chain (see the heartbeat in `routes/ai.js`), and
-for truly periodic background work use a cron job.
+`setInterval` throws `setInterval is disabled, use a cron job instead` — an
+unhandled exception that kills the calling function (this crashed the AI worker
+on its first heartbeat tick). In **HTTP route handlers** `setTimeout` works
+(the `/ai/ping` 3s probe depends on it). In **queue workers** `setTimeout`
+callbacks have been observed to silently never fire (a 15s heartbeat chain
+never ticked once across a 153s run), so never build worker logic that DEPENDS
+on a timer firing — treat the worker `timeout` option (platform kill) as the
+only reliable time bound. For truly periodic background work use a cron job.
 
 **9. KV store — ALWAYS go through `kvSet`/`kvGet`, never raw `db.set`/`db.get`**
 

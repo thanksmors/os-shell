@@ -493,11 +493,12 @@ export function registerOsStore() {
         setReady: () => { win.ready = true; },
         notify: (msg, type) => Alpine.store('os').notify(msg, type),
         requestClose: () => Alpine.store('os').close(win.id),
-        updateInstance: async (name, icon) => {
+        updateInstance: async (name, icon, extra = {}) => {
           const inst = self.instances.find(i => i.instanceId === instance.instanceId);
           if (inst) {
             inst.name = name;
             inst.icon = icon;
+            Object.assign(inst, extra);
             win.title = name;
             win.icon = icon;
             self.instances = [...self.instances];
@@ -554,9 +555,12 @@ export function registerOsStore() {
     },
 
     buildInstanceContextMenu(x, y, item) {
-      this.showContextMenu(x, y, [
-        { label: '🗑 Delete', action: () => this.removeInstance(item.id) },
-      ]);
+      const menu = [];
+      if (item.appId === 'link') {
+        menu.push({ label: '✏️ Edit', action: () => this.launchInstance(item.id) });
+      }
+      menu.push({ label: '🗑 Delete', action: () => this.removeInstance(item.id) });
+      this.showContextMenu(x, y, menu);
     },
 
     beginInstanceDrag(id) {
@@ -690,8 +694,10 @@ export function registerOsStore() {
     clickDesktopIcon(iconEl, item) {
       motion(iconEl, { scale: [1, 0.84, 1.1, 1], y: [0, -6, 0] }, { ...spring.snappy() })
         .finished.then(() => _unpinMotionStyles(iconEl));
-      if (item.type === 'app') this.launch(item.id);
-      else this.launchInstance(item.id);
+      if (item.type === 'app') return this.launch(item.id);
+      const inst = this.instances.find(i => i.instanceId === item.id);
+      if (inst?.appId === 'link' && inst.url) { window.open(inst.url, '_blank'); return; }
+      this.launchInstance(item.id); // no url yet → open editor
     },
 
     toggleTheme() {

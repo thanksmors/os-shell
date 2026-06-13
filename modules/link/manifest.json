@@ -1,0 +1,18 @@
+{
+  "appId": "link",
+  "tag": "app-link",
+  "entry": "/modules/link/index.js",
+  "title": "Link",
+  "icon": "🔗",
+  "defaultSize": { "w": 360, "h": 300 },
+  "singleton": false,
+  "generator": true,
+  "hasSettings": false,
+  "resizable": true,
+  "minSize": { "w": 300, "h": 240 },
+  "sync": false,
+  "dataCollections": [],
+  "contextMenu": [
+    { "label": "🔗 New Link", "config": { "name": "New link", "icon": "🔗" } }
+  ]
+}

@@ -1,11 +1,12 @@
 import { app, datastore } from 'codehooks-js';
 import { getSessionUser, sendUnauth } from '../lib/session.js';
 import { kvSet, kvGet } from '../lib/db.js';
+import { lintModule } from '../lib/lint-module.js';
 
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-13-scope-split-v3';
+const AI_BUILD = '2026-06-14-capabilities-v1';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -94,6 +95,18 @@ You are given an approved FILE PLAN (manifest, state shape, mainSpec, and a list
 - When the plan has no feature files: main.js IS the whole app — implement everything here.
 - Match the plan's state shape and the exact export names of each feature file. Feature functions take the module instance ("host") as first arg.
 
+## Optional capabilities — use ONLY when the plan calls for them
+
+Opt-in. A simple tool needs NONE of these; adding unused capability code wastes output budget and risks truncation. Each notes whether it is generator-only.
+
+- Settings panel (plan wants user-configurable options, or — generator — renaming the instance). The manifest must have hasSettings:true (the architect sets it). Register the gear button in the constructor, toggle a flag, re-render:
+    constructor() { super(); this._settingsOpen = false; this.addEventListener('os:toggle-settings', () => { this._settingsOpen = !this._settingsOpen; this._render(); }); }
+  In _render(), when this._settingsOpen, render the panel inputs + a Save button; Save reads the inputs, persists via setData, closes the panel, re-renders.
+- Rename a generator instance's desktop icon (GENERATOR ONLY): await this.api.updateInstance(newName, newIcon); — updates the desktop icon and window title together. Singletons have no instance icon; do not use this.
+- Emoji/icon picker: import { showEmojiPicker } from '/shell/emoji-picker.js'; then on a button click: showEmojiPicker(buttonEl, currentEmoji, emoji => { /* store it + reflect in the UI */ });
+- Toast: this.api.notify('Saved', 'success'); ('info' | 'success' | 'error').
+- Live cross-device sync (GENERATOR ONLY, when the data is shared/collaborative): set manifest.sync:true (architect) AND override _collection() to return your exact dataCollections name — the same string passed to getData/setData: _collection() { return 'my-collection'; }. AppModuleBase then reloads + re-renders automatically when another device edits the same instance. Sync keys on this._appId (which generators already use as the data key); singletons do NOT get auto-sync.
+
 ## Rules
 
 1. Output ONLY valid JSON — no markdown, no code fences, no extra text
@@ -107,7 +120,7 @@ You are given an approved FILE PLAN (manifest, state shape, mainSpec, and a list
 9. Use this.api?.config?.name for the initial name when available
 10. The collection name in dataCollections must match what getData/setData use
 11. Keep JS as a single-line string with \\n for newlines (valid JSON string)
-12. ALL modules (generator AND singleton) extend AppModuleBase. NEVER write your own constructor or connectedCallback — AppModuleBase already awaits _load() (which sets this._state) BEFORE calling _render(). Writing your own connectedCallback runs _render() before _state exists and crashes with "this._state is null".
+12. ALL modules (generator AND singleton) extend AppModuleBase. NEVER override connectedCallback — AppModuleBase already awaits _load() (which sets this._state) BEFORE calling _render(); your own connectedCallback runs _render() before _state exists and crashes with "this._state is null". A constructor is allowed ONLY to call super() and register the settings listener (see Optional capabilities) — it must NOT touch this._state/this._wrapper/this._render() (they don't exist yet).
 13. _load() MUST always assign this._state before it returns — to persisted data OR a default object. Use: this._state = await getData(coll, key) || { ...defaults }. Singletons with no saved data just do: this._state = { ...defaults };
 14. _render() may safely assume this._state is set. Always null-check elements from querySelector before using them.
 15. If you override disconnectedCallback (e.g. to clear a setInterval), call super.disconnectedCallback() first.
@@ -146,11 +159,23 @@ Rules:
 5. No customElements.define here — only main.js defines the element.
 6. Font sizes in rem (CSS is generated separately — just use clear class names). Be economical: implement exactly the spec, nothing extra.`;
 
+// Repair = a targeted re-prompt when lintModule (lib/lint-module.js) flags a
+// generated file. The model gets the file + the exact violations and must fix
+// ONLY those, so a near-correct module isn't thrown away over one contract slip.
+const REPAIR_PROMPT = `You previously wrote one source file of an "ODVI Spaces" app module (a Web Component extending AppModuleBase). A static contract check found specific violations. Fix ONLY those violations — change nothing else, keep all behavior and class names identical.
+
+Contract reminders (only relevant to the violations):
+- The entry file extends AppModuleBase, imports it from '/shell/module-base.js', and ends with customElements.define('app-<appId>', Class). NEVER write your own constructor/connectedCallback. _load() MUST assign this._state.
+- Persist via getData/setData from '/shell/api.js' keyed on this._appId (generator) or a fixed literal (singleton) — NEVER windowId, NEVER raw localStorage.
+- Import only from '/shell/…' (entry may also import its './feature.js' files; feature files may import ONLY '/shell/…' and must not define the element).
+
+Output ONLY valid JSON: { "js": "<corrected file source>" } — single-line string with \\n for newlines. No markdown, no code fences.`;
+
 // Architect = call 1: plan the FILE STRUCTURE only, NO code. Tiny output → fast,
 // so it never becomes the bottleneck (writing a full module in one call was). It
 // decides single- vs multi-file and the contract every code call then fills.
 const ARCHITECT_PROMPT = `You are the architect for an "ODVI Spaces" app module — a Web Component extending AppModuleBase (singleton by default; generator only if the approved plan says so). Decide the FILE STRUCTURE. Output ONLY JSON and absolutely NO code:
-{ "manifest": { "appId": "kebab-id", "tag": "app-<appId>", "entry": "/modules/placeholder/index.js", "title": "...", "icon": "single emoji", "defaultSize": {"w":..,"h":..}, "minSize": {"w":..,"h":..}, "singleton": true, "generator": false, "resizable": true, "dataCollections": ["..."], "contextMenu": [ ... only if generator ... ] },
+{ "manifest": { "appId": "kebab-id", "tag": "app-<appId>", "entry": "/modules/placeholder/index.js", "title": "...", "icon": "single emoji", "defaultSize": {"w":..,"h":..}, "minSize": {"w":..,"h":..}, "singleton": true, "generator": false, "resizable": true, "sync": false, "hasSettings": false, "dataCollections": ["..."], "contextMenu": [ ... only if generator ... ] },
   "state": "one line: the host._state shape (the shared data object all files read/write)",
   "mainSpec": "one line: what main.js renders/orchestrates and which feature functions it calls",
   "files": [ { "name": "feature-<area>.js", "exports": ["fnA","fnB"], "spec": "one line: what it does + what each export does" } ] }
@@ -159,6 +184,7 @@ Rules:
 - Build ONLY the plan's "features" (the core v1). The plan may also list "deferred" features — do NOT implement or plan files for those; they are added later via Revise. Scope the file structure to the core only.
 - Follow the approved plan's type EXACTLY: singleton (generator:false, no contextMenu) unless it explicitly asked for multiple named instances (then generator:true with a contextMenu). entry is literally "/modules/placeholder/index.js". tag is "app-" + appId.
 - SPLIT aggressively: every distinct feature area becomes its own file so no file is large. A genuinely simple, single-purpose tool may use "files": [] (everything in main). Anything with multiple feature areas MUST split.
+- Set "sync": true ONLY for a generator whose data is shared/collaborative (a list/board several people edit) — auto-sync keys on the instance id, so it works for generators, not singletons. Set "hasSettings": true if the app needs a settings/config panel (or a generator that lets the user rename its instance). Both default false — leave them false for a simple personal/local tool.
 - Feature functions take the module instance ("host") and work via host._state/host._wrapper/host._render(); main imports them by ./name. Feature files import ONLY /shell/, never each other.
 - Output the PLAN ONLY — short, no JavaScript. This call must be fast.`;
 
@@ -215,6 +241,16 @@ const REVISE_SUFFIX = `
 You are REVISING an existing installed module. You will receive its current manifest, main, and any feature files, plus an approved change plan.
 - Keep the SAME appId and tag (user data is keyed by them).
 - Output the updated FILE PLAN (the { manifest, state, mainSpec, files } shape above) reflecting the change — keep the existing file split where it still fits. The code for each file is regenerated from your plan, so describe specs/exports accurately; do NOT write code here.`;
+
+const CONSOLIDATE_SUFFIX = `
+
+## Consolidate mode
+
+You are CONSOLIDATING an existing installed module: redesigning it into ONE coherent app, not patching it. The app was grown feature-by-feature, so its layout, controls, and structure have drifted. You will receive the approved plan (the full realized feature set) plus the current module's manifest + code.
+- Treat the EXISTING MODULE as a BEHAVIORAL REFERENCE, NOT a structural template. You are NOT bound to its file split, layout, naming, or control placement — restructure all of it freely for a single coherent design.
+- PRESERVE every behavior the existing code currently has, plus everything in the plan's "features". Consolidation must NOT drop functionality — losing a feature is worse than incoherence.
+- FREEZE the data contract: keep the SAME appId and tag, and the EXACT collection keys (manifest.dataCollections) and stored-record field names the existing code reads/writes. User data is keyed by them — renaming a key or field orphans it. Everything else (UI, layout, logic, file structure) you redesign freely.
+- Output the updated FILE PLAN (the { manifest, state, mainSpec, files } shape above) for the redesigned app. The code for each file is regenerated from your plan, so describe specs/exports accurately; do NOT write code here.`;
 
 // Enforce the approved plan's instance model — the model occasionally drifts.
 function enforcePlanType(parsed, planType) {
@@ -399,17 +435,68 @@ async function generateCode({ model, systemPrompt, planCtx, instruction, label, 
   return parsed.js;
 }
 
+// One targeted repair pass for a lint-flagged file. Returns the corrected source,
+// or the original on any failure (the caller re-lints and rejects if still bad).
+async function repairCode({ model, fileName, code, violations, isEntry, budgetMs }) {
+  try {
+    const role = isEntry
+      ? 'This is the ENTRY file (it defines the element).'
+      : 'This is a FEATURE file: it must NOT define the element and may import ONLY /shell/… (share state through the host argument).';
+    const convo = [{ role: 'user', content: `FILE: ${fileName} — ${role}\nVIOLATIONS:\n- ${violations.join('\n- ')}\n\nCURRENT SOURCE:\n${code}` }];
+    const { jsonStr } = await runMiniMax({ model, systemPrompt: REPAIR_PROMPT, convo, maxTokens: 32768, budgetMs });
+    const parsed = JSON.parse(jsonStr);
+    return typeof parsed?.js === 'string' ? parsed.js : code;
+  } catch (e) {
+    console.error(`[ai] repair of ${fileName} failed:`, e.message);
+    return code;
+  }
+}
+
+// Lint the assembled module; if `repairBudget > 0`, attempt ONE repair pass per
+// offending file and re-lint. Mutates `module` in place with repaired code.
+// Returns { ok:true } when clean, or { ok:false, error } with the precise messages.
+// Best-effort stat bumps so the lint's real effect is readable via `coho kv:get`.
+async function lintAndRepair(module, { jsModel, repairBudget }) {
+  let violations = lintModule(module);
+  if (!violations.length) return { ok: true };
+  await bumpStat('lint_caught');
+
+  if (repairBudget > 0) {
+    // Group violations by file, repair each offending file once, then re-lint.
+    const byFile = {};
+    for (const v of violations) (byFile[v.file] ||= []).push(v.message);
+    for (const [fileName, msgs] of Object.entries(byFile)) {
+      const isEntry = !module.files || fileName === (module.entryFile || 'main.js');
+      const current = module.files ? module.files[fileName] : module.js;
+      if (typeof current !== 'string') continue;
+      const fixed = await repairCode({ model: jsModel, fileName, code: current, violations: msgs, isEntry, budgetMs: repairBudget });
+      if (module.files) module.files[fileName] = fixed; else module.js = fixed;
+    }
+    violations = lintModule(module);
+    if (!violations.length) { await bumpStat('lint_repaired'); return { ok: true }; }
+  }
+
+  await bumpStat('lint_failed');
+  const summary = violations.map(v => `${v.file}: ${v.message}`).join(' | ');
+  return { ok: false, error: `Generated code violated the module contract: ${summary}` };
+}
+
 // Build: call 1 = architect plans the FILE STRUCTURE only (tiny output → fast, so
 // it's never the bottleneck). Then main.js + each feature file are generated in
 // PARALLEL from that fixed plan — every code call is bounded, so none truncates.
-// Finally CSS (per-file, parallel, fast model). Returns { ok:true, module } or
-// { ok:false, finishReason?, raw?, error? }.
-async function buildModule({ jsModel, mode, convo, planBudget, codeBudget, cssBudget }) {
+// Then lint+repair (lib/lint-module.js) on the final code, BEFORE CSS (CSS is
+// generated from the final class names). Finally CSS (per-file, parallel, fast
+// model). Returns { ok:true, module } or { ok:false, finishReason?, raw?, error? }.
+// `repairBudget` > 0 enables the repair re-prompt; 0 (inline path) lints and
+// rejects on violation without the extra LLM call.
+async function buildModule({ jsModel, mode, convo, planBudget, codeBudget, cssBudget, repairBudget = 0 }) {
   // 1. Architect — plan only, no code. Runs on the FAST model: it's structural
   // JSON (no code reasoning), and M3 occasionally hangs for minutes — and the
   // worker's abort setTimeout is unreliable (gotcha 8), so an M3 hang here can't
   // be aborted and silently burns the whole worker. Highspeed is fast + reliable.
-  const planSys = mode === 'revise' ? ARCHITECT_PROMPT + REVISE_SUFFIX : ARCHITECT_PROMPT;
+  const planSys = mode === 'consolidate' ? ARCHITECT_PROMPT + CONSOLIDATE_SUFFIX
+    : mode === 'revise' ? ARCHITECT_PROMPT + REVISE_SUFFIX
+    : ARCHITECT_PROMPT;
   const { jsonStr, finishReason } = await runMiniMax({ model: 'MiniMax-M2.7-highspeed', systemPrompt: planSys, convo, maxTokens: 8192, budgetMs: planBudget });
   let plan;
   try { plan = JSON.parse(jsonStr); }
@@ -437,22 +524,23 @@ async function buildModule({ jsModel, mode, convo, planBudget, codeBudget, cssBu
   // Single-file: main.js is the whole module (legacy { js } shape).
   if (!specs.length) {
     const module = { manifest: plan.manifest, js: mainCode };
-    module.css = await generateCss({ 'main.js': mainCode }, cssBudget);
+    // 3. Lint+repair before CSS so CSS styles the final code.
+    const lint = await lintAndRepair(module, { jsModel, repairBudget });
+    if (!lint.ok) return { ok: false, error: lint.error };
+    module.css = await generateCss({ 'main.js': module.js }, cssBudget);
     return { ok: true, module };
   }
 
   const files = { 'main.js': mainCode };
-  for (let i = 0; i < specs.length; i++) {
-    // Star topology: feature files must import only /shell/ — assembleModuleBlobs
-    // wires only the entry's relative imports, so a sibling/main import ships broken.
-    if (/\bfrom\s+['"]\.\.?\//.test(featureCodes[i])) {
-      return { ok: false, error: `Feature file ${specs[i].name} used a relative import (only main.js may import feature files) — Retry.` };
-    }
-    files[specs[i].name] = featureCodes[i];
-  }
+  for (let i = 0; i < specs.length; i++) files[specs[i].name] = featureCodes[i];
   const module = { manifest: plan.manifest, files, entryFile: 'main.js' };
+  // 3. Lint+repair before CSS. lintModule enforces the star-topology import rule
+  // (feature files must import only /shell/ — assembleModuleBlobs wires only the
+  // entry's relative imports, so a sibling/main import ships broken).
+  const lint = await lintAndRepair(module, { jsModel, repairBudget });
+  if (!lint.ok) return { ok: false, error: lint.error };
   // One CSS chunk per file (parallel) — entry owns globals, features style sections.
-  module.css = await generateCss(files, cssBudget);
+  module.css = await generateCss(module.files, cssBudget);
   return { ok: true, module };
 }
 
@@ -495,7 +583,7 @@ app.worker('ai-generate-worker', async (req, res) => {
     console.log(`[ai-worker] job ${jobId} LLM call start (${model || 'MiniMax-M3'}, mode=${mode}, convo=${convo.length})`);
     // Architect (M3) → parallel feature files → CSS (fast). Budgets are ceilings;
     // a multi-file architect returns a thin main fast, leaving room for features.
-    const result = await buildModule({ jsModel: model || 'MiniMax-M3', mode, convo, planBudget: 110000, codeBudget: 230000, cssBudget: 35000 });
+    const result = await buildModule({ jsModel: model || 'MiniMax-M3', mode, convo, planBudget: 110000, codeBudget: 230000, cssBudget: 35000, repairBudget: 60000 });
     console.log(`[ai-worker] job ${jobId} LLM done +${Date.now() - startedAt}ms`);
 
     if (!result.ok) {
@@ -518,15 +606,15 @@ app.worker('ai-generate-worker', async (req, res) => {
   res.end();
 }, { timeout: 330000, workers: 1 });
 
-// ─── POST: clarify/plan run inline; build/revise enqueue to the worker ────────
+// ─── POST: clarify/plan run inline; build/revise/consolidate enqueue to the worker ────────
 
 app.post('/w/:workspaceId/ai-generate', async (req, res) => {
   const authUser = await getSessionUser(req);
   if (!authUser) { sendUnauth(res); return; }
 
-  // mode: clarify | plan | build | revise. Legacy callers send only {prompt} → build.
+  // mode: clarify | plan | build | revise | consolidate. Legacy callers send only {prompt} → build.
   const { prompt, messages, plan, existing } = req.body || {};
-  const mode = ['clarify', 'plan', 'build', 'revise'].includes(req.body?.mode) ? req.body.mode : 'build';
+  const mode = ['clarify', 'plan', 'build', 'revise', 'consolidate'].includes(req.body?.mode) ? req.body.mode : 'build';
 
   // Normalize conversation: prefer messages[], fall back to single prompt.
   let convo = Array.isArray(messages)
@@ -544,16 +632,21 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
     return;
   }
 
-  if ((mode === 'build' || mode === 'revise') && plan) {
+  if ((mode === 'build' || mode === 'revise' || mode === 'consolidate') && plan) {
     convo = [...convo, { role: 'user', content: `APPROVED PLAN (follow "type" exactly):\n${JSON.stringify(plan)}` }];
   }
-  if (mode === 'revise' && existing) {
+  if ((mode === 'revise' || mode === 'consolidate') && existing) {
     // Send the existing code (single js or multi-file main + files) as context;
     // drop css (regenerated) and the `prev` snapshot (just input-token waste).
+    // Revise: structural template (keep the split). Consolidate: behavioral
+    // reference only — the architect is free to restructure (see CONSOLIDATE_SUFFIX).
     const slim = existing.files
       ? { manifest: existing.manifest, main: existing.files[existing.entryFile || 'main.js'], files: existing.files }
       : { manifest: existing.manifest, main: existing.js };
-    convo = [...convo, { role: 'user', content: `EXISTING MODULE (keep appId/tag, apply only planned changes):\n${JSON.stringify(slim)}` }];
+    const label = mode === 'consolidate'
+      ? 'EXISTING MODULE (behavioral reference — keep appId/tag + data contract, redesign everything else):'
+      : 'EXISTING MODULE (keep appId/tag, apply only planned changes):';
+    convo = [...convo, { role: 'user', content: `${label}\n${JSON.stringify(slim)}` }];
   }
 
   const workspaceId = req.params.workspaceId;
@@ -569,8 +662,8 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
       .catch((e) => console.error(`[ai] kvSet failed for job ${jobId}:`, e.message));
   };
 
-  // ── build/revise: hand off to the worker (M3 JS ~260s + fast CSS ~45s) and return now ──
-  if (mode === 'build' || mode === 'revise') {
+  // ── build/revise/consolidate: hand off to the worker (M3 JS ~260s + fast CSS ~45s) and return now ──
+  if (mode === 'build' || mode === 'revise' || mode === 'consolidate') {
     const planType = plan?.type === 'generator' ? 'generator' : 'singleton';
 
     // Worker-health routing: any worker that runs (ping-worker via /ai/ping, or
@@ -594,7 +687,9 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
         // Inline runs synchronously in the POST, which the frontend aborts at 65s.
         // Keep architect + (parallel) features + CSS summing under that; features
         // run in parallel so the feature budget counts once, not per file.
-        const result = await buildModule({ jsModel: 'MiniMax-M2.7-highspeed', mode, convo, planBudget: 18000, codeBudget: 25000, cssBudget: 12000 });
+        // repairBudget:0 — inline is under a tight 65s POST abort, so lint REJECTS
+        // on violation (precise message) rather than spending another LLM call.
+        const result = await buildModule({ jsModel: 'MiniMax-M2.7-highspeed', mode, convo, planBudget: 18000, codeBudget: 25000, cssBudget: 12000, repairBudget: 0 });
         if (!result.ok) {
           const truncated = result.finishReason === 'length';
           await bumpStat(truncated ? 'truncation' : 'invalid_json');

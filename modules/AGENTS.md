@@ -82,7 +82,7 @@ await new Promise(r => setTimeout(r, 0));
 | `setTitle(t)` | Update the window titlebar title. |
 | `notify(msg, type)` | Fire a toast. `type`: `'info'` / `'success'` / `'error'`. |
 | `requestClose()` | Close this window programmatically. |
-| `updateInstance(name, icon)` | Rename desktop icon + persist. Generator modules only. |
+| `updateInstance(name, icon, extra?)` | Rename desktop icon + persist. Generator modules only. Optional `extra` object is merged onto the instance (used by `link` to store `url` on the instance). |
 | `store` | Read-only `Alpine.store('os')`. See `shell/AGENTS.md` for the full public method list. |
 
 **CRITICAL:** Never use `windowId` as a persistence key.
@@ -212,13 +212,32 @@ fresh attempt often succeeds. Truncation ("Module too large") and invalid-JSON a
 deterministic and are surfaced as errors immediately, not retried. The manual Retry
 button resets `autoRetried` so a retried job gets its own auto-retry budget.
 
+**Contract lint before install.** Generated code is statically checked against the
+module contract (no own `connectedCallback`, `_load` assigns `this._state`, no
+`windowId` key, no raw `localStorage`, allowed imports only, star-topology feature
+files) before it is stored/installed — `lintModule` in `codehooks/lib/lint-module.js`,
+run from `buildModule` (`codehooks/routes/ai.js`). Violations trigger one targeted
+repair re-prompt then a hard reject; valid modules pass through untouched. This is the
+backstop for the contract rules this doc and `SYSTEM_PROMPT` describe — when you change
+a generation rule, update both the prompt and the lint (see `codehooks/AGENTS.md`).
+
+**Capability surface taught to the generator.** `SYSTEM_PROMPT`/`ARCHITECT_PROMPT`
+(`codehooks/routes/ai.js`) teach the model a gated, opt-in subset of the contracts in
+this doc — settings panel (`hasSettings` + `os:toggle-settings`), `api.updateInstance`
+rename, `showEmojiPicker`, `api.notify`, and live `sync`. **Scoped by instance model:**
+auto-`sync` and `updateInstance` rename are **generator-only** (auto-sync keys on
+`this._appId` and needs a `_collection()` override; singletons get neither). The
+assessment, roadmap, and remaining passes are tracked in
+`docs/builder-generator-roadmap.md`; prompt changes are regression-checked with the
+manual eval set in `docs/builder-eval-set.md` (no headless build harness exists).
+
 **Singleton is the default.** The backend (`codehooks/routes/ai.js`) enforces
 `plan.type` after generation: anything not explicitly planned as `generator` is
 forced to `singleton: true, generator: false` with `contextMenu` removed.
 The `plan` prompt only allows `generator` when the user explicitly asked for
 multiple named instances.
 
-Backend modes: `POST /w/:ws/ai-generate` takes `{ mode: clarify|plan|build|revise,
+Backend modes: `POST /w/:ws/ai-generate` takes `{ mode: clarify|plan|build|revise|consolidate,
 messages, plan, existing }` (frontend wrapper: `aiRequest(mode, payload)` in
 `shell/api.js`). Same job/poll mechanics for all modes.
 
@@ -267,6 +286,24 @@ shown as a "Later" list on the plan card). After install, `_renderRoadmap` shows
 one-tap **➕ Add** buttons from the module's stored `deferred`; `_addFeature` seeds
 a scoped Revise (re-plans the item into the core, multi-file rebuild, appId/tag
 preserved) and the roadmap shrinks as the new plan's `deferred` updates.
+
+**Consolidate (de-Frankenstein):** incremental Revise is purely additive — it
+anchors to the existing file split and bolts each feature on, so after several adds
+the app is coherent locally but incoherent globally (drifting controls/layout). The
+**🪄 Consolidate** button on installed jobs (`_consolidate`) rebuilds the whole app
+as ONE coherent design from its spec — the accumulated `job.plan`. It enqueues a
+`consolidate`-flag job (no plan/approve round); `_processQueue` treats `revise` and
+`consolidate` identically as **in-place** rebuilds (send existing code, keep
+appId/tag, auto-reinstall, snapshot `prev` → **Revert is the backstop**). The only
+difference is the architect prompt: `CONSOLIDATE_SUFFIX` (`codehooks/routes/ai.js`)
+**drops** the "keep the existing file split" structural anchor (free redesign of
+layout/structure) but **keeps** the existing code as a *behavioral reference*
+(preserve every feature) and **freezes the data contract** (same collection keys +
+field names → stored data still loads). The spec is viewable/editable per installed
+job via the **Spec ▾** panel (`_renderSpecPanel`/`_saveSpec`): an editable JSON
+textarea of `job.plan` validated on save (must parse + have a `title`); edits feed
+the next Consolidate. Consolidate reuses the build pipeline at the same scope as a
+Revise — it is **not** a larger build (every file regenerates on every build anyway).
 
 **Hot-swap via unique runtime tags — critical:** Custom-element tags are immutable
 once defined in a page session, so re-registering a revised module under the same
@@ -390,13 +427,14 @@ Do **not** call `_load()` or `_render()` manually in a `connectedCallback` overr
 | `roadmap` | Generator | High-level project roadmap: projects with phase bars on a quarterly timeline, row reorder, bar drag/resize. Feeds Load via project linking. | `roadmaps` |
 | `pm` | Generator | Project hub: folder/project sidebar (notes-style) with Brief / Roles / Milestones / Issues / Action Items / Decisions / Links tabs per project. | `pm-data` |
 | `folder` | Generator | Container for other instances. `acceptsDroppedInstances: true`. | none |
+| `link` | Generator | Desktop URL shortcut. Click the icon → opens its URL in a new tab; right-click → Edit/Delete. The whole window is the editor (emoji/name/URL). State (incl. `url`) lives **on the instance object**, not a collection, so the shell can `window.open` synchronously on click — see `shell/AGENTS.md`. | none |
 | `emoji` | Singleton | Browse emojis by category or search, click to copy. CDN-backed. | none |
 | `notes` | Singleton | Markdown notes with folders, preview, image/YouTube embeds. | `notes` |
 | `chat` | Singleton | Channels + messages, unread badge, SSE-driven sync. | `chat`, `chat-messages`, `chat-read` |
 | `files` | Singleton | "Drive" (🗃️) — file manager: folders, base64 upload/download, in-app preview (images, PDF, text, MD, HTML, CSV, DOCX/XLSX via lazy CDN libs). | `files-meta`, `files-data` |
 | `about` | Singleton | About/info page. | none |
 | `settings` | Singleton | Appearance (theme/font/accent), workspace, about. | none |
-| `builder` | Singleton | "Build App" — AI module generation: clarify → plan → queued build, revise. | `generated-modules`, `build-jobs` |
+| `builder` | Singleton | "Build App" — AI module generation: clarify → plan → queued build, revise, consolidate (spec-driven coherent rebuild). | `generated-modules`, `build-jobs` |
 | `data` | (internal) | Shared collection management API, consumed by the shell (`module-base.js`, `store-os.js`). In `registry.json` but hidden from the launcher (`hiddenApps` default). | — |
 | `boilerplate` | (template) | Not in `registry.json`. Starting point for new modules. | — |
 

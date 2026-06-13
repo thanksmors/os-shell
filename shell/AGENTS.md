@@ -51,6 +51,11 @@ launch() / createInstance()
 - `createInstance(appId, config)` — generates `instanceId = inst-{timestamp}`, adds desktop icon, opens window
 - `removeInstance(instanceId)` — closes window, removes icon, deletes `os:{col}:{instanceId}` from localStorage for each name in `manifest.dataCollections`
 
+**Link shortcuts (`appId === 'link'`) — special-cased in three handlers:**
+- `el.api.updateInstance(name, icon, extra?)` merges an optional `extra` object onto the instance. The `link` module uses it to persist `url` directly on the instance object (no data collection), so the URL survives the `meta/instances` JSON round-trip.
+- `clickDesktopIcon` opens `inst.url` via `window.open(...)` synchronously when a link instance has a url (an `await` first would lose user-activation and be popup-blocked). A url-less link falls through to `launchInstance` (opens the editor).
+- `buildInstanceContextMenu` adds an **Edit** entry (→ `launchInstance`) for link instances; all other instance types get Delete only.
+
 **Public store methods modules may call via `el.api.store`:**
 
 | Method | Description |

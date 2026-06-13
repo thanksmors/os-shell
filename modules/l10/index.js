@@ -61,7 +61,7 @@ class AppL10 extends AppModuleBase {
     const cfg = this.api?.config || {};
     this._state = saved || {
       name: cfg.name || 'L10',
-      icon: '🔵',
+      icon: '🪨',
       scorecard: [],
       rocks: [],
       issues: [],
@@ -144,7 +144,7 @@ class AppL10 extends AppModuleBase {
   _renderEmpty() {
     return `
       <div class="l10-empty">
-        <div class="l10-empty-icon">🔵</div>
+        <div class="l10-empty-icon">🪨</div>
         <div class="l10-empty-title">No meetings yet</div>
         <div class="l10-empty-sub">Create your first L10 meeting to get started.</div>
         <button class="l10-btn-primary" data-action="new-meeting">+ New L10 Meeting</button>

@@ -382,6 +382,31 @@
   overflow-x: auto;
 }
 
+.spec-panel {
+  margin: 0 0 6px;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(0,0,0,.03);
+  border: 1px solid rgba(0,0,0,.08);
+}
+.wrapper.dark .spec-panel { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.1); }
+.spec-hint { font-size: 0.72rem; opacity: .7; line-height: 1.4; margin-bottom: 6px; }
+.spec-edit {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,.12);
+  background: #1e1e2e;
+  color: #cdd6f4;
+  font: 0.7rem/1.5 ui-monospace, monospace;
+  white-space: pre;
+}
+.wrapper.dark .spec-edit { border-color: rgba(255,255,255,.14); }
+.spec-actions { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.spec-err { font-size: 0.72rem; color: #ef4444; }
+
 .empty-state {
   text-align: center;
   padding: 40px 20px;

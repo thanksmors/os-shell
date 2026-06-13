@@ -223,6 +223,8 @@ class AppBuilder extends HTMLElement {
       done:      `<button class="job-btn primary" data-action="install" data-job="${job.jobId}">⬇ Install</button>
                   <button class="job-btn" data-action="toggle-code" data-job="${job.jobId}">Code ▾</button>`,
       installed: `<button class="job-btn" data-action="revise" data-job="${job.jobId}">✏️ Revise</button>
+                  ${job.plan ? `<button class="job-btn" data-action="consolidate" data-job="${job.jobId}" title="Rebuild the whole app as one coherent design from its spec (data kept)">🪄 Consolidate</button>` : ''}
+                  ${job.plan ? `<button class="job-btn" data-action="toggle-spec" data-job="${job.jobId}">Spec ▾</button>` : ''}
                   ${this._modules[job.appId]?.prev ? `<button class="job-btn" data-action="revert" data-job="${job.jobId}" title="Restore the previous version">↩ Revert</button>` : ''}
                   <button class="job-btn" data-action="toggle-code" data-job="${job.jobId}">Code ▾</button>
                   <button class="del-btn" data-action="delete" data-job="${job.jobId}" title="Uninstall + remove job">🗑</button>`,
@@ -240,8 +242,24 @@ class AppBuilder extends HTMLElement {
         <div class="job-actions">${actions}</div>
       </div>
       ${this._renderRoadmap(job)}
+      ${this._renderSpecPanel(job)}
       ${this._renderCodePanel(job)}
     `;
+  }
+
+  // Editable spec panel: shows the job's accumulated plan as JSON. Edits feed the
+  // next 🪄 Consolidate (the spec is the source of truth for the coherent rebuild).
+  // dataCollections + the data shape are the frozen contract — flagged in the hint.
+  _renderSpecPanel(job) {
+    if (job.status !== 'installed' || !job.plan) return '';
+    return `<div class="spec-panel" id="spec-${job.jobId}" style="display:none">
+      <div class="spec-hint">Editable spec — the next 🪄 <strong>Consolidate</strong> rebuilds the whole app from this. <strong>dataCollections + data shape are the frozen contract</strong>; renaming them redefines stored data.</div>
+      <textarea class="spec-edit" data-job="${job.jobId}" rows="14" spellcheck="false">${this._esc(JSON.stringify(job.plan, null, 2))}</textarea>
+      <div class="spec-actions">
+        <button class="job-btn primary" data-action="save-spec" data-job="${job.jobId}">💾 Save spec</button>
+        <span class="spec-err" data-specerr="${job.jobId}"></span>
+      </div>
+    </div>`;
   }
 
   // Deferred-feature roadmap: one-tap "➕ Add" buttons on an installed app that
@@ -298,6 +316,12 @@ class AppBuilder extends HTMLElement {
       const handlers = {
         'install': () => this._install(job),
         'revise': () => this._startRevise(job),
+        'consolidate': () => this._consolidate(job),
+        'save-spec': () => this._saveSpec(job),
+        'toggle-spec': () => {
+          const panel = this._wrapper.querySelector(`#spec-${job.jobId}`);
+          if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        },
         'add-feature': () => this._addFeature(job, parseInt(btn.dataset.idx)),
         'revert': () => this._revert(job),
         'retry': () => { job.status = 'queued'; job.error = null; job.autoRetried = false; this._saveJobs(); this._render(); this._processQueue(); },
@@ -445,6 +469,7 @@ class AppBuilder extends HTMLElement {
       plan,
       messages: [...this._aiMessages],
       revise: !!reviseJob,
+      consolidate: false, // clear any stale flag from a prior Consolidate (revise ≠ consolidate)
       error: null,
       createdAt: reviseJob?.createdAt || Date.now(),
       ...(reviseJob && { revisedAt: Date.now() }),
@@ -471,8 +496,12 @@ class AppBuilder extends HTMLElement {
     this._render();
 
     try {
-      const existing = next.revise && next.appId ? this._modules[next.appId] : undefined;
-      const result = await aiRequest(next.revise ? 'revise' : 'build', {
+      // Both revise and consolidate edit an installed app in place: they send the
+      // existing code, keep appId/tag so data survives, and auto-reinstall.
+      const inPlace = next.revise || next.consolidate;
+      const mode = next.consolidate ? 'consolidate' : next.revise ? 'revise' : 'build';
+      const existing = inPlace && next.appId ? this._modules[next.appId] : undefined;
+      const result = await aiRequest(mode, {
         messages: next.messages,
         plan: next.plan,
         ...(existing && { existing }),
@@ -484,8 +513,8 @@ class AppBuilder extends HTMLElement {
         this._render();
       });
       if (!result?.manifest || (!result?.js && !result?.files)) throw new Error('Build returned no module');
-      // Revisions must keep the original appId so user data survives
-      if (next.revise && next.appId) {
+      // Revise/consolidate must keep the original appId so user data survives
+      if (inPlace && next.appId) {
         result.manifest.appId = next.appId;
         const mod = this._modules[next.appId];
         if (mod?.manifest?.tag) result.manifest.tag = mod.manifest.tag;
@@ -494,8 +523,8 @@ class AppBuilder extends HTMLElement {
       next.appId = result.manifest.appId;
       next.status = 'done';
       this.api?.notify(`${next.icon} ${next.title} built — install it from Jobs`, 'success');
-      // Revisions of installed apps auto-reinstall (code overwrite, data kept)
-      if (next.revise) await this._install(next, { quiet: true });
+      // Revise/consolidate of installed apps auto-reinstall (code overwrite, data kept)
+      if (inPlace) await this._install(next, { quiet: true });
     } catch (err) {
       // Timeouts here are intermittent, not deterministic: M3 calls occasionally
       // hang for minutes and the worker's abort setTimeout is unreliable (gotcha 8),
@@ -621,6 +650,46 @@ class AppBuilder extends HTMLElement {
     this._convo = [{ role: 'ai', text: `➕ Adding “${this._esc(d.title || d.desc || 'feature')}” to ${job.icon} ${job.title} — planning…` }];
     this._render();
     this._requestPlan();
+  }
+
+  // "🪄 Consolidate": rebuild the whole app from its (possibly hand-edited) spec
+  // as ONE coherent design — no plan/approve round. Unlike Revise it drops the
+  // "keep the existing file split" anchor (so layout/controls get redesigned) but
+  // keeps the data contract frozen and the appId/tag, so user data survives.
+  // Revert is the backstop (the pre-consolidate version is snapshotted as `prev`).
+  _consolidate(job) {
+    if (!job.plan) { this.api?.notify('No spec to consolidate — Revise this app once to generate one.', 'info'); return; }
+    if (this._building) { this.api?.notify('A build is already running — try again when it finishes.', 'info'); return; }
+    job.status = 'queued';
+    job.consolidate = true;
+    job.revise = false;
+    job.error = null;
+    job.phase = null;
+    job.autoRetried = false;
+    job.revisedAt = Date.now();
+    job.messages = [{ role: 'user', content: `Consolidate my existing app "${job.title}" into one coherent design. Spec: ${JSON.stringify(job.plan)}.` }];
+    this._saveJobs();
+    this.api?.notify(`🪄 Consolidating ${job.icon} ${job.title}…`, 'info');
+    this._activeTab = 'jobs';
+    this._render();
+    this._processQueue();
+  }
+
+  // Persist a hand-edited spec back onto the job. The next Consolidate rebuilds
+  // from it. Rejects invalid JSON / a spec missing a title so a typo can't wipe
+  // the only spec the app has.
+  _saveSpec(job) {
+    const ta = this._wrapper.querySelector(`.spec-edit[data-job="${job.jobId}"]`);
+    const errEl = this._wrapper.querySelector(`[data-specerr="${job.jobId}"]`);
+    if (!ta) return;
+    let parsed;
+    try { parsed = JSON.parse(ta.value); }
+    catch (e) { if (errEl) errEl.textContent = 'Invalid JSON: ' + e.message; return; }
+    if (!parsed || !parsed.title) { if (errEl) errEl.textContent = 'Spec needs at least a "title".'; return; }
+    job.plan = parsed;
+    this._saveJobs();
+    this.api?.notify('Spec saved — 🪄 Consolidate will rebuild from it', 'success');
+    this._render();
   }
 
   async _deleteInstalled(job) {

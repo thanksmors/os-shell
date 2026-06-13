@@ -5,7 +5,7 @@ import { kvSet, kvGet } from '../lib/db.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-13-css-split';
+const AI_BUILD = '2026-06-13-multifile';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -90,7 +90,8 @@ JSON output:
     "dataCollections": ["counters"],
     "contextMenu": [{ "label": "🔢 New Counter", "config": { "name": "Counter", "icon": "🔢" } }]
   },
-  "js": "import { AppModuleBase } from '/shell/module-base.js';\\nimport { getData, setData } from '/shell/api.js';\\n\\nclass AppCounter extends AppModuleBase {\\n  async _load() {\\n    this._state = await getData('counters', this._appId) || { name: this.api?.config?.name || 'Counter', count: 0 };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"body\\"><div class=\\"count\\">\${this._state.count}</div><div class=\\"btns\\"><button class=\\"btn dec\\">−</button><button class=\\"btn rst\\">Reset</button><button class=\\"btn inc\\">+</button></div></div>\`;\\n    this._wrapper.querySelector('.dec').addEventListener('click', () => this._change(-1));\\n    this._wrapper.querySelector('.inc').addEventListener('click', () => this._change(1));\\n    this._wrapper.querySelector('.rst').addEventListener('click', () => this._change(0, true));\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  async _change(delta, reset = false) {\\n    if (reset) this._state.count = 0; else this._state.count += delta;\\n    await setData('counters', this._appId, this._state);\\n    this._render();\\n  }\\n}\\n\\nif (!customElements.get('app-counter')) customElements.define('app-counter', AppCounter);"
+  "main": "import { AppModuleBase } from '/shell/module-base.js';\\nimport { getData, setData } from '/shell/api.js';\\n\\nclass AppCounter extends AppModuleBase {\\n  async _load() {\\n    this._state = await getData('counters', this._appId) || { name: this.api?.config?.name || 'Counter', count: 0 };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"body\\"><div class=\\"count\\">\${this._state.count}</div><div class=\\"btns\\"><button class=\\"btn dec\\">−</button><button class=\\"btn rst\\">Reset</button><button class=\\"btn inc\\">+</button></div></div>\`;\\n    this._wrapper.querySelector('.dec').addEventListener('click', () => this._change(-1));\\n    this._wrapper.querySelector('.inc').addEventListener('click', () => this._change(1));\\n    this._wrapper.querySelector('.rst').addEventListener('click', () => this._change(0, true));\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  async _change(delta, reset = false) {\\n    if (reset) this._state.count = 0; else this._state.count += delta;\\n    await setData('counters', this._appId, this._state);\\n    this._render();\\n  }\\n}\\n\\nif (!customElements.get('app-counter')) customElements.define('app-counter', AppCounter);",
+  "files": []
 }
 
 ## EXAMPLE — Complete singleton module (one shared window)
@@ -112,15 +113,29 @@ JSON output:
     "generator": false,
     "resizable": true
   },
-  "js": "import { AppModuleBase } from '/shell/module-base.js';\\n\\nclass AppClock extends AppModuleBase {\\n  async _load() {\\n    this._state = { name: 'Clock', now: new Date().toLocaleTimeString() };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"body\\"><div class=\\"time\\">\${this._state.now}</div></div>\`;\\n    clearInterval(this._timer);\\n    this._timer = setInterval(() => {\\n      const t = this._wrapper.querySelector('.time');\\n      if (t) t.textContent = new Date().toLocaleTimeString();\\n    }, 1000);\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  disconnectedCallback() { super.disconnectedCallback(); clearInterval(this._timer); }\\n}\\n\\nif (!customElements.get('app-clock')) customElements.define('app-clock', AppClock);"
+  "main": "import { AppModuleBase } from '/shell/module-base.js';\\n\\nclass AppClock extends AppModuleBase {\\n  async _load() {\\n    this._state = { name: 'Clock', now: new Date().toLocaleTimeString() };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"body\\"><div class=\\"time\\">\${this._state.now}</div></div>\`;\\n    clearInterval(this._timer);\\n    this._timer = setInterval(() => {\\n      const t = this._wrapper.querySelector('.time');\\n      if (t) t.textContent = new Date().toLocaleTimeString();\\n    }, 1000);\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  disconnectedCallback() { super.disconnectedCallback(); clearInterval(this._timer); }\\n}\\n\\nif (!customElements.get('app-clock')) customElements.define('app-clock', AppClock);",
+  "files": []
 }
 
 ## Output shape
 
-Output ONLY valid JSON of the form { "manifest": {...}, "js": "..." }.
-Do NOT include a "css" field — styling is generated in a separate step.
+Output ONLY valid JSON: { "manifest": {...}, "main": "<main.js source>", "files": [ ... ] }.
+- "main" is the entry module — the class extending AppModuleBase, ending with customElements.define. This file runs.
+- "files" lists EXTRA source files (for large apps). For a small/simple app use "files": [] and put the whole implementation in "main".
+- Do NOT include a "css" field — styling is generated in a separate step.
+
+## When to split into files
+
+If the app is large or has several distinct feature areas (one file would exceed ~250 lines of JS), split each feature area into its own file and keep "main" a THIN orchestrator that imports and calls them — this keeps every file small. For each extra file add to "files":
+  { "name": "feature-<area>.js", "exports": ["fnA","fnB"], "spec": "one line: what it does + what each export does" }
+- "main" imports each by relative name and calls it: import { renderTasks, bindTasks } from './feature-tasks.js';
+- Feature functions take the module INSTANCE as their first arg ("host"): they read/write host._state, set host._wrapper.innerHTML, call host._render(), use host.api. e.g. export function renderTasks(host){ ... }
+- main.js's _load/_render/_getTitle delegate to these functions.
+- Feature files import ONLY from '/shell/...'. They MUST NOT import each other or main — everything shared flows through the host instance. (Only "main" may import feature files.)
 
 ## Rules
+
+(Rules below describe "main"; feature files follow the same conventions except they export functions instead of defining the element.)
 
 1. Output ONLY valid JSON — no markdown, no code fences, no extra text
 2. The "entry" field must always be exactly "/modules/placeholder/index.js" (the shell replaces it)
@@ -156,6 +171,22 @@ Rules:
 5. Primary action colors must use var(--os-accent, #3b82f6) — the user picks the accent.
 6. NEVER declare font-family — it inherits the user's chosen font from the shell.
 7. Be economical: style only what the js renders, no dead rules.`;
+
+// Per-feature-file generation for large (multi-file) apps. The architect call
+// produces main.js + a list of feature files; each file is then generated here
+// against the fixed contract (main.js + the file's required exports) so no single
+// call is large enough to truncate.
+const FEATURE_PROMPT = `You are writing ONE source file of a larger "ODVI Spaces" app module (a Web Component extending AppModuleBase). You receive the app's manifest, its main.js, and the file to write (name + required exports + spec).
+
+Output ONLY valid JSON: { "js": "<file source>" } — a single-line string with \\n for newlines. No markdown, no code fences.
+
+Rules:
+1. Export EXACTLY the named functions. Each takes the module INSTANCE as its first argument ("host").
+2. Work through the host: host._state (data), host._wrapper (shadow content — set innerHTML, querySelector), host._render() (re-render), host.api (shell API), host._esc(str) if needed. Keep NO module-level mutable state.
+3. Import ONLY from '/shell/...' (e.g. import { getData, setData } from '/shell/api.js'). NEVER import sibling feature files or main — everything shared flows through host.
+4. Match how main.js calls your exports (same names, same argument usage, same host fields).
+5. No customElements.define here — only main.js defines the element.
+6. Font sizes in rem (CSS is generated separately — just use clear class names). Be economical: implement exactly the spec, nothing extra.`;
 
 // ─── Phase prompts (clarify → plan → build/revise) ────────────────────────────
 
@@ -203,10 +234,10 @@ const REVISE_SUFFIX = `
 
 ## Revision mode
 
-You are REVISING an existing installed module. You will receive its current manifest and js plus an approved change plan.
+You are REVISING an existing installed module. You will receive its current manifest, main, and any feature files, plus an approved change plan.
 - Keep the SAME appId and tag (user data is keyed by them).
 - Apply only the planned changes; preserve all other behavior.
-- Output the COMPLETE updated module JSON ({manifest, js}), not a diff. Do NOT include a "css" field — styling is regenerated separately from your js.`;
+- Output the COMPLETE updated module in the standard { manifest, main, files } shape (keep the split if it had one; main thin + feature files for large apps). Do NOT include a "css" field — styling is regenerated separately.`;
 
 // Enforce the approved plan's instance model — the model occasionally drifts.
 function enforcePlanType(parsed, planType) {
@@ -331,7 +362,7 @@ async function runMiniMax({ model, systemPrompt, convo, maxTokens, budgetMs }) {
 
 // Validate + finalize a build/revise result. Returns an error string or null.
 function validateBuildResult(parsed, planType) {
-  if (!parsed.manifest || !parsed.js) return 'AI response missing manifest or js fields';
+  if (!parsed.manifest || (!parsed.js && !parsed.files)) return 'AI response missing manifest or code';
   return enforcePlanType(parsed, planType === 'generator' ? 'generator' : 'singleton');
 }
 
@@ -350,32 +381,93 @@ async function bumpStat(kind) {
   }
 }
 
-// Generate CSS for an already-built {manifest, js} on the fast model. Non-fatal:
-// a failure returns '' so a working module ships unstyled rather than being lost.
-async function generateCss(parsed, budgetMs) {
+// CSS for one JS file on the fast model. `feature` files style only their own
+// classes (the entry owns root/layout/theme) so per-file CSS concatenates without
+// duplicate root rules. Non-fatal: returns '' on failure (ship that chunk unstyled).
+async function generateCssChunk(js, { feature, budgetMs }) {
   try {
-    const convo = [{ role: 'user', content: `MODULE manifest and js:\n${JSON.stringify({ manifest: parsed.manifest, js: parsed.js })}` }];
-    const { jsonStr } = await runMiniMax({ model: 'MiniMax-M2.7-highspeed', systemPrompt: STYLE_PROMPT, convo, maxTokens: 4096, budgetMs });
+    const sys = feature
+      ? STYLE_PROMPT + '\n\nThis is a FEATURE file: style ONLY the classes it renders. Do NOT emit .wrapper root/layout/background rules — the entry file already defines them.'
+      : STYLE_PROMPT;
+    const { jsonStr } = await runMiniMax({ model: 'MiniMax-M2.7-highspeed', systemPrompt: sys, convo: [{ role: 'user', content: `MODULE js:\n${js}` }], maxTokens: 4096, budgetMs });
     const styled = JSON.parse(jsonStr);
     return typeof styled?.css === 'string' ? styled.css : '';
   } catch (e) {
-    console.error('[ai] CSS generation failed, shipping unstyled:', e.message);
+    console.error('[ai] CSS generation failed, shipping chunk unstyled:', e.message);
     return '';
   }
 }
 
-// Two-call build: JS (reasoning model) then CSS (fast model). Returns
-// { ok:true, module } with css attached, or { ok:false, finishReason, raw } when
-// the JS JSON won't parse (caller maps finishReason 'length' → truncation). A JS
-// timeout throws out of runMiniMax and propagates to the caller's catch.
-async function buildModule({ jsModel, mode, convo, jsBudget, cssBudget }) {
+// CSS scales with the code: one chunk per JS file, in parallel, concatenated. The
+// first file (entry) owns globals; the rest style only their sections — so a large
+// multi-file app's CSS never has to fit one 4096-token call. `files` is { name: js }
+// with the entry first.
+async function generateCss(files, budgetMs) {
+  const names = Object.keys(files);
+  const parts = await Promise.all(names.map((name, i) =>
+    generateCssChunk(files[name], { feature: i !== 0, budgetMs })));
+  return parts.filter(Boolean).join('\n');
+}
+
+// Generate one feature file for a multi-file app against the fixed contract
+// (manifest + main.js + the file's required exports). Throws on failure.
+async function generateFeature({ model, manifest, main, feat, budgetMs }) {
+  const convo = [{ role: 'user', content:
+    `APP manifest + main.js (context — do NOT rewrite these):\n${JSON.stringify({ manifest, main })}\n\n` +
+    `Write file "${feat.name}" exporting: ${(feat.exports || []).join(', ')}\nSPEC: ${feat.spec || ''}` }];
+  const { jsonStr } = await runMiniMax({ model, systemPrompt: FEATURE_PROMPT, convo, maxTokens: 16384, budgetMs });
+  const parsed = JSON.parse(jsonStr);
+  if (typeof parsed?.js !== 'string') throw new Error(`feature ${feat.name} returned no js`);
+  return parsed.js;
+}
+
+// Build: architect call (M3) emits main.js + optional feature-file manifest; small
+// apps come back single-file (no features). Each feature file is then generated in
+// its own bounded call (parallel) so no single call truncates. Finally CSS (fast
+// model). Returns { ok:true, module } or { ok:false, finishReason?, raw?, error? }
+// (caller maps finishReason 'length' → truncation, or surfaces error verbatim).
+async function buildModule({ jsModel, mode, convo, jsBudget, featureBudget, cssBudget }) {
   const systemPrompt = mode === 'revise' ? SYSTEM_PROMPT + REVISE_SUFFIX : SYSTEM_PROMPT;
   const { jsonStr, finishReason } = await runMiniMax({ model: jsModel, systemPrompt, convo, maxTokens: 32768, budgetMs: jsBudget });
-  let parsed;
-  try { parsed = JSON.parse(jsonStr); }
+  let arch;
+  try { arch = JSON.parse(jsonStr); }
   catch { return { ok: false, finishReason, raw: jsonStr.slice(0, 800) }; }
-  parsed.css = await generateCss(parsed, cssBudget);
-  return { ok: true, module: parsed };
+  if (!arch.manifest || !arch.main) return { ok: false, finishReason, raw: jsonStr.slice(0, 800) };
+
+  const specs = Array.isArray(arch.files)
+    ? arch.files.filter(f => f && f.name && f.name !== 'main.js')
+    : [];
+
+  // Single-file: main.js is the whole module (legacy { js } shape).
+  if (!specs.length) {
+    const module = { manifest: arch.manifest, js: arch.main };
+    module.css = await generateCss({ 'main.js': arch.main }, cssBudget);
+    return { ok: true, module };
+  }
+
+  // Multi-file: generate feature files in parallel against the fixed main.js.
+  let codes;
+  try {
+    codes = await Promise.all(specs.map(feat =>
+      generateFeature({ model: jsModel, manifest: arch.manifest, main: arch.main, feat, budgetMs: featureBudget })));
+  } catch (e) {
+    return { ok: false, error: `Feature generation failed: ${e.message}` };
+  }
+  const files = { 'main.js': arch.main };
+  for (let i = 0; i < specs.length; i++) {
+    // Star topology: feature files must import only /shell/ — assembleModuleBlobs
+    // wires only the entry's relative imports, so a sibling/main import would ship
+    // broken. Reject rather than install something that won't load.
+    if (/\bfrom\s+['"]\.\.?\//.test(codes[i])) {
+      return { ok: false, error: `Feature file ${specs[i].name} used a relative import (only main.js may import feature files) — Retry.` };
+    }
+    files[specs[i].name] = codes[i];
+  }
+  const module = { manifest: arch.manifest, files, entryFile: 'main.js' };
+  // One CSS chunk per file (parallel) — entry owns globals, features style their
+  // own sections — so CSS scales with the app instead of one capped call.
+  module.css = await generateCss(files, cssBudget);
+  return { ok: true, module };
 }
 
 // ─── Worker: build/revise on MiniMax-M3 (300s LLM budget, 330s worker timeout —
@@ -415,14 +507,15 @@ app.worker('ai-generate-worker', async (req, res) => {
 
   try {
     console.log(`[ai-worker] job ${jobId} LLM call start (${model || 'MiniMax-M3'}, mode=${mode}, convo=${convo.length})`);
-    // JS on M3 (~260s) then CSS on the fast model (~45s) — both fit the 330s worker.
-    const result = await buildModule({ jsModel: model || 'MiniMax-M3', mode, convo, jsBudget: 260000, cssBudget: 45000 });
+    // Architect (M3) → parallel feature files → CSS (fast). Budgets are ceilings;
+    // a multi-file architect returns a thin main fast, leaving room for features.
+    const result = await buildModule({ jsModel: model || 'MiniMax-M3', mode, convo, jsBudget: 220000, featureBudget: 70000, cssBudget: 38000 });
     console.log(`[ai-worker] job ${jobId} LLM done +${Date.now() - startedAt}ms`);
 
     if (!result.ok) {
       const truncated = result.finishReason === 'length';
       await bumpStat(truncated ? 'truncation' : 'invalid_json');
-      await finish({ status: 'error', error: truncated ? TRUNCATION_MSG : 'AI returned invalid JSON', raw: result.raw });
+      await finish({ status: 'error', error: result.error || (truncated ? TRUNCATION_MSG : 'AI returned invalid JSON'), raw: result.raw });
       res.end();
       return;
     }
@@ -469,9 +562,11 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
     convo = [...convo, { role: 'user', content: `APPROVED PLAN (follow "type" exactly):\n${JSON.stringify(plan)}` }];
   }
   if (mode === 'revise' && existing) {
-    // Send only what the JS call can use — css is regenerated, and the stored
-    // entry also carries a `prev` snapshot. Both would just waste input tokens.
-    const slim = { manifest: existing.manifest, js: existing.js };
+    // Send the existing code (single js or multi-file main + files) as context;
+    // drop css (regenerated) and the `prev` snapshot (just input-token waste).
+    const slim = existing.files
+      ? { manifest: existing.manifest, main: existing.files[existing.entryFile || 'main.js'], files: existing.files }
+      : { manifest: existing.manifest, main: existing.js };
     convo = [...convo, { role: 'user', content: `EXISTING MODULE (keep appId/tag, apply only planned changes):\n${JSON.stringify(slim)}` }];
   }
 
@@ -510,14 +605,14 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
     if (req.body?.inline || !workerHealthy) {
       console.log(`[ai] job ${jobId} building INLINE (${req.body?.inline ? 'frontend fallback' : 'queue dead'})`);
       try {
-        // Inline runs synchronously in the POST, which the frontend aborts at 65s
-        // — keep JS + CSS budgets summing well under that so a finished build is
-        // never orphaned by a client abort. Highspeed is fast, so this is ample.
-        const result = await buildModule({ jsModel: 'MiniMax-M2.7-highspeed', mode, convo, jsBudget: 38000, cssBudget: 15000 });
+        // Inline runs synchronously in the POST, which the frontend aborts at 65s.
+        // Keep architect + (parallel) features + CSS summing under that; features
+        // run in parallel so the feature budget counts once, not per file.
+        const result = await buildModule({ jsModel: 'MiniMax-M2.7-highspeed', mode, convo, jsBudget: 38000, featureBudget: 12000, cssBudget: 12000 });
         if (!result.ok) {
           const truncated = result.finishReason === 'length';
           await bumpStat(truncated ? 'truncation' : 'invalid_json');
-          await finish({ status: 'error', error: truncated ? TRUNCATION_MSG : 'AI returned invalid JSON', raw: result.raw });
+          await finish({ status: 'error', error: result.error || (truncated ? TRUNCATION_MSG : 'AI returned invalid JSON'), raw: result.raw });
           res.json({ jobId });
           return;
         }

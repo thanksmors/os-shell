@@ -464,7 +464,7 @@ class AppBuilder extends HTMLElement {
         next.phase = phase;
         this._render();
       });
-      if (!result?.manifest || !result?.js) throw new Error('Build returned no module');
+      if (!result?.manifest || (!result?.js && !result?.files)) throw new Error('Build returned no module');
       // Revisions must keep the original appId so user data survives
       if (next.revise && next.appId) {
         result.manifest.appId = next.appId;

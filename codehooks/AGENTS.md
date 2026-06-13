@@ -55,7 +55,7 @@ a `TOP_ARRAYS` entry in `lib/merge.js` — see Concurrent-edit merge below.)
 
 **Route path rule:** AI routes use 3-segment paths (`/w/:ws/ai-generate`, `/w/:ws/ai-job`). A 4-segment path like `/w/:ws/ai/generate` collides with the generic data route `/w/:ws/:collection/:id` — never use 4 segments for AI routes.
 
-**Models:** `MiniMax-M2.7-highspeed` for clarify/plan (max_tokens 1024/2048); `MiniMax-M3` for build/revise (max_tokens 16384, runs in the worker — M3 takes 40–90s and emits `<think>` blocks, which `extractModuleJson` strips). No `response_format` param — it caused request hangs; JSON extraction is handled by `extractModuleJson` instead.
+**Models:** `MiniMax-M2.7-highspeed` for clarify/plan (max_tokens 1024/2048); `MiniMax-M3` for build/revise (max_tokens 32768 — M3's `<think>` reasoning tokens count against max_tokens (~4k typical), so the cap must leave room for reasoning + module; 16384 truncated rich apps. Runs in the worker, ~1–3min at ~120 tok/s; `extractModuleJson` strips the `<think>` blocks). No `response_format` param — it caused request hangs; JSON extraction is handled by `extractModuleJson` instead.
 
 ---
 

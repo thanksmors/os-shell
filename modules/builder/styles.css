@@ -243,6 +243,23 @@
 
 .plan-data { font-size: 0.75rem; opacity: .7; }
 
+.plan-later { font-size: 0.75rem; opacity: .8; }
+.plan-deferred { margin: 2px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; opacity: .85; }
+
+.roadmap { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 6px; padding: 0 2px; }
+.roadmap-label { font-size: 0.72rem; opacity: .6; }
+.roadmap-btn {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px dashed rgba(0,0,0,.18);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.roadmap-btn:hover { border-style: solid; border-color: var(--os-accent, #3b82f6); color: var(--os-accent, #3b82f6); }
+.wrapper.dark .roadmap-btn { border-color: rgba(255,255,255,.2); }
+
 .plan-actions { display: flex; align-items: center; gap: 10px; }
 
 .approve-btn {

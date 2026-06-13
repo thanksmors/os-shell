@@ -5,7 +5,7 @@ import { kvSet, kvGet } from '../lib/db.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-13-multifile-v4';
+const AI_BUILD = '2026-06-13-scope-split';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -156,6 +156,7 @@ const ARCHITECT_PROMPT = `You are the architect for an "ODVI Spaces" app module 
   "files": [ { "name": "feature-<area>.js", "exports": ["fnA","fnB"], "spec": "one line: what it does + what each export does" } ] }
 
 Rules:
+- Build ONLY the plan's "features" (the core v1). The plan may also list "deferred" features — do NOT implement or plan files for those; they are added later via Revise. Scope the file structure to the core only.
 - Follow the approved plan's type EXACTLY: singleton (generator:false, no contextMenu) unless it explicitly asked for multiple named instances (then generator:true with a contextMenu). entry is literally "/modules/placeholder/index.js". tag is "app-" + appId.
 - SPLIT aggressively: every distinct feature area becomes its own file so no file is large. A genuinely simple, single-purpose tool may use "files": [] (everything in main). Anything with multiple feature areas MUST split.
 - Feature functions take the module instance ("host") and work via host._state/host._wrapper/host._render(); main imports them by ./name. Feature files import ONLY /shell/, never each other.
@@ -191,13 +192,14 @@ Given the conversation (user request + any clarification answers), output ONLY v
   "type":"singleton",
   "summary":"2-3 sentence description of what will be built",
   "features":["feature 1","feature 2","..."],
+  "deferred":[{"title":"Short Name","desc":"one line: what this feature adds"}],
   "collections":["collection-name"],
   "dataModel":"one-line description of the persisted state shape"
 }}
 
 CRITICAL RULE for "type": it MUST be "singleton" unless the user EXPLICITLY asked for multiple separately-named instances (e.g. "I want to create several boards", "one per project"). Vague or absent instance-model preference = "singleton". If you choose "generator", the summary MUST quote the user's exact words that demanded multiple instances.
 
-SCOPE LIMIT: the plan must fit a single-file module of roughly 400 lines of JS. If the request implies more than that, plan a core feature set that fits and say in "summary" which features were deferred — the user can add them later via Revise.
+SCOPE — "features" is the CORE v1 you build now; "deferred" is held back for later. Be aggressive: for anything beyond a simple single-purpose tool (a game, a multi-view app, anything with several distinct feature areas), put ONLY the essential, usable/playable core in "features" and move everything else into "deferred". Each deferred item is one the user adds later in one click via Revise. A genuinely simple tool uses "deferred":[]. State in "summary" what's core vs deferred. Erring toward a smaller core is correct — extras are easy to add via Revise, but an over-large build fails to generate.
 
 If the user asks to revise an existing app, keep its appId and title unless they asked to change them, and list only what changes under "features".
 

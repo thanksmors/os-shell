@@ -224,8 +224,9 @@ messages, plan, existing }` (frontend wrapper: `aiRequest(mode, payload)` in
 
 **Storage:** Generated module code lives in the `generated-modules` collection under the key `'index'`:
 ```js
-// shape: { [appId]: { manifest, css, prev, ...code } } where code is either
+// shape: { [appId]: { manifest, css, prev, deferred?, ...code } } where code is
 //   single-file: { js }   or   multi-file: { files: {name:code}, entryFile }
+//   deferred: [{title,desc}] — the Revise roadmap (features the plan held back)
 getData('generated-modules', 'index')
 ```
 
@@ -260,6 +261,12 @@ because the registry is empty on a fresh page load.
 **Code viewer:** the Jobs tab shows generated code in a per-file switcher
 (`_renderCodePanel`): a `<select>` over the files (+ a `CSS` entry) feeding one
 `<pre>`; the change handler swaps `<code>` text from `moduleFiles(job.module)`.
+
+**Scope roadmap:** big apps are scoped to a core at plan time (`plan.deferred`,
+shown as a "Later" list on the plan card). After install, `_renderRoadmap` shows
+one-tap **➕ Add** buttons from the module's stored `deferred`; `_addFeature` seeds
+a scoped Revise (re-plans the item into the core, multi-file rebuild, appId/tag
+preserved) and the roadmap shrinks as the new plan's `deferred` updates.
 
 **Hot-swap via unique runtime tags — critical:** Custom-element tags are immutable
 once defined in a page session, so re-registering a revised module under the same

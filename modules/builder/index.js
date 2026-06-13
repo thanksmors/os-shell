@@ -13,6 +13,7 @@ function moduleSnapshot(m) {
   const s = { manifest: m.manifest, css: m.css };
   if (m.files) { s.files = m.files; s.entryFile = m.entryFile || 'main.js'; }
   else { s.js = m.js; }
+  if (Array.isArray(m.deferred)) s.deferred = m.deferred; // Revise roadmap
   return s;
 }
 
@@ -176,6 +177,11 @@ class AppBuilder extends HTMLElement {
           ${Array.isArray(p.features) && p.features.length ? `
             <ul class="plan-features">${p.features.map(f => `<li>${this._esc(f)}</li>`).join('')}</ul>
           ` : ''}
+          ${Array.isArray(p.deferred) && p.deferred.length ? `
+            <div class="plan-later"><strong>Later (one-tap Revise after install):</strong>
+              <ul class="plan-deferred">${p.deferred.map(d => `<li>${this._esc(d.title || d.desc || '')}</li>`).join('')}</ul>
+            </div>
+          ` : ''}
           ${p.dataModel ? `<div class="plan-data"><strong>Data:</strong> ${this._esc(p.dataModel)}</div>` : ''}
           <div class="plan-actions">
             <button class="approve-btn" data-action="approve">✅ Approve &amp; queue build</button>
@@ -233,8 +239,20 @@ class AppBuilder extends HTMLElement {
         ${badge}
         <div class="job-actions">${actions}</div>
       </div>
+      ${this._renderRoadmap(job)}
       ${this._renderCodePanel(job)}
     `;
+  }
+
+  // Deferred-feature roadmap: one-tap "➕ Add" buttons on an installed app that
+  // seed a scoped Revise. Survives reload (deferred is stored on the module).
+  _renderRoadmap(job) {
+    const deferred = job.status === 'installed' ? this._modules[job.appId]?.deferred : null;
+    if (!Array.isArray(deferred) || !deferred.length) return '';
+    return `<div class="roadmap">
+      <span class="roadmap-label">Add later:</span>
+      ${deferred.map((d, i) => `<button class="roadmap-btn" data-action="add-feature" data-job="${job.jobId}" data-idx="${i}" title="${this._esc(d.desc || '')}">➕ ${this._esc(d.title || d.desc || 'feature')}</button>`).join('')}
+    </div>`;
   }
 
   // Code viewer: a file switcher (entry + feature files + CSS) over one <pre>.
@@ -280,6 +298,7 @@ class AppBuilder extends HTMLElement {
       const handlers = {
         'install': () => this._install(job),
         'revise': () => this._startRevise(job),
+        'add-feature': () => this._addFeature(job, parseInt(btn.dataset.idx)),
         'revert': () => this._revert(job),
         'retry': () => { job.status = 'queued'; job.error = null; job.autoRetried = false; this._saveJobs(); this._render(); this._processQueue(); },
         'cancel': () => { delete this._jobs[job.jobId]; this._saveJobs(); this._render(); },
@@ -509,7 +528,10 @@ class AppBuilder extends HTMLElement {
       const appId = mod.manifest.appId;
       // Keep one previous version so a bad revision can be rolled back.
       const cur = this._modules[appId];
-      this._modules[appId] = { ...moduleSnapshot(mod), prev: cur ? moduleSnapshot(cur) : null };
+      // Carry the deferred roadmap from the approved plan onto the stored module
+      // (persists in generated-modules so the "➕ Add" buttons survive reload).
+      const deferred = Array.isArray(job.plan?.deferred) ? job.plan.deferred : [];
+      this._modules[appId] = { ...moduleSnapshot(mod), deferred, prev: cur ? moduleSnapshot(cur) : null };
       await setData(MODULES_COLLECTION, INDEX_KEY, this._modules);
 
       this._registerModule(this._modules[appId]);
@@ -577,6 +599,24 @@ class AppBuilder extends HTMLElement {
     });
     this._convo = [{ role: 'ai', text: `✏️ Revising ${job.icon} ${job.title} — your saved data will be kept. What would you like to change?` }];
     this._render();
+  }
+
+  // One-tap "add a deferred feature": seed a revise with that feature and go
+  // straight to planning. The re-plan moves it into the core and updates the
+  // deferred roadmap; the revise build keeps appId/tag so data survives.
+  _addFeature(job, idx) {
+    const d = this._modules[job.appId]?.deferred?.[idx];
+    if (!d) return;
+    this._resetDraft();
+    this._reviseJobId = job.jobId;
+    this._activeTab = 'build';
+    this._aiMessages.push({
+      role: 'user',
+      content: `Revise my existing app "${job.title}". Current plan: ${JSON.stringify(job.plan)}. Add this previously-deferred feature into the core now: ${d.title} — ${d.desc || ''}. Keep all existing behavior and leave any other deferred features deferred.`,
+    });
+    this._convo = [{ role: 'ai', text: `➕ Adding “${this._esc(d.title || d.desc || 'feature')}” to ${job.icon} ${job.title} — planning…` }];
+    this._render();
+    this._requestPlan();
   }
 
   async _deleteInstalled(job) {

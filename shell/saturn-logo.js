@@ -73,10 +73,18 @@ class SaturnLogo extends HTMLElement {
     <path class="sg-ring-glow"
       d="M 6 40 A 44 11 0 0 1 94 40"
       fill="none" stroke="url(#sg-rg)" stroke-width="6" stroke-linecap="round"/>
-    <!-- orbiting moon -->
+    <!-- orbiting moons — layered radii / speeds / directions for a livelier 3D feel -->
     <circle class="sg-moon" cx="50" cy="13" r="2.4" fill="rgba(255,255,255,0.88)">
       <animateTransform attributeName="transform" type="rotate"
         from="0 50 40" to="360 50 40" dur="8s" repeatCount="indefinite"/>
+    </circle>
+    <circle class="sg-moon" cx="50" cy="6" r="1.7" fill="rgba(200,225,255,0.82)">
+      <animateTransform attributeName="transform" type="rotate"
+        from="140 50 40" to="500 50 40" dur="13s" repeatCount="indefinite"/>
+    </circle>
+    <circle class="sg-moon" cx="50" cy="21" r="1.4" fill="rgba(255,240,200,0.85)">
+      <animateTransform attributeName="transform" type="rotate"
+        from="300 50 40" to="-60 50 40" dur="5.5s" repeatCount="indefinite"/>
     </circle>
   </g>
 </svg>`;

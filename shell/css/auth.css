@@ -117,7 +117,7 @@
 .os-auth-subtitle { font-size: 0.875rem; color: rgba(255,255,255,0.55); }
 .os-auth-error { font-size: 0.8rem; color: #f87171; margin-top: 8px; text-align: center; }
 
-/* Legacy border-spinner kept for fallback; prefer .os-auth-orbit-loader */
+/* Legacy border-spinner — unused fallback */
 .os-auth-spinner {
   width: 28px;
   height: 28px;
@@ -129,45 +129,6 @@
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Orbit loader — dot circling a tiny Saturn */
-.os-auth-orbit-loader {
-  position: relative;
-  width: 44px;
-  height: 44px;
-  margin-top: 20px;
-  flex-shrink: 0;
-}
-.os-auth-orbit-loader::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #f5e49c, #c28a28);
-}
-.os-auth-orbit-track {
-  position: absolute;
-  inset: 0;
-  animation: orbit-spin 1.4s linear infinite;
-  transform-origin: center;
-}
-.os-auth-orbit-dot {
-  position: absolute;
-  top: 2px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #93c5fd;
-  box-shadow: 0 0 5px #60a5fa;
-}
-@keyframes orbit-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  .os-auth-orbit-track { animation: none; }
-}
 
 .os-auth-header {
   display: flex;
@@ -401,23 +362,6 @@
   margin-top: 4px;
 }
 .os-share-invite-btn:hover { background: #4338ca; }
-
-/* User workspace button in taskbar */
-.os-user-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 8px;
-  border: none;
-  background: rgba(255,255,255,0.08);
-  color: rgba(255,255,255,0.8);
-  cursor: pointer;
-  font-size: 0.875rem;
-  transition: background 150ms;
-  height: 32px;
-}
-.os-user-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
 
 /* Google sign-in button (server-side OAuth flow) */
 .os-google-btn {

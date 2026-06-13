@@ -320,9 +320,11 @@ Strips `fe0f` variation selectors. Accessible in modules via `this.api.store.ico
 ### `shortcuts.js`
 
 Global keyboard shortcuts. Registered via `initShortcuts()`:
-- `Ctrl/Cmd + K` — toggle launcher
+- `Ctrl/Cmd + K` — toggle the Spaces menu (the onboarding modal hub; dispatches `os:launcher-toggle`, which the body handler maps to `openOnboarding`/`closeOnboarding`). There is no longer a separate start-menu/app launcher.
 - `Ctrl/Cmd + W` — close focused window
-- `Escape` — hide context menu
+- `Escape` — hide context menu / close the Spaces menu
+
+**Taskbar & Spaces menu.** The taskbar holds only the **Spaces button** (Saturn logo, embossed/glassy — `.os-start-btn`), running-window buttons, and the clock. The Spaces button opens the **onboarding modal hub** (`openOnboarding`), which carries the ODVI ecosystem apps plus the **Settings / Switch space / Theme / Sign out** action row (`.os-ob-actions` in `index.html`). The old in-taskbar theme toggle and workspace switcher were removed (they live in the hub). Apps launch from **desktop icons** only. `desktopItems()` excludes apps with `manifest.hidden: true` (e.g. Settings, reached via the hub) in addition to `generator`/`isAppHidden`.
 
 ## Verification
 

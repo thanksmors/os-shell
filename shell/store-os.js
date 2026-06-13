@@ -585,7 +585,7 @@ export function registerOsStore() {
     // Merged ordered list of all desktop items (non-generator apps + root instances)
     desktopItems() {
       const map = {};
-      Object.values(this.apps).filter(a => !a.generator && !this.isAppHidden(a.appId)).forEach(a => {
+      Object.values(this.apps).filter(a => !a.generator && !a.hidden && !this.isAppHidden(a.appId)).forEach(a => {
         map[`app:${a.appId}`] = { key: `app:${a.appId}`, type: 'app', id: a.appId, icon: a.icon, label: a.title };
       });
       this.instances.filter(i => !i.parentId).forEach(i => {

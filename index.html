@@ -113,12 +113,12 @@
   </style>
 </head>
 <body
-  x-data="{ launcherOpen: false, searchQuery: '' }"
+  x-data="{}"
   x-cloak
   :class="$store.os && $store.os.theme === 'dark' ? 'dark' : ''"
-  @os:launcher-toggle.window="launcherOpen = !launcherOpen; if(launcherOpen) { $nextTick(() => $refs.launcherSearch && $refs.launcherSearch.focus()); $store.os.staggerLauncherTiles(); }"
+  @os:launcher-toggle.window="$store.os && ($store.os.showOnboarding ? $store.os.closeOnboarding(false) : $store.os.openOnboarding())"
   @click.window="$store.os && $store.os.hideContextMenu()"
-  @keydown.escape.window="launcherOpen = false"
+  @keydown.escape.window="$store.os && $store.os.showOnboarding && $store.os.closeOnboarding(false)"
 >
 
   <!-- ===== AUTH SCREEN ===== -->
@@ -132,9 +132,7 @@
         <div class="os-auth-card">
           <saturn-logo class="os-auth-logo-svg"></saturn-logo>
           <div class="os-auth-title">ODVI Spaces</div>
-          <div class="os-auth-orbit-loader">
-            <div class="os-auth-orbit-track"><div class="os-auth-orbit-dot"></div></div>
-          </div>
+          <div class="os-auth-subtitle">Loading…</div>
         </div>
       </template>
 
@@ -430,12 +428,9 @@
     <!-- Start Menu Button -->
     <button
       class="os-start-btn"
-      :class="{ active: launcherOpen }"
-      @click.stop="
-        launcherOpen = !launcherOpen;
-        if (launcherOpen) { $nextTick(() => $refs.launcherSearch && $refs.launcherSearch.focus()); $store.os.staggerLauncherTiles(); }
-      "
-      title="Start menu (⌘K)"
+      :class="{ active: $store.os && $store.os.showOnboarding }"
+      @click.stop="$store.os.openOnboarding()"
+      title="Spaces menu (⌘K)"
     ><saturn-logo class="os-start-logo"></saturn-logo><span class="os-start-label">Spaces</span></button>
 
     <!-- Window Buttons -->
@@ -454,26 +449,6 @@
 
     <!-- Right side controls -->
     <div style="display:flex;align-items:center;gap:4px;margin-left:auto;flex-shrink:0;">
-      <!-- Theme Toggle -->
-      <button
-        class="os-theme-btn"
-        @click.stop="$store.os && $store.os.toggleTheme()"
-        :title="($store.os && $store.os.theme === 'dark') ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
-        x-text="($store.os && $store.os.theme === 'dark') ? '☀️' : '🌙'"
-      ></button>
-
-      <!-- User avatar + workspace switcher -->
-      <template x-if="$store.auth && $store.auth.user">
-        <button
-          class="os-user-btn"
-          @click.stop="$store.auth.screen = 'workspace-select'; $store.auth.workspaces.length || $store.auth.init()"
-          :title="($store.auth.user?.name || '') + ' · ' + ($store.auth.workspace?.name || '')"
-        >
-          <span x-text="$store.auth.workspace?.icon || '🏢'"></span>
-          <span style="font-size:0.75rem;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" x-text="$store.auth.workspace?.name || ''"></span>
-        </button>
-      </template>
-
       <!-- Clock -->
       <div
         class="os-clock"
@@ -488,117 +463,6 @@
         "
         x-text="time"
       ></div>
-    </div>
-  </div>
-
-  <!-- ===== START MENU ===== -->
-  <div
-    class="os-launcher"
-    x-show="launcherOpen && $store.auth && $store.auth.screen === 'desktop'"
-    @click.self="launcherOpen = false"
-    x-transition:enter="transition duration-150 ease-out"
-    x-transition:enter-start="opacity-0"
-    x-transition:enter-end="opacity-100"
-    x-transition:leave="transition duration-100 ease-in"
-    x-transition:leave-start="opacity-100"
-    x-transition:leave-end="opacity-0"
-  >
-    <div
-      class="os-launcher-panel os-startmenu"
-      @click.stop
-      x-transition:enter="transition duration-200 ease-out"
-      x-transition:enter-start="opacity-0 scale-95"
-      x-transition:enter-end="opacity-100 scale-100"
-      x-transition:leave="transition duration-150 ease-in"
-      x-transition:leave-start="opacity-100 scale-100"
-      x-transition:leave-end="opacity-0 scale-95"
-    >
-      <!-- Header -->
-      <div class="os-sm-header">
-        <span class="os-sm-brand">🪐 ODVI Spaces</span>
-        <span class="os-sm-ws" x-text="$store.auth?.workspace?.name || ''"></span>
-      </div>
-
-      <!-- Search -->
-      <input
-        x-ref="launcherSearch"
-        class="os-launcher-search"
-        type="text"
-        placeholder="Search apps..."
-        x-model="searchQuery"
-        @keydown.escape="launcherOpen = false"
-        @keydown.enter="
-          const apps = Object.values($store.os.apps).filter(a =>
-            !a.generator && !$store.os.isAppHidden(a.appId) &&
-            (!searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()))
-          );
-          if (apps.length > 0) {
-            $store.os.launch(apps[0].appId);
-            launcherOpen = false;
-            searchQuery = '';
-          }
-        "
-      />
-
-      <!-- Recent apps -->
-      <template x-if="!searchQuery && $store.os && $store.os.recentApps.map(id => $store.os.apps[id]).filter(a => a && !a.generator && !$store.os.isAppHidden(a.appId)).length">
-        <div>
-          <div class="os-sm-label">Recent</div>
-          <div class="os-launcher-grid">
-            <template x-for="app in $store.os.recentApps.map(id => $store.os.apps[id]).filter(a => a && !a.generator && !$store.os.isAppHidden(a.appId)).slice(0,4)" :key="'recent-'+app.appId">
-              <button class="os-app-tile" @click="$store.os.launch(app.appId); launcherOpen = false; searchQuery = '';">
-                <span class="os-app-tile-icon" x-text="app.icon"></span>
-                <span class="os-app-tile-label" x-text="app.title"></span>
-              </button>
-            </template>
-          </div>
-        </div>
-      </template>
-
-      <!-- ODVI ecosystem apps (external) -->
-      <div class="os-sm-label" x-show="!searchQuery">ODVI Apps</div>
-      <div class="os-launcher-grid" x-show="!searchQuery">
-        <template x-for="app in ($store.os ? $store.os.odviApps.filter(a => a.id !== 'spaces') : [])" :key="'odvi-'+app.id">
-          <button class="os-app-tile os-odvi-tile" :title="app.desc" @click="window.open(app.url, '_blank'); launcherOpen = false;">
-            <span class="os-app-tile-icon" x-text="app.icon"></span>
-            <span class="os-app-tile-label" x-text="app.name"></span>
-          </button>
-        </template>
-      </div>
-
-      <!-- All apps -->
-      <div class="os-sm-label" x-show="!searchQuery">All Apps</div>
-      <div class="os-launcher-grid">
-        <template x-for="app in ($store.os ? Object.values($store.os.apps).filter(a => !a.generator && !$store.os.isAppHidden(a.appId) && (!searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()))) : [])" :key="app.appId">
-          <button
-            class="os-app-tile"
-            @click="$store.os.launch(app.appId); launcherOpen = false; searchQuery = '';"
-          >
-            <span class="os-app-tile-icon" x-text="app.icon"></span>
-            <span class="os-app-tile-label" x-text="app.title"></span>
-          </button>
-        </template>
-        <div
-          x-show="$store.os && Object.values($store.os.apps).filter(a => !a.generator && !$store.os.isAppHidden(a.appId) && (!searchQuery || a.title.toLowerCase().includes(searchQuery.toLowerCase()))).length === 0"
-          style="grid-column:1/-1;text-align:center;padding:24px;color:#9ca3af;font-size:0.875rem;"
-        >No apps found</div>
-      </div>
-
-      <!-- Quick actions -->
-      <div class="os-sm-actions">
-        <button class="os-sm-action" @click="$store.os.launch('settings'); launcherOpen = false;" title="Settings">
-          <span>⚙️</span><span>Settings</span>
-        </button>
-        <button class="os-sm-action" @click="$store.auth.screen = 'workspace-select'; launcherOpen = false;" title="Switch workspace">
-          <span>🔄</span><span>Switch</span>
-        </button>
-        <button class="os-sm-action" @click="$store.os.openOnboarding(); launcherOpen = false;" title="Help & tips">
-          <span>❓</span><span>Help</span>
-        </button>
-        <button class="os-sm-action" @click="$store.auth.signOut(); launcherOpen = false;" title="Sign out">
-          <span>🚪</span><span>Sign out</span>
-        </button>
-      </div>
     </div>
   </div>
 
@@ -730,13 +594,29 @@
       >
         <h2 class="os-ob-title">Pro Tips</h2>
         <p class="os-ob-body">
-          <span class="os-ob-tip"><kbd>Ctrl / ⌘ K</kbd> — Open the app launcher</span>
+          <span class="os-ob-tip"><kbd>Ctrl / ⌘ K</kbd> — Open the Spaces menu</span>
           <span class="os-ob-tip"><kbd>Ctrl / ⌘ W</kbd> — Close the focused window</span>
           <span class="os-ob-tip">Right-click the desktop for quick actions &amp; shortcuts</span>
           <span class="os-ob-tip">Drag desktop icons to reorder them</span>
         </p>
       </div>
       <p class="os-ob-trivia"><span class="os-ob-trivia-tag">Space Trivia</span> <span x-text="trivia[triviaIdx]"></span></p>
+      <div class="os-ob-actions">
+        <button class="os-ob-action" @click="$store.os.launch('settings'); $store.os.closeOnboarding(false)" title="Settings">
+          <span>⚙️</span><span>Settings</span>
+        </button>
+        <button class="os-ob-action" @click="$store.auth.screen = 'workspace-select'; $store.auth.workspaces.length || $store.auth.init(); $store.os.closeOnboarding(false)" title="Switch space">
+          <span>🔄</span><span>Switch space</span>
+        </button>
+        <button class="os-ob-action" @click="$store.os.toggleTheme()"
+          :title="($store.os && $store.os.theme === 'dark') ? 'Switch to light mode' : 'Switch to dark mode'">
+          <span x-text="($store.os && $store.os.theme === 'dark') ? '☀️' : '🌙'"></span>
+          <span x-text="($store.os && $store.os.theme === 'dark') ? 'Light' : 'Dark'"></span>
+        </button>
+        <button class="os-ob-action os-ob-action--danger" @click="$store.auth.signOut(); $store.os.closeOnboarding(false)" title="Sign out">
+          <span>🚪</span><span>Sign out</span>
+        </button>
+      </div>
       <div class="os-onboarding-footer">
         <label class="os-ob-check">
           <input type="checkbox" x-model="showAlways"> Show on startup

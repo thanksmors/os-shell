@@ -281,143 +281,6 @@
 .os-rh-sw { bottom: 0; left: 0;    width: 10px; height: 10px; cursor: sw-resize; }
 .os-rh-se { bottom: 0; right: 0;   width: 10px; height: 10px; cursor: se-resize; }
 
-/* Start-menu overlay — backdrop fills the screen for click-to-close, but the
-   panel anchors to the bottom-left, just above the taskbar start button. */
-.os-launcher {
-  position: fixed;
-  inset: 0;
-  bottom: 48px;
-  z-index: 9500;
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-start;
-  padding: 0 0 8px 8px;
-  background: transparent;
-}
-
-.os-launcher-panel {
-  background: rgba(255,255,255,0.97);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-radius: 16px;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.32), 0 0 0 1px rgba(0,0,0,0.08);
-  padding: 16px;
-  width: 380px;
-  max-width: calc(100vw - 16px);
-}
-.dark .os-launcher-panel {
-  background: rgba(30,36,51,0.98);
-  box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08);
-}
-
-/* Start menu specifics */
-.os-startmenu {
-  max-height: calc(100vh - 72px);
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
-.os-sm-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.os-sm-brand { font-size: 0.9rem; font-weight: 700; color: #111827; }
-.dark .os-sm-brand { color: #f3f4f6; }
-.os-sm-ws {
-  font-size: 0.75rem;
-  color: #6b7280;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 50%;
-}
-.dark .os-sm-ws { color: #9ca3af; }
-.os-sm-label {
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: #9ca3af;
-  margin: 8px 2px 6px;
-}
-.os-sm-actions {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #f0f0f3;
-}
-.dark .os-sm-actions { border-top-color: rgba(255,255,255,0.08); }
-.os-sm-action {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 4px;
-  border: none;
-  border-radius: 10px;
-  background: transparent;
-  cursor: pointer;
-  font-size: 0.7rem;
-  color: #374151;
-  transition: background 150ms, transform 100ms;
-}
-.os-sm-action span:first-child { font-size: 1.15rem; line-height: 1; }
-.os-sm-action:hover { background: rgba(59,130,246,0.08); }
-.dark .os-sm-action { color: #d1d5db; }
-.dark .os-sm-action:hover { background: rgba(255,255,255,0.06); }
-.os-sm-action:active { transform: scale(0.95); }
-
-.os-launcher-search {
-  width: 100%;
-  padding: 10px 14px;
-  font-size: 1rem;
-  border: 1.5px solid #e5e7eb;
-  border-radius: 10px;
-  outline: none;
-  background: #f9fafb;
-  color: #111827;
-  margin-bottom: 12px;
-  transition: border-color 150ms, box-shadow 150ms;
-}
-.os-launcher-search:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
-.dark .os-launcher-search { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); color: #e5e7eb; }
-.dark .os-launcher-search:focus { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96,165,250,0.15); }
-.os-launcher-search::placeholder { color: #9ca3af; }
-
-.os-launcher-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
-}
-
-.os-app-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 12px 8px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background 150ms,
-              transform 200ms cubic-bezier(0.34,1.56,0.64,1),
-              box-shadow 200ms ease-out;
-  border: none;
-  background: transparent;
-  width: 100%;
-}
-.os-app-tile:hover { background: rgba(59,130,246,0.08); transform: translateY(-4px) scale(1.08); box-shadow: 0 12px 32px rgba(0,0,0,0.40); }
-.dark .os-app-tile:hover { background: rgba(255,255,255,0.06); }
-.os-app-tile:active { transform: scale(0.97); }
-
-.os-app-tile-icon { font-size: var(--os-icon-emoji); line-height: 1; }
-.os-app-tile-label { font-size: 0.75rem; font-weight: 500; color: #374151; text-align: center; }
-.dark .os-app-tile-label { color: #d1d5db; }
-
 /* Context menu */
 .os-context-menu {
   position: fixed;
@@ -550,25 +413,57 @@
 }
 
 /* Start button — pill with Saturn logo + "Spaces" label */
+/* Start/Spaces button — embossed, glassy, 3D pill with the Saturn logo */
 .os-start-btn {
   display: flex;
   align-items: center;
-  gap: 7px;
-  height: 36px;
-  padding: 0 12px 0 9px;
-  border-radius: 18px;
-  border: none;
-  background: rgba(255,255,255,0.12);
+  gap: 8px;
+  height: 38px;
+  padding: 0 15px 0 11px;
+  border-radius: 19px;
+  border: 1px solid rgba(255,255,255,0.22);
+  border-top-color: rgba(255,255,255,0.4);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.10) 45%, rgba(255,255,255,0.04) 100%),
+    radial-gradient(120% 80% at 30% 0%, rgba(147,197,253,0.22), transparent 70%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.55),
+    inset 0 -1px 2px rgba(0,0,0,0.25),
+    0 1px 2px rgba(0,0,0,0.35),
+    0 4px 14px rgba(0,0,0,0.28);
   cursor: pointer;
-  transition: background 150ms, transform 100ms;
+  transition: background 150ms, transform 100ms, box-shadow 150ms, filter 150ms;
   flex-shrink: 0;
   margin-right: 4px;
   width: auto;
 }
-.os-start-btn:hover { background: rgba(255,255,255,0.22); }
-.os-start-btn:active { transform: scale(0.94); }
-.os-start-btn.active { background: rgba(96,165,250,0.3); }
-.os-start-logo { width: 20px; height: 16px; flex-shrink: 0; }
+.os-start-btn:hover {
+  filter: brightness(1.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.65),
+    inset 0 -1px 2px rgba(0,0,0,0.25),
+    0 2px 4px rgba(0,0,0,0.35),
+    0 6px 20px rgba(96,165,250,0.35);
+}
+.os-start-btn:active {
+  transform: scale(0.95) translateY(0.5px);
+  box-shadow:
+    inset 0 2px 4px rgba(0,0,0,0.4),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+}
+.os-start-btn.active {
+  border-color: rgba(96,165,250,0.55);
+  background:
+    linear-gradient(180deg, rgba(147,197,253,0.4) 0%, rgba(96,165,250,0.18) 100%),
+    radial-gradient(120% 80% at 30% 0%, rgba(147,197,253,0.3), transparent 70%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.5),
+    0 0 0 1px rgba(96,165,250,0.3),
+    0 4px 16px rgba(96,165,250,0.4);
+}
+.os-start-logo { width: 24px; height: 19px; flex-shrink: 0; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.35)); }
 .os-start-label {
   font-size: 0.875rem;
   font-weight: 600;
@@ -586,23 +481,6 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-
-/* Theme toggle */
-.os-theme-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 1rem;
-  color: rgba(255,255,255,0.7);
-  transition: background 150ms, color 150ms;
-}
-.os-theme-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
 
 /* Scrollbar styling */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -827,6 +705,45 @@
   border-color: rgba(255,255,255,0.12);
   color: #e5e7eb;
 }
+/* Spaces-hub action row (Settings / Switch space / Theme / Sign out) */
+.os-ob-actions {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid #f3f4f6;
+}
+.dark .os-ob-actions { border-top-color: rgba(255,255,255,0.07); }
+.os-ob-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 6px;
+  border: 1px solid #eceef1;
+  border-radius: 11px;
+  background: #f9fafb;
+  color: #374151;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 130ms, transform 90ms, border-color 130ms;
+}
+.os-ob-action > span:first-child { font-size: 1.15rem; line-height: 1; }
+.os-ob-action:hover { background: #f1f5ff; border-color: #c7d2fe; }
+.os-ob-action:active { transform: scale(0.96); }
+.os-ob-action--danger { color: #dc2626; }
+.os-ob-action--danger:hover { background: #fef2f2; border-color: #fecaca; }
+.dark .os-ob-action {
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.09);
+  color: #d1d5db;
+}
+.dark .os-ob-action:hover { background: rgba(147,197,253,0.12); border-color: rgba(147,197,253,0.3); }
+.dark .os-ob-action--danger { color: #f87171; }
+.dark .os-ob-action--danger:hover { background: rgba(248,113,113,0.12); border-color: rgba(248,113,113,0.3); }
+
 .os-onboarding-footer {
   display: flex;
   align-items: center;

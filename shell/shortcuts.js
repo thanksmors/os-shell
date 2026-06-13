@@ -4,7 +4,9 @@ export function initShortcuts() {
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key === 'k') {
       e.preventDefault();
-      document.dispatchEvent(new CustomEvent('os:launcher-toggle'));
+      // Toggles the Spaces menu (onboarding hub). Dispatched on window so the
+      // body's @os:launcher-toggle.window handler receives it.
+      window.dispatchEvent(new CustomEvent('os:launcher-toggle'));
     }
     if (mod && e.key === 'w') {
       e.preventDefault();

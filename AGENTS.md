@@ -129,7 +129,7 @@ localStorage entries.
 
 | Shortcut | Action |
 |---|---|
-| `Ctrl/Cmd + K` | Toggle launcher |
+| `Ctrl/Cmd + K` | Toggle the Spaces menu (onboarding hub) |
 | `Ctrl/Cmd + W` | Close focused window |
 | `Escape` | Hide context menu |
 

@@ -159,16 +159,14 @@ Base class for **all** modules (generator and singleton). Extends `HTMLElement`.
 Handles the full lifecycle so subclasses only implement 3–4 methods.
 
 **Lifecycle (in order):**
-1. Shadow DOM + styles (`modules/{id}/styles.css` + `setup-dialog.css`)
-2. `adoptTailwind(shadow, wrapper)` — Tailwind utilities + dark-mode sync
-3. `await new Promise(r => setTimeout(r, 0))` — wait one tick for `el.api`
-4. `_resolveAppId()` — `instanceId` → `windowId` → `{id}-{timestamp}` fallback
-5. `_setupCollections()` — show setup dialog for unresolved `requiredCollections` slots
-6. `await _load()` — **subclass implements**
-7. `_applyTheme()` + `_render()` — **subclass implements**
-8. `api.setTitle(_getTitle())` — **subclass implements**
-9. `Alpine.effect()` watching `Alpine.store('os').theme` — keeps `.dark` class in sync reactively (replaces MutationObserver)
-10. `subscribe()` if `manifest.sync === true` — cross-device polling
+1. `setupShell(this, { cssUrl, extraCssUrls: ['/shell/setup-dialog.css'] })` (`shell-setup.js`) — shadow DOM + styles + `adoptTailwind` + one-tick wait for `el.api`
+2. `_resolveAppId()` — `instanceId` → `windowId` → `{id}-{timestamp}` fallback
+3. `_setupCollections()` — show setup dialog for unresolved `requiredCollections` slots
+4. `await _load()` — **subclass implements**
+5. `_applyTheme()` + `_render()` — **subclass implements**
+6. `api.setTitle(_getTitle())` — **subclass implements**
+7. `Alpine.effect()` watching `Alpine.store('os').theme` — keeps `.dark` class in sync reactively (replaces MutationObserver)
+8. `subscribe()` if `manifest.sync === true` — cross-device polling
 
 **Dark-mode sync:** Uses `Alpine.effect()` instead of a MutationObserver. The effect subscribes to `Alpine.store('os').theme` so updates are driven by Alpine's reactive graph, not DOM polling. `disconnectedCallback` calls `this._themeCleanup()` to stop the effect.
 
@@ -209,6 +207,28 @@ See `modules/AGENTS.md` → "Generated modules" for how to create the CSS blob U
 (tags are immutable per session). `_moduleId` recovers the stable appId for
 manifest/cssUrl/appId resolution. Stored code keeps the canonical `app-{id}` tag;
 only the runtime blob is suffixed.
+
+---
+
+### `shell-setup.js` — shared component scaffolding (composition)
+
+Small composable helpers, used by `AppModuleBase` **and** the standalone
+`HTMLElement` components (`builder`, `chat`, `files`, `notes`) so the shadow-DOM
+boilerplate lives in one place — composition, not a deeper class hierarchy.
+
+- `setupShell(host, { cssUrl, extraCssUrls = [] })` → `attachShadow`, build
+  `<style>` from `fetchCssCached(cssUrl)` + extras, create `div.wrapper`,
+  `adoptTailwind`, then the one-tick wait for `el.api`. Returns `{ shadow, wrapper }`.
+- `observeTheme(applyFn) → cleanupFn` → `MutationObserver` on `<html class>` for
+  dark-mode flips; store the returned cleanup and call it in `disconnectedCallback`.
+- `fetchCssCached(url)` → session-level CSS text cache (moved here from
+  `module-base.js`; `store-os._prefetchModules` imports it from here).
+
+**Why not collapse the standalone components into `AppModuleBase`?** Their
+lifecycles differ (tabs/queues/SSE/no persisted state) and re-parenting them would
+*add* inheritance. Sharing the scaffolding via a helper is the maxim-correct fix.
+`AppModuleBase` keeps its own `Alpine.effect` theme sync; the standalones use
+`observeTheme`.
 
 ---
 

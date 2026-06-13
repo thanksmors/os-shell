@@ -1,4 +1,4 @@
-import { adoptTailwind } from '/shell/shadow-tailwind.js';
+import { setupShell, observeTheme } from '/shell/shell-setup.js';
 import { getData, setData, deleteData, aiRequest } from '/shell/api.js';
 
 const MODULES_COLLECTION = 'generated-modules';
@@ -22,7 +22,7 @@ class AppBuilder extends HTMLElement {
     this._modules = {};
     this._activeTab = 'build';
     this._wrapper = null;
-    this._themeObserver = null;
+    this._themeCleanup = null;
     this._loadingTimer = null;
     this._loadingStart = 0;
     this._building = false;
@@ -40,20 +40,11 @@ class AppBuilder extends HTMLElement {
   }
 
   async connectedCallback() {
-    const shadow = this.attachShadow({ mode: 'open' });
-    const moduleCss = await fetch('/modules/builder/styles.css').then(r => r.text()).catch(() => '');
-    const styleEl = document.createElement('style');
-    styleEl.textContent = moduleCss;
-    this._wrapper = document.createElement('div');
-    this._wrapper.className = 'wrapper';
-    shadow.appendChild(styleEl);
-    shadow.appendChild(this._wrapper);
-    await adoptTailwind(shadow, this._wrapper);
-    await new Promise(r => setTimeout(r, 0));
+    const { wrapper } = await setupShell(this, { cssUrl: '/modules/builder/styles.css' });
+    this._wrapper = wrapper;
 
     this._applyTheme();
-    this._themeObserver = new MutationObserver(() => this._applyTheme());
-    this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    this._themeCleanup = observeTheme(() => this._applyTheme());
 
     const [jobs, modules] = await Promise.all([
       getData(JOBS_COLLECTION, INDEX_KEY),
@@ -90,7 +81,7 @@ class AppBuilder extends HTMLElement {
   }
 
   disconnectedCallback() {
-    this._themeObserver?.disconnect();
+    this._themeCleanup?.();
     clearInterval(this._loadingTimer);
   }
 

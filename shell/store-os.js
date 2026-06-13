@@ -147,7 +147,7 @@ export function registerOsStore() {
     // (the import fetch is the biggest contributor to skeleton time).
     _prefetchModules() {
       const warm = async () => {
-        const { fetchCssCached } = await import('/shell/module-base.js');
+        const { fetchCssCached } = await import('/shell/shell-setup.js');
         for (const app of Object.values(this.apps)) {
           if (!app.entry || app.entry.startsWith('blob:')) continue;
           import(app.entry).catch(() => {});

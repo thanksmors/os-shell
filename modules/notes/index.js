@@ -1,5 +1,5 @@
 import { getData, setData } from '/shell/api.js';
-import { adoptTailwind } from '/shell/shadow-tailwind.js';
+import { setupShell, observeTheme } from '/shell/shell-setup.js';
 
 const COLLECTION = 'notes';
 const DATA_KEY = 'data';
@@ -13,25 +13,16 @@ class AppNotes extends HTMLElement {
     this._editMode = true;
     this._searchQuery = '';
     this._saveTimer = null;
-    this._themeObserver = null;
+    this._themeCleanup = null;
     this._wrapper = null;
   }
 
   async connectedCallback() {
-    const shadow = this.attachShadow({ mode: 'open' });
-    const moduleCss = await fetch('/modules/notes/styles.css').then(r => r.text()).catch(() => '');
-    const styleEl = document.createElement('style');
-    styleEl.textContent = moduleCss;
-    this._wrapper = document.createElement('div');
-    this._wrapper.className = 'wrapper';
-    shadow.appendChild(styleEl);
-    shadow.appendChild(this._wrapper);
-    await adoptTailwind(shadow, this._wrapper);
-    await new Promise(r => setTimeout(r, 0));
+    const { wrapper } = await setupShell(this, { cssUrl: '/modules/notes/styles.css' });
+    this._wrapper = wrapper;
 
     this._applyTheme();
-    this._themeObserver = new MutationObserver(() => this._applyTheme());
-    this._themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    this._themeCleanup = observeTheme(() => this._applyTheme());
 
     const saved = await getData(COLLECTION, DATA_KEY);
     if (saved) {
@@ -50,7 +41,7 @@ class AppNotes extends HTMLElement {
   }
 
   disconnectedCallback() {
-    this._themeObserver?.disconnect();
+    this._themeCleanup?.();
     if (this._saveTimer) {
       clearTimeout(this._saveTimer);
       setData(COLLECTION, DATA_KEY, this._data);

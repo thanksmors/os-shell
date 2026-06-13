@@ -1,16 +1,7 @@
-import { adoptTailwind } from '/shell/shadow-tailwind.js';
+import { setupShell } from '/shell/shell-setup.js';
 import { subscribe, getData, setData } from '/shell/api.js';
 import { getCollections, createCollection } from '/modules/data/api.js';
 import { motion, spring } from '/shell/motion.js';
-
-// Session-level CSS text cache — re-opening a window type skips the network.
-const _cssCache = new Map();
-export async function fetchCssCached(url) {
-  if (_cssCache.has(url)) return _cssCache.get(url);
-  const text = await fetch(url).then(r => r.text()).catch(() => '');
-  _cssCache.set(url, text);
-  return text;
-}
 
 export class AppModuleBase extends HTMLElement {
   constructor() {
@@ -26,38 +17,25 @@ export class AppModuleBase extends HTMLElement {
   // ─── Lifecycle ────────────────────────────────────────────────────────────
 
   async connectedCallback() {
-    // 1. Shadow DOM setup
-    const shadow = this.attachShadow({ mode: 'open' });
-    const styleEl = document.createElement('style');
+    // 1. Shadow DOM setup (+ wait one tick for el.api). Generated modules pass
+    // cssUrl on the manifest; read from the Alpine store directly because
+    // this.api isn't set until the tick wait inside setupShell.
     const moduleId = this._moduleId();
-    // Generated modules pass cssUrl on the manifest; read from Alpine store
-    // directly because this.api isn't set until after the tick wait below.
     const cssUrl = window.Alpine?.store('os')?.apps?.[moduleId]?.cssUrl
       || `/modules/${moduleId}/styles.css`;
-    const [moduleCss, setupCss] = await Promise.all([
-      fetchCssCached(cssUrl),
-      fetchCssCached('/shell/setup-dialog.css'),
-    ]);
-    styleEl.textContent = moduleCss + '\n' + setupCss;
-    this._wrapper = document.createElement('div');
-    this._wrapper.className = 'wrapper';
-    shadow.appendChild(styleEl);
-    shadow.appendChild(this._wrapper);
-    await adoptTailwind(shadow, this._wrapper);
+    const { wrapper } = await setupShell(this, { cssUrl, extraCssUrls: ['/shell/setup-dialog.css'] });
+    this._wrapper = wrapper;
 
-    // 2. Wait one tick for el.api to be set by the shell
-    await new Promise(r => setTimeout(r, 0));
-
-    // 3. Resolve stable appId
+    // 2. Resolve stable appId
     this._appId = this._resolveAppId();
 
-    // 4. Resolve required collections (shows setup dialog if needed)
+    // 3. Resolve required collections (shows setup dialog if needed)
     await this._setupCollections();
 
-    // 5. Load data (subclass)
+    // 4. Load data (subclass)
     await this._load();
 
-    // 6. Render (subclass)
+    // 5. Render (subclass)
     this._applyTheme();
     this._wrapper.style.opacity = '0';
     this._render();
@@ -65,13 +43,13 @@ export class AppModuleBase extends HTMLElement {
     this.api?.setReady?.();
     motion(this._wrapper, { opacity: [0, 1] }, { ...spring.smooth() });
 
-    // 7. Theme sync — use Alpine's reactive store so no DOM polling needed
+    // 6. Theme sync — use Alpine's reactive store so no DOM polling needed
     this._themeCleanup = Alpine.effect(() => {
       Alpine.store('os').theme; // subscribe to reactive value
       this._applyTheme();
     });
 
-    // 8. Cross-client sync — only if manifest declares sync:true
+    // 7. Cross-client sync — only if manifest declares sync:true
     const manifest = this.api?.store?.apps?.[this._manifestId()];
     if (manifest?.sync) {
       const collection = this._collection();

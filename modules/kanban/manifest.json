@@ -13,6 +13,6 @@
   "sync": true,
   "dataCollections": ["boards"],
   "contextMenu": [
-    { "label": "🗂️ New Kanban Board", "config": { "name": "New Board", "icon": "🗂️" } }
+    { "label": "New Kanban Board", "config": { "name": "New Board", "icon": "🗂️" } }
   ]
 }

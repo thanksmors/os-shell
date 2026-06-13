@@ -40,4 +40,16 @@ the output, and diff the durable counters.
 
 | Date | Change | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | trunc Δ | notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| _baseline_ | (pre-Pass-2) | | | | | | | | | | not yet run |
+| 2026-06-14 | post Pass-1+2 (`capabilities-v1`) | ⚠️ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | 0 | see run notes below |
+
+**Run 1 — 2026-06-14, build `2026-06-14-capabilities-v1`**
+Counters: success 21→29 (+8), truncation 0, invalid_json 4→4 (0), lint_caught 0→1, lint_repaired 0→1, lint_failed 0. (timeout not captured; kanban timed out.)
+Headline: **~1/8 actually works** — `success` counts installs, not working apps; lint caught only 1 of ~8 (wrong layer). Every **multi-file** app crashed; the **single-file** one ran.
+- 1 tip calc — installs, works, BUT re-renders on each keystroke → field loses focus ("exits"). → Phase A3.
+- 2 habit tracker — add habit dead; `host._state is undefined` (multi-file: main passed `this._state` not `this`). → Phase A2 D1.
+- 3 shopping list — asked shared/generator, built **singleton**; `[…] is not a function` bug. → Phase B1 + logic.
+- 4 kanban — timed out, retried, displays nothing; `this._state is null` / `host._state is null` (multi-file). → A1/A2.
+- 5 md scratchpad — preview pane doesn't work (interactivity). → A1 (single-file), prompt quality.
+- 6 pac-man — did NOT scope-split; `host is undefined` (multi-file: feature called with no arg). → A2 D1 + B2.
+- 7 pomodoro — seconds/minutes bug; Revise "for settings panel" added **no** panel. → B3.
+- 8 contact list — add button dead; "New Contact List" menu had no emoji. → A1/quality + menu-emoji change.

@@ -13,6 +13,6 @@
   "sync": true,
   "dataCollections": ["load-plans"],
   "contextMenu": [
-    { "label": "📊 New Load Plan", "config": { "name": "Load Plan", "icon": "📊" } }
+    { "label": "New Load Plan", "config": { "name": "Load Plan", "icon": "📊" } }
   ]
 }

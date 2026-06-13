@@ -13,6 +13,6 @@
   "sync": false,
   "dataCollections": [],
   "contextMenu": [
-    { "label": "🔗 New Link", "config": { "name": "New link", "icon": "🔗" } }
+    { "label": "New Link", "config": { "name": "New link", "icon": "🔗" } }
   ]
 }

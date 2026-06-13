@@ -6,7 +6,7 @@ import { lintModule } from '../lib/lint-module.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-14-capabilities-v1';
+const AI_BUILD = '2026-06-14-reliability-a-v1';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -72,6 +72,10 @@ _render() {
   });
 }
 \`\`\`
+
+## Text inputs — never re-render on every keystroke
+
+Calling _render() on an 'input' event rebuilds innerHTML and destroys the field's focus + caret (the user gets kicked out after one character). For text/number fields: on 'input', update this._state and persist (setData) but do NOT call _render(); read the final value on the committing action (button click, Enter, or 'change'/blur). Only call _render() on STRUCTURAL changes — add, delete, toggle, reorder — not on plain typing.
 
 ## EXAMPLE — main.js for a single-file counter (plan had no feature files)
 
@@ -165,9 +169,10 @@ Rules:
 const REPAIR_PROMPT = `You previously wrote one source file of an "ODVI Spaces" app module (a Web Component extending AppModuleBase). A static contract check found specific violations. Fix ONLY those violations — change nothing else, keep all behavior and class names identical.
 
 Contract reminders (only relevant to the violations):
-- The entry file extends AppModuleBase, imports it from '/shell/module-base.js', and ends with customElements.define('app-<appId>', Class). NEVER write your own constructor/connectedCallback. _load() MUST assign this._state.
+- The entry file extends AppModuleBase, imports it from '/shell/module-base.js', and ends with customElements.define('app-<appId>', Class). NEVER override connectedCallback. _load() MUST assign this._state. A constructor is allowed ONLY for super() + a settings listener — it must NOT touch this._state/this._wrapper/this._render().
 - Persist via getData/setData from '/shell/api.js' keyed on this._appId (generator) or a fixed literal (singleton) — NEVER windowId, NEVER raw localStorage.
 - Import only from '/shell/…' (entry may also import its './feature.js' files; feature files may import ONLY '/shell/…' and must not define the element).
+- main.js must call every feature function passing exactly \`this\` as the first arg (renderTasks(this)) — never with no argument, never with this._state.
 
 Output ONLY valid JSON: { "js": "<corrected file source>" } — single-line string with \\n for newlines. No markdown, no code fences.`;
 
@@ -183,7 +188,8 @@ const ARCHITECT_PROMPT = `You are the architect for an "ODVI Spaces" app module 
 Rules:
 - Build ONLY the plan's "features" (the core v1). The plan may also list "deferred" features — do NOT implement or plan files for those; they are added later via Revise. Scope the file structure to the core only.
 - Follow the approved plan's type EXACTLY: singleton (generator:false, no contextMenu) unless it explicitly asked for multiple named instances (then generator:true with a contextMenu). entry is literally "/modules/placeholder/index.js". tag is "app-" + appId.
-- SPLIT aggressively: every distinct feature area becomes its own file so no file is large. A genuinely simple, single-purpose tool may use "files": [] (everything in main). Anything with multiple feature areas MUST split.
+- PREFER A SINGLE FILE: default to "files": [] (everything in main.js). Multi-file delegation (main passing the host instance to feature functions) is the #1 source of broken builds, so only split when the app is genuinely LARGE — it would risk truncation in one code call, or has clearly separable subsystems. When unsure, keep it single-file. If you DO split, main must call every feature function passing exactly \`this\` (e.g. renderTasks(this)) — never with no argument and never with this._state.
+- contextMenu labels (generators only) carry NO leading emoji — write "New <Thing>" (e.g. "New Board"), not "🆕 New <Thing>". The desktop icon emoji comes from manifest.icon, not the menu label.
 - Set "sync": true ONLY for a generator whose data is shared/collaborative (a list/board several people edit) — auto-sync keys on the instance id, so it works for generators, not singletons. Set "hasSettings": true if the app needs a settings/config panel (or a generator that lets the user rename its instance). Both default false — leave them false for a simple personal/local tool.
 - Feature functions take the module instance ("host") and work via host._state/host._wrapper/host._render(); main imports them by ./name. Feature files import ONLY /shell/, never each other.
 - Output the PLAN ONLY — short, no JavaScript. This call must be fast.`;

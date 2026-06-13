@@ -13,6 +13,6 @@
   "sync": true,
   "dataCollections": ["people-charts"],
   "contextMenu": [
-    { "label": "👥 New People Chart", "config": { "name": "People", "icon": "👥" } }
+    { "label": "New People Chart", "config": { "name": "People", "icon": "👥" } }
   ]
 }

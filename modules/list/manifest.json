@@ -13,6 +13,6 @@
   "sync": true,
   "dataCollections": ["lists"],
   "contextMenu": [
-    { "label": "📋 New List", "config": { "name": "New List", "icon": "📋" } }
+    { "label": "New List", "config": { "name": "New List", "icon": "📋" } }
   ]
 }

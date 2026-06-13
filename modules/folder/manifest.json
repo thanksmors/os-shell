@@ -12,6 +12,6 @@
   "acceptsDroppedInstances": true,
   "dataCollections": [],
   "contextMenu": [
-    { "label": "📁 New Folder", "config": { "name": "New Folder", "icon": "📁" } }
+    { "label": "New Folder", "config": { "name": "New Folder", "icon": "📁" } }
   ]
 }

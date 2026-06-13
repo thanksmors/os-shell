@@ -12,6 +12,6 @@
   "minSize": { "w": 640, "h": 440 },
   "dataCollections": ["l10"],
   "contextMenu": [
-    { "label": "🪨 New L10 Board", "config": { "name": "L10" } }
+    { "label": "New L10 Board", "config": { "name": "L10" } }
   ]
 }

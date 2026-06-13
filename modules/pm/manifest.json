@@ -13,6 +13,6 @@
   "sync": true,
   "dataCollections": ["pm-data"],
   "contextMenu": [
-    { "label": "🎯 New Project Hub", "config": { "name": "Projects", "icon": "🎯" } }
+    { "label": "New Project Hub", "config": { "name": "Projects", "icon": "🎯" } }
   ]
 }

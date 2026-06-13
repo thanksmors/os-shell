@@ -27,6 +27,62 @@ function importSpecifiers(code) {
   return specs;
 }
 
+// Names imported into the entry from a relative (sibling feature) specifier —
+// both `import { a, b } from './x'` and `import d from './y'`.
+function relativeImportedNames(code) {
+  const names = [];
+  const re = /\bimport\b\s*(?:(\w+)\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s*['"](\.[^'"]*)['"]/g;
+  let m;
+  while ((m = re.exec(code)) !== null) {
+    if (m[1]) names.push(m[1].trim());
+    if (m[2]) for (const n of m[2].split(',')) {
+      const name = n.split(/\bas\b/).pop().trim();
+      if (name) names.push(name);
+    }
+  }
+  return names;
+}
+
+// D1 — every call to a feature function imported from a sibling file must pass
+// exactly `this` as its first argument (the contract: feature fns take the module
+// instance as `host`). Catches `fn()` (host undefined) and `fn(this._state)` /
+// `fn(x)` (host._state undefined) — the dominant multi-file crash class.
+function lintFeatureCalls(code) {
+  const out = [];
+  for (const name of new Set(relativeImportedNames(code))) {
+    // call sites of `name(` not preceded by `.` or a word char (skip obj.name()).
+    const callRe = new RegExp(`(?<![.\\w])${name}\\s*\\(([^)]*)`, 'g');
+    let m;
+    while ((m = callRe.exec(code)) !== null) {
+      const firstArg = m[1].split(',')[0].trim();
+      if (firstArg !== 'this') {
+        out.push(`D1: ${name}(${firstArg || ''}…) must pass exactly \`this\` as the first argument (feature functions take the module instance as host) — got \`${firstArg || '(no args)'}\`.`);
+        break; // one report per feature is enough
+      }
+    }
+  }
+  return out;
+}
+
+// Extract the constructor body via brace matching from `constructor(...) { … }`,
+// keeping ONLY the statements that run during construction (brace-depth 0 within
+// the body). Content inside nested blocks — e.g. an addEventListener callback —
+// is dropped, because that runs later (post-mount) and may legitimately touch
+// this._state/_render (the taught settings-listener pattern does exactly this).
+function constructorTopLevel(code) {
+  const m = /\bconstructor\s*\([^)]*\)\s*\{/.exec(code);
+  if (!m) return null;
+  const start = m.index + m[0].length;
+  let depth = 1, top = '';
+  for (let i = start; i < code.length; i++) {
+    const c = code[i];
+    if (c === '{') { depth++; continue; }
+    if (c === '}') { depth--; if (depth === 0) break; continue; }
+    if (depth === 1) top += c; // only statements directly in the constructor body
+  }
+  return top;
+}
+
 // Rules for the entry file (the single-file `js`, or `files[entryFile]`). These
 // only fire on things a correct AppModuleBase module never does.
 function lintEntry(code, appId) {
@@ -72,6 +128,18 @@ function lintEntry(code, appId) {
     if (!ALLOWED_IMPORT_PREFIXES.some(p => spec.startsWith(p))) {
       out.push(`E7: disallowed import '${spec}' — only /shell/…, /modules/…, or relative ./… imports are allowed (no npm/CDN/URL).`);
     }
+  }
+
+  // D1 — feature calls must pass exactly `this`.
+  out.push(...lintFeatureCalls(code));
+
+  // D2 — the constructor runs before _load(): its top-level statements must NOT
+  // touch this._state / this._wrapper / this._render() (they don't exist yet).
+  // Code inside nested callbacks is excluded, so the taught settings-listener
+  // constructor (super() + addEventListener(…, () => this._render())) stays clean.
+  const ctor = constructorTopLevel(code);
+  if (ctor && /this\.(_state|_wrapper)\b|this\._render\s*\(/.test(ctor)) {
+    out.push('D2: the constructor must not access this._state / this._wrapper / this._render() — they are not set until _load() runs. Move that logic into _load()/_render().');
   }
 
   return out;

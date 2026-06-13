@@ -13,6 +13,6 @@
   "sync": true,
   "dataCollections": ["roadmaps"],
   "contextMenu": [
-    { "label": "🗺️ New Roadmap", "config": { "name": "Roadmap", "icon": "🗺️" } }
+    { "label": "New Roadmap", "config": { "name": "Roadmap", "icon": "🗺️" } }
   ]
 }

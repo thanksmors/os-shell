@@ -128,4 +128,44 @@ check('E0 missing entry file', () => {
   expectRule(lintModule({ manifest: { appId: 'x' }, entryFile: 'main.js', files: { 'feature.js': '' } }), 'E0');
 });
 
+// ── D1 — feature calls must pass exactly `this` ──────────────────────────────
+function multiWithMainCall(call) {
+  return { manifest: { appId: 'game' }, entryFile: 'main.js', files: {
+    'main.js': "import { AppModuleBase } from '/shell/module-base.js';\n"
+      + "import { getData } from '/shell/api.js';\n"
+      + "import { renderDeck } from './feature-deck.js';\n"
+      + "class AppGame extends AppModuleBase {\n"
+      + "  async _load() { this._state = await getData('games', this._appId) || { deck: [] }; }\n"
+      + "  _render() { this._wrapper.innerHTML = '<div></div>'; " + call + " }\n"
+      + "}\ncustomElements.define('app-game', AppGame);",
+    'feature-deck.js': "export function renderDeck(host) { host._state.deck; }",
+  }};
+}
+check('D1 feature called with no arg (pac-man: host undefined)', () => {
+  expectRule(lintModule(multiWithMainCall('renderDeck();')), 'D1', 'main.js');
+});
+check('D1 feature called with this._state (habit: host._state undefined)', () => {
+  expectRule(lintModule(multiWithMainCall('renderDeck(this._state);')), 'D1', 'main.js');
+});
+check('D1 feature called with this is clean', () => {
+  assert.deepStrictEqual(lintModule(multiWithMainCall('renderDeck(this);')), []);
+});
+
+// ── D2 — constructor must not touch instance state ───────────────────────────
+check('D2 constructor touches this._state', () => {
+  expectRule(lintModule({ manifest: { appId: 'x' }, js:
+    "import { AppModuleBase } from '/shell/module-base.js';\n"
+    + "class AppX extends AppModuleBase { constructor() { super(); this._state = {}; } async _load() { this._state = {}; } }\n"
+    + "customElements.define('app-x', AppX);" }), 'D2');
+});
+check('D2 settings-listener constructor is clean', () => {
+  assert.deepStrictEqual(lintModule({ manifest: { appId: 'x' }, js:
+    "import { AppModuleBase } from '/shell/module-base.js';\n"
+    + "import { getData } from '/shell/api.js';\n"
+    + "class AppX extends AppModuleBase {\n"
+    + "  constructor() { super(); this._settingsOpen = false; this.addEventListener('os:toggle-settings', () => { this._settingsOpen = !this._settingsOpen; this._render(); }); }\n"
+    + "  async _load() { this._state = await getData('x', this._appId) || {}; }\n"
+    + "}\ncustomElements.define('app-x', AppX);" }), []);
+});
+
 console.log(`\n${passed} checks passed.`);

@@ -234,5 +234,25 @@ Bump `AI_BUILD` in ai.js (e.g. `'2026-06-14-lint-v1'`) so `/ai/ping` confirms th
   (roadmap item 4) if the eval set shows you want the heavier capabilities (cross-module
   reads, file upload) AND prompt size starts driving `ai_stat:truncation` up. Otherwise stop —
   the gated section already covers the high-leverage surface.
-- **Next up:** Pass 3 is now conditional (see decision point). Drift governance (item 5)
-  is partially seeded in `modules/AGENTS.md` + `codehooks/AGENTS.md`.
+- **Pass 3 REFRAMED by eval evidence — from "capability/archetype" to "reliability".**
+  The live eval run (logged in `docs/builder-eval-set.md`) showed `success` counts installs,
+  not working apps (~1/8 actually worked), the lint caught the wrong layer (1/8), and **every
+  multi-file app crashed while the single-file one ran**. So capability/archetype expansion is
+  **deferred**; the real bottleneck is generation reliability + plan fidelity.
+
+- **Phase A — DONE (not yet deployed):** reliability / the crash class.
+  - `codehooks/lib/lint-module.js` — new rules **D1** (feature calls must pass exactly `this`;
+    catches pac-man `host is undefined` + habit `host._state is undefined`) and **D2** (no
+    `this._state`/`_wrapper`/`_render()` in the constructor's top-level — callback bodies
+    excluded so the settings-listener stays clean). 20 unit checks pass.
+  - `codehooks/routes/ai.js` — `ARCHITECT_PROMPT` now **prefers single-file** (split only for
+    large apps; if split, call features with `this`); `SYSTEM_PROMPT` forbids re-render on every
+    keystroke (tip-calc focus bug); `REPAIR_PROMPT` aligned (constructor allowed; pass `this`).
+    `AI_BUILD = 2026-06-14-reliability-a-v1`.
+  - Menu emoji dropped from all 10 module `contextMenu` labels + `ARCHITECT_PROMPT` teaches it.
+  - DOX: `codehooks/AGENTS.md` (D1/D2, single-file bias, re-render rule, no-emoji), `modules/AGENTS.md`.
+  - **Remaining to ship:** deploy → re-run the 8-prompt eval set → log a new row. **Gate Phase B
+    on that re-run.**
+- **Phase B — PENDING (after Phase A eval re-run):** plan fidelity — generator detection
+  (shopping list), scope-split reliability (pac-man), capability-survives-Revise (pomodoro).
+- Drift governance (item 5) partially seeded in `modules/AGENTS.md` + `codehooks/AGENTS.md`.

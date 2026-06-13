@@ -49,7 +49,7 @@ modules/your-id/
 | `dataCollections` | string[] | `[]` | Collection names owned by this module. `removeInstance()` deletes `os:{name}:{instanceId}` from localStorage for each. **Always declare** — omitting causes stale data accumulation. |
 | `acceptsDroppedInstances` | boolean | `false` | Makes this instance a drop container on the desktop. Set on the folder module only. |
 | `requiredCollections` | object[] | `[]` | Named collection slots needing user resolution on first launch. Shape: `{ slot, default, hint }`. `AppModuleBase._setupCollections()` shows a dialog. No current module uses it. |
-| `contextMenu` | object[] | `[]` | Entries in the desktop right-click menu. Shape: `{ label, config }`. Generator modules must have at least one or they are completely unreachable. |
+| `contextMenu` | object[] | `[]` | Entries in the desktop right-click menu. Shape: `{ label, config }`. `label` is plain text with **no leading emoji** ("New Board", not "🗂️ New Board") — the icon comes from `config.icon`/`manifest.icon`. Generator modules must have at least one or they are completely unreachable. |
 
 ---
 

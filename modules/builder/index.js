@@ -497,10 +497,14 @@ class AppBuilder extends HTMLElement {
       // Revisions of installed apps auto-reinstall (code overwrite, data kept)
       if (next.revise) await this._install(next, { quiet: true });
     } catch (err) {
-      // A 300s timeout is variable (M3 latency) — a fresh attempt often succeeds.
-      // Auto-retry once by re-queueing; the cleanup below re-picks the job. Don't
-      // retry truncation ("too large") or invalid JSON — those are deterministic.
-      if (/took over/.test(err.message || '') && !next.autoRetried) {
+      // Timeouts here are intermittent, not deterministic: M3 calls occasionally
+      // hang for minutes and the worker's abort setTimeout is unreliable (gotcha 8),
+      // so even a small scoped build can stall and get killed (→ "timed out") on
+      // bad luck. A fresh attempt usually succeeds, and scope-split keeps cores
+      // small so a retry is cheap. Auto-retry once on any timeout — both the clean
+      // "took over Ns" abort and the frontend "…timed out" stuck-build fail-fast.
+      // Truncation ("too large") / invalid JSON are deterministic — not retried.
+      if (/took over|timed out/.test(err.message || '') && !next.autoRetried) {
         next.autoRetried = true;
         next.error = null;
         next.phase = null;

@@ -5,7 +5,7 @@ import { kvSet, kvGet } from '../lib/db.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-13-multifile-logs';
+const AI_BUILD = '2026-06-13-multifile-v2';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -126,7 +126,7 @@ Output ONLY valid JSON: { "manifest": {...}, "main": "<main.js source>", "files"
 
 ## When to split into files
 
-If the app is large or has several distinct feature areas (one file would exceed ~250 lines of JS), split each feature area into its own file and keep "main" a THIN orchestrator that imports and calls them — this keeps every file small. For each extra file add to "files":
+If the app is large or has several distinct feature areas (one file would exceed ~200 lines of JS), split each feature area into its own file. This is REQUIRED, not optional, for anything beyond a basic single-purpose tool — a fat "main" defeats the purpose and will time out. When you split, "main" MUST stay a THIN orchestrator (target under ~120 lines): it does `_load` (state), a layout skeleton in `_render` that calls the imported feature render functions, `_getTitle`, and delegation — it MUST NOT contain feature implementation logic. For each extra file add to "files":
   { "name": "feature-<area>.js", "exports": ["fnA","fnB"], "spec": "one line: what it does + what each export does" }
 - "main" imports each by relative name and calls it: import { renderTasks, bindTasks } from './feature-tasks.js';
 - Feature functions take the module INSTANCE as their first arg ("host"): they read/write host._state, set host._wrapper.innerHTML, call host._render(), use host.api. e.g. export function renderTasks(host){ ... }
@@ -513,7 +513,7 @@ app.worker('ai-generate-worker', async (req, res) => {
     console.log(`[ai-worker] job ${jobId} LLM call start (${model || 'MiniMax-M3'}, mode=${mode}, convo=${convo.length})`);
     // Architect (M3) → parallel feature files → CSS (fast). Budgets are ceilings;
     // a multi-file architect returns a thin main fast, leaving room for features.
-    const result = await buildModule({ jsModel: model || 'MiniMax-M3', mode, convo, jsBudget: 220000, featureBudget: 70000, cssBudget: 38000 });
+    const result = await buildModule({ jsModel: model || 'MiniMax-M3', mode, convo, jsBudget: 255000, featureBudget: 60000, cssBudget: 35000 });
     console.log(`[ai-worker] job ${jobId} LLM done +${Date.now() - startedAt}ms`);
 
     if (!result.ok) {

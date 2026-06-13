@@ -5,7 +5,7 @@ import { kvSet, kvGet } from '../lib/db.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-13-build-budget-300s';
+const AI_BUILD = '2026-06-13-heartbeat-settimeout';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -321,9 +321,14 @@ app.worker('ai-generate-worker', async (req, res) => {
   const payload = req.body?.payload ?? req.body ?? {};
   const { jobId, workspaceId, mode, convo, planType, maxTokens, model } = payload;
   const startedAt = Date.now();
-  let heartbeat; // cleared inside finish() so a late tick can't overwrite a terminal status
+  // Heartbeat state — stopped inside finish() so a late tick can't overwrite a
+  // terminal status. setInterval is DISABLED in the Codehooks runtime (throws),
+  // so this is a self-rescheduling setTimeout chain.
+  let hbTimer = null;
+  let hbStopped = false;
   const finish = (patch) => {
-    clearInterval(heartbeat);
+    hbStopped = true;
+    clearTimeout(hbTimer);
     console.log(`[ai-worker] job ${jobId} → ${patch.status}${patch.error ? ` (${patch.error})` : ''} +${Date.now() - startedAt}ms`);
     return kvSet(`ai_job:${jobId}`, { jobId, workspaceId, ...patch }, { ttl: AI_JOB_TTL })
       .catch((e) => console.error(`[ai-worker] kvSet failed for job ${jobId}:`, e.message));
@@ -346,11 +351,16 @@ app.worker('ai-generate-worker', async (req, res) => {
 
   // Liveness heartbeat: lets polling distinguish "LLM still running" from
   // "worker silently killed" (stale heartbeatAt → frontend fails fast).
-  heartbeat = setInterval(() => {
-    console.log(`[ai-worker] job ${jobId} heartbeat +${Date.now() - startedAt}ms`);
-    kvSet(`ai_job:${jobId}`, { jobId, workspaceId, status: 'building', workerStartedAt, heartbeatAt: Date.now() }, { ttl: AI_JOB_TTL })
-      .catch((e) => console.error(`[ai-worker] heartbeat kvSet failed for job ${jobId}:`, e.message));
-  }, 15000);
+  const scheduleBeat = () => {
+    hbTimer = setTimeout(() => {
+      if (hbStopped) return;
+      console.log(`[ai-worker] job ${jobId} heartbeat +${Date.now() - startedAt}ms`);
+      kvSet(`ai_job:${jobId}`, { jobId, workspaceId, status: 'building', workerStartedAt, heartbeatAt: Date.now() }, { ttl: AI_JOB_TTL })
+        .catch((e) => console.error(`[ai-worker] heartbeat kvSet failed for job ${jobId}:`, e.message));
+      scheduleBeat();
+    }, 15000);
+  };
+  scheduleBeat();
 
   try {
     const systemPrompt = mode === 'revise' ? SYSTEM_PROMPT + REVISE_SUFFIX : SYSTEM_PROMPT;

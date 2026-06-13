@@ -134,7 +134,15 @@ res.json({ error: 'Insufficient permissions' });
 ```
 `sendUnauth` in `lib/session.js` already does this correctly for 401. Apply the same pattern for 403 in route handlers.
 
-**8. KV store — ALWAYS go through `kvSet`/`kvGet`, never raw `db.set`/`db.get`**
+**8. `setInterval` is disabled in the runtime — it throws**
+
+`setInterval is disabled, use a cron job instead` — an unhandled exception that
+kills the calling function (this crashed the AI worker's heartbeat on first
+tick). `setTimeout` works fine; for repeating work inside one invocation use a
+self-rescheduling `setTimeout` chain (see the heartbeat in `routes/ai.js`), and
+for truly periodic background work use a cron job.
+
+**9. KV store — ALWAYS go through `kvSet`/`kvGet`, never raw `db.set`/`db.get`**
 
 ⚠️ **The single worst gotcha in this backend.** Codehooks' raw KV `db.set(key, value)`
 does **not** JSON-serialize objects — it coerces non-string values with `String()`,

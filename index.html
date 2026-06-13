@@ -510,7 +510,14 @@
       class="os-onboarding-panel"
       x-data="{
         slide: 0,
-        showAlways: false,
+        showAlways: true,
+        activeSetting: 'appearance',
+        settingsTabs: [
+          { id: 'appearance', icon: '🎨', label: 'Appearance' },
+          { id: 'apps', icon: '🧩', label: 'Apps' },
+          { id: 'workspace', icon: '🏢', label: 'Workspace' },
+          { id: 'about', icon: 'ℹ️', label: 'About' },
+        ],
         hoverFeat: null,
         hoverApp: null,
         triviaIdx: 0,
@@ -588,37 +595,31 @@
         </p>
       </div>
       <div class="os-onboarding-slide" x-show="slide === 2"
+        x-init="$watch('slide', v => { if (v === 2) $nextTick(() => $store.os.embedSettingsTab(activeSetting, $refs.setBody)); })"
         x-transition:enter="transition duration-200 ease-out"
         x-transition:enter-start="opacity-0 translate-y-1"
         x-transition:enter-end="opacity-100 translate-y-0"
       >
-        <h2 class="os-ob-title">Pro Tips</h2>
-        <p class="os-ob-body">
-          <span class="os-ob-tip"><kbd>Ctrl / ⌘ K</kbd> — Open the Spaces menu</span>
-          <span class="os-ob-tip"><kbd>Ctrl / ⌘ W</kbd> — Close the focused window</span>
-          <span class="os-ob-tip">Right-click the desktop for quick actions &amp; shortcuts</span>
-          <span class="os-ob-tip">Drag desktop icons to reorder them</span>
-        </p>
+        <h2 class="os-ob-title">Settings</h2>
+        <p class="os-ob-body">Appearance, apps, your workspace, and more.</p>
+        <div class="os-ob-feat-row">
+          <template x-for="t in settingsTabs" :key="t.id">
+            <div class="os-ob-feat" :class="{ 'os-ob-feat--active': activeSetting === t.id }"
+              @click="activeSetting = t.id; $store.os.embedSettingsTab(t.id, $refs.setBody)">
+              <span class="os-ob-feat-icon" x-text="t.icon"></span>
+              <span class="os-ob-feat-name" x-text="t.label"></span>
+            </div>
+          </template>
+        </div>
+        <div class="os-ob-settings-body" x-ref="setBody"></div>
       </div>
-      <p class="os-ob-trivia"><span class="os-ob-trivia-tag">Space Trivia</span> <span x-text="trivia[triviaIdx]"></span></p>
-      <div class="os-ob-actions">
-        <button class="os-ob-action" @click="$store.os.launch('settings'); $store.os.closeOnboarding(false)" title="Settings">
-          <span>⚙️</span><span>Settings</span>
-        </button>
-        <button class="os-ob-action" @click="$store.auth.screen = 'workspace-select'; $store.auth.workspaces.length || $store.auth.init(); $store.os.closeOnboarding(false)" title="Switch space">
-          <span>🔄</span><span>Switch space</span>
-        </button>
-        <button class="os-ob-action" @click="$store.os.toggleTheme()"
-          :title="($store.os && $store.os.theme === 'dark') ? 'Switch to light mode' : 'Switch to dark mode'">
-          <span x-text="($store.os && $store.os.theme === 'dark') ? '☀️' : '🌙'"></span>
-          <span x-text="($store.os && $store.os.theme === 'dark') ? 'Light' : 'Dark'"></span>
-        </button>
-        <button class="os-ob-action os-ob-action--danger" @click="$store.auth.signOut(); $store.os.closeOnboarding(false)" title="Sign out">
-          <span>🚪</span><span>Sign out</span>
-        </button>
-      </div>
+      <p class="os-ob-trivia" x-show="slide === 1"><span class="os-ob-trivia-tag">Space Trivia</span> <span x-text="trivia[triviaIdx]"></span></p>
+      <p class="os-ob-protips" x-show="slide === 2">
+        <span class="os-ob-tip">Right-click the desktop for quick actions &amp; shortcuts</span>
+        <span class="os-ob-tip">Drag desktop icons to reorder them</span>
+      </p>
       <div class="os-onboarding-footer">
-        <label class="os-ob-check">
+        <label class="os-ob-check" :style="{ visibility: slide === 2 ? 'visible' : 'hidden' }">
           <input type="checkbox" x-model="showAlways"> Show on startup
         </label>
         <div class="os-ob-dots">

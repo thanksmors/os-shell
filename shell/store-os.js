@@ -75,6 +75,16 @@ export function registerOsStore() {
       else            localStorage.setItem('os:onboarding-seen', '1');
     },
 
+    // Render a Settings tab inside the Spaces modal's Settings page (el is the
+    // light-DOM content container). Lazy-imports the embed helper.
+    async embedSettingsTab(tabId, el) {
+      if (!el) return;
+      try {
+        const { renderSettingsTab } = await import('/shell/settings-embed.js');
+        await renderSettingsTab(tabId, el);
+      } catch (e) { console.error('[os] embedSettingsTab failed:', e); }
+    },
+
     toggleAnimatedBg() {
       this.animatedBg = !this.animatedBg;
       localStorage.setItem('os:animated-bg', this.animatedBg ? '1' : '');

@@ -705,44 +705,34 @@
   border-color: rgba(255,255,255,0.12);
   color: #e5e7eb;
 }
-/* Spaces-hub action row (Settings / Switch space / Theme / Sign out) */
-.os-ob-actions {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin-top: 20px;
-  padding-top: 18px;
-  border-top: 1px solid #f3f4f6;
+/* Settings page (slide 3): tab icons act like tabs; content renders below */
+.os-ob-feat--active {
+  background: rgba(59,130,246,0.12);
+  box-shadow: inset 0 0 0 1.5px var(--os-accent, #3b82f6);
 }
-.dark .os-ob-actions { border-top-color: rgba(255,255,255,0.07); }
-.os-ob-action {
+.dark .os-ob-feat--active { background: rgba(147,197,253,0.16); }
+.os-ob-settings-body {
+  margin-top: 16px;
+  max-height: 320px;
+  overflow-y: auto;
+  text-align: left;
+  border-top: 1px solid #f3f4f6;
+  padding-top: 12px;
+}
+.dark .os-ob-settings-body { border-top-color: rgba(255,255,255,0.07); }
+/* Pro-tips block replaces the trivia line on the Settings page */
+.os-ob-protips {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  padding: 10px 6px;
-  border: 1px solid #eceef1;
-  border-radius: 11px;
-  background: #f9fafb;
-  color: #374151;
-  font-size: 0.72rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 130ms, transform 90ms, border-color 130ms;
+  gap: 4px;
+  margin: 14px 0 0;
+  text-align: left;
 }
-.os-ob-action > span:first-child { font-size: 1.15rem; line-height: 1; }
-.os-ob-action:hover { background: #f1f5ff; border-color: #c7d2fe; }
-.os-ob-action:active { transform: scale(0.96); }
-.os-ob-action--danger { color: #dc2626; }
-.os-ob-action--danger:hover { background: #fef2f2; border-color: #fecaca; }
-.dark .os-ob-action {
-  background: rgba(255,255,255,0.05);
-  border-color: rgba(255,255,255,0.09);
-  color: #d1d5db;
+.os-ob-protips .os-ob-tip {
+  font-size: 0.8rem;
+  color: #6b7280;
 }
-.dark .os-ob-action:hover { background: rgba(147,197,253,0.12); border-color: rgba(147,197,253,0.3); }
-.dark .os-ob-action--danger { color: #f87171; }
-.dark .os-ob-action--danger:hover { background: rgba(248,113,113,0.12); border-color: rgba(248,113,113,0.3); }
+.dark .os-ob-protips .os-ob-tip { color: #9ca3af; }
 
 .os-onboarding-footer {
   display: flex;

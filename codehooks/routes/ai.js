@@ -5,7 +5,7 @@ import { kvSet, kvGet } from '../lib/db.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-13-scope-split-v2';
+const AI_BUILD = '2026-06-13-scope-split-v3';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -405,9 +405,12 @@ async function generateCode({ model, systemPrompt, planCtx, instruction, label, 
 // Finally CSS (per-file, parallel, fast model). Returns { ok:true, module } or
 // { ok:false, finishReason?, raw?, error? }.
 async function buildModule({ jsModel, mode, convo, planBudget, codeBudget, cssBudget }) {
-  // 1. Architect — plan only, no code.
+  // 1. Architect — plan only, no code. Runs on the FAST model: it's structural
+  // JSON (no code reasoning), and M3 occasionally hangs for minutes — and the
+  // worker's abort setTimeout is unreliable (gotcha 8), so an M3 hang here can't
+  // be aborted and silently burns the whole worker. Highspeed is fast + reliable.
   const planSys = mode === 'revise' ? ARCHITECT_PROMPT + REVISE_SUFFIX : ARCHITECT_PROMPT;
-  const { jsonStr, finishReason } = await runMiniMax({ model: jsModel, systemPrompt: planSys, convo, maxTokens: 8192, budgetMs: planBudget });
+  const { jsonStr, finishReason } = await runMiniMax({ model: 'MiniMax-M2.7-highspeed', systemPrompt: planSys, convo, maxTokens: 8192, budgetMs: planBudget });
   let plan;
   try { plan = JSON.parse(jsonStr); }
   catch { return { ok: false, finishReason, raw: jsonStr.slice(0, 800) }; }

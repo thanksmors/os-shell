@@ -5,7 +5,7 @@ import { kvSet, kvGet } from '../lib/db.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-13-build-verified';
+const AI_BUILD = '2026-06-13-maxtokens-32k';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -139,7 +139,8 @@ JSON output:
 18. Font sizes in CSS must use rem units (the shell scales html font-size from user settings) — never px for text.
 19. Primary action colors must use var(--os-accent, #3b82f6) — the user picks the accent in OS settings.
 20. NEVER declare font-family in CSS — it inherits the user's chosen font from the shell.
-21. SINGLETON IS THE DEFAULT. Only produce a generator module if the approved plan's type is "generator". Follow the plan's "type" field EXACTLY.`;
+21. SINGLETON IS THE DEFAULT. Only produce a generator module if the approved plan's type is "generator". Follow the plan's "type" field EXACTLY.
+22. Be economical with output: no code comments, no dead code, no decorative whitespace. Implement exactly the planned features and nothing extra — your response is cut off at a hard token limit, so every wasted token risks truncating the module.`;
 
 // ─── Phase prompts (clarify → plan → build/revise) ────────────────────────────
 
@@ -173,6 +174,8 @@ Given the conversation (user request + any clarification answers), output ONLY v
 }}
 
 CRITICAL RULE for "type": it MUST be "singleton" unless the user EXPLICITLY asked for multiple separately-named instances (e.g. "I want to create several boards", "one per project"). Vague or absent instance-model preference = "singleton". If you choose "generator", the summary MUST quote the user's exact words that demanded multiple instances.
+
+SCOPE LIMIT: the plan must fit a single-file module of roughly 400 lines of JS. If the request implies more than that, plan a core feature set that fits and say in "summary" which features were deferred — the user can add them later via Revise.
 
 If the user asks to revise an existing app, keep its appId and title unless they asked to change them, and list only what changes under "features".`;
 
@@ -354,7 +357,7 @@ app.worker('ai-generate-worker', async (req, res) => {
       model: model || 'MiniMax-M3',
       systemPrompt,
       convo,
-      maxTokens: maxTokens || 16384,
+      maxTokens: maxTokens || 32768,
       budgetMs: 300000,
     });
     console.log(`[ai-worker] job ${jobId} LLM done +${Date.now() - startedAt}ms (finish_reason=${finishReason}, len=${jsonStr.length})`);
@@ -366,7 +369,7 @@ app.worker('ai-generate-worker', async (req, res) => {
       await finish({
         status: 'error',
         error: truncated
-          ? 'Module too large — the AI response was cut off at the token limit. Try a simpler/smaller app.'
+          ? 'Module too large — the AI response was cut off at the token limit. Try fewer features, or build a basic version first and use Revise to add more.'
           : 'AI returned invalid JSON',
         raw: jsonStr.slice(0, 800),
       });
@@ -457,7 +460,7 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
           model: 'MiniMax-M2.7-highspeed',
           systemPrompt,
           convo,
-          maxTokens: 16384,
+          maxTokens: 32768,
           budgetMs: 50000,
         });
         let parsed;
@@ -466,7 +469,7 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
           await finish({
             status: 'error',
             error: finishReason === 'length'
-              ? 'Module too large — the AI response was cut off at the token limit. Try a simpler/smaller app.'
+              ? 'Module too large — the AI response was cut off at the token limit. Try fewer features, or build a basic version first and use Revise to add more.'
               : 'AI returned invalid JSON',
             raw: jsonStr.slice(0, 800),
           });
@@ -490,7 +493,7 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
       mode,
       convo,
       planType,
-      maxTokens: 16384,
+      maxTokens: 32768,
       model: 'MiniMax-M3',
     });
     res.json({ jobId });

@@ -5,7 +5,7 @@ import { kvSet, kvGet } from '../lib/db.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-13-kv-ttl-ms-fix';
+const AI_BUILD = '2026-06-13-build-budget-300s';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -251,13 +251,14 @@ app.get('/ai/ping', async (req, res) => {
 // Two execution paths by mode:
 // - clarify/plan: fast (~5-10s), run synchronously in the POST handler on
 //   MiniMax-M2.7-highspeed. Result is in ai_jobs before the POST returns.
-// - build/revise: slow (M3 takes 40-90s), run in a background WORKER with a
-//   110s budget (PRO plan worker timeout is 120s). POST enqueues and returns
-//   the jobId instantly; the frontend polls.
+// - build/revise: slow (M3 is a reasoning model — 40s to several minutes), run
+//   in a background WORKER with a 300s LLM budget (worker timeout 330s; paid
+//   plans allow up to 10min). POST enqueues and returns the jobId instantly;
+//   the frontend polls (deadline 360s).
 
 // ⚠️ Codehooks KV ttl is MILLISECONDS, not seconds. `10 * 60` (600ms) expired
 // every job record before the frontend's first 2s poll — every build "timed out".
-// AI job TTL: 10 minutes — frontend polls max 4min, so jobs always outlive polling.
+// AI job TTL: 10 minutes — frontend polls max 6min, so jobs always outlive polling.
 const AI_JOB_TTL = 10 * 60 * 1000;
 const WORKER_PING_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days, ms
 
@@ -311,7 +312,8 @@ function validateBuildResult(parsed, planType) {
   return enforcePlanType(parsed, planType === 'generator' ? 'generator' : 'singleton');
 }
 
-// ─── Worker: build/revise on MiniMax-M3 (110s budget under the 120s PRO limit) ─
+// ─── Worker: build/revise on MiniMax-M3 (300s LLM budget, 330s worker timeout —
+// paid plans allow worker timeouts up to 10 minutes) ───────────────────────────
 
 app.worker('ai-generate-worker', async (req, res) => {
   // Defensive payload parse: handle both delivery shapes (body.payload and
@@ -319,7 +321,9 @@ app.worker('ai-generate-worker', async (req, res) => {
   const payload = req.body?.payload ?? req.body ?? {};
   const { jobId, workspaceId, mode, convo, planType, maxTokens, model } = payload;
   const startedAt = Date.now();
+  let heartbeat; // cleared inside finish() so a late tick can't overwrite a terminal status
   const finish = (patch) => {
+    clearInterval(heartbeat);
     console.log(`[ai-worker] job ${jobId} → ${patch.status}${patch.error ? ` (${patch.error})` : ''} +${Date.now() - startedAt}ms`);
     return kvSet(`ai_job:${jobId}`, { jobId, workspaceId, ...patch }, { ttl: AI_JOB_TTL })
       .catch((e) => console.error(`[ai-worker] kvSet failed for job ${jobId}:`, e.message));
@@ -335,9 +339,18 @@ app.worker('ai-generate-worker', async (req, res) => {
   // now distinguish "worker never ran" (pending forever) from "LLM slow/killed"
   // (building, then nothing). Also refresh the worker-health stamp the POST
   // handler uses to route between worker and inline builds.
-  await finish({ status: 'building', workerStartedAt: Date.now() });
+  const workerStartedAt = Date.now();
+  await finish({ status: 'building', workerStartedAt });
   await kvSet('worker_ping', { at: Date.now() }, { ttl: WORKER_PING_TTL })
     .catch((e) => console.error('[ai] kvSet worker_ping failed:', e.message));
+
+  // Liveness heartbeat: lets polling distinguish "LLM still running" from
+  // "worker silently killed" (stale heartbeatAt → frontend fails fast).
+  heartbeat = setInterval(() => {
+    console.log(`[ai-worker] job ${jobId} heartbeat +${Date.now() - startedAt}ms`);
+    kvSet(`ai_job:${jobId}`, { jobId, workspaceId, status: 'building', workerStartedAt, heartbeatAt: Date.now() }, { ttl: AI_JOB_TTL })
+      .catch((e) => console.error(`[ai-worker] heartbeat kvSet failed for job ${jobId}:`, e.message));
+  }, 15000);
 
   try {
     const systemPrompt = mode === 'revise' ? SYSTEM_PROMPT + REVISE_SUFFIX : SYSTEM_PROMPT;
@@ -347,7 +360,7 @@ app.worker('ai-generate-worker', async (req, res) => {
       systemPrompt,
       convo,
       maxTokens: maxTokens || 16384,
-      budgetMs: 110000,
+      budgetMs: 300000,
     });
     console.log(`[ai-worker] job ${jobId} LLM done +${Date.now() - startedAt}ms (finish_reason=${finishReason}, len=${jsonStr.length})`);
 
@@ -374,7 +387,7 @@ app.worker('ai-generate-worker', async (req, res) => {
     await finish({ status: 'error', error: err.message || 'AI request failed' });
   }
   res.end();
-}, { timeout: 120000, workers: 1 });
+}, { timeout: 330000, workers: 1 });
 
 // ─── POST: clarify/plan run inline; build/revise enqueue to the worker ────────
 
@@ -547,5 +560,5 @@ app.get('/w/:workspaceId/ai-job', async (req, res) => {
     res.json({ status: 'unknown' });
     return;
   }
-  res.json({ status: job.status, module: job.module, error: job.error, raw: job.raw, workerStartedAt: job.workerStartedAt });
+  res.json({ status: job.status, module: job.module, error: job.error, raw: job.raw, workerStartedAt: job.workerStartedAt, heartbeatAt: job.heartbeatAt });
 });

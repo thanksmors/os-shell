@@ -5,7 +5,7 @@ import { kvSet, kvGet } from '../lib/db.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-13-maxtokens-32k';
+const AI_BUILD = '2026-06-13-clarify-retry';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -156,7 +156,10 @@ Given the conversation, decide if the request is clear enough to plan. Output ON
 - Do NOT ask whether the app should be single-window or multi-instance UNLESS the user's words hint at multiple named instances (e.g. "lists", "boards", "one per project"). The default is a single shared window (singleton).
 
 2. If the request is already clear (or after questions were answered):
-{"ready":true,"summary":"one-paragraph restatement of what will be built"}`;
+{"ready":true,"summary":"one-paragraph restatement of what will be built"}
+
+NEVER output prose or markdown outside the JSON — your entire reply must parse as JSON.
+If the user asks for your opinion, advice, or a recommendation (e.g. "which is better, tabs or a toggle?"), do NOT answer in prose: express it as a multiple-choice question whose recommended:true option is your advice, with your reasoning in that option's "detail". If the right choice is obvious, just state it inside the ready summary.`;
 
 const PLAN_PROMPT = `You are a software planner for "ODVI Spaces" app modules (Web Components + AppModuleBase, getData/setData persistence — tech stack is FIXED).
 
@@ -177,7 +180,9 @@ CRITICAL RULE for "type": it MUST be "singleton" unless the user EXPLICITLY aske
 
 SCOPE LIMIT: the plan must fit a single-file module of roughly 400 lines of JS. If the request implies more than that, plan a core feature set that fits and say in "summary" which features were deferred — the user can add them later via Revise.
 
-If the user asks to revise an existing app, keep its appId and title unless they asked to change them, and list only what changes under "features".`;
+If the user asks to revise an existing app, keep its appId and title unless they asked to change them, and list only what changes under "features".
+
+Output ONLY the JSON — no prose, no markdown — even if the user's last message was a question. The plan itself is your answer; reflect any decision they asked about in "features" and "summary".`;
 
 const REVISE_SUFFIX = `
 
@@ -501,40 +506,57 @@ app.post('/w/:workspaceId/ai-generate', async (req, res) => {
   }
 
   // ── clarify/plan: fast modes, run inline on the highspeed model ────────────
+  // Up to 2 attempts: if the model drifts into prose or the wrong shape (it
+  // does when the user asks it a design question), reprompt once with the bad
+  // reply + a corrective instruction. 25s/attempt keeps two attempts under the
+  // frontend's 65s POST abort.
   try {
-    const { jsonStr } = await runMiniMax({
-      model: 'MiniMax-M2.7-highspeed',
-      systemPrompt: mode === 'clarify' ? CLARIFY_PROMPT : PLAN_PROMPT,
-      convo,
-      maxTokens: mode === 'clarify' ? 1024 : 2048,
-      budgetMs: 55000,
-    });
+    let attemptConvo = convo;
+    let lastErr = null;
+    let lastRaw = '';
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const { jsonStr } = await runMiniMax({
+        model: 'MiniMax-M2.7-highspeed',
+        systemPrompt: mode === 'clarify' ? CLARIFY_PROMPT : PLAN_PROMPT,
+        convo: attemptConvo,
+        maxTokens: mode === 'clarify' ? 1024 : 2048,
+        budgetMs: 25000,
+      });
 
-    let parsed;
-    try { parsed = JSON.parse(jsonStr); }
-    catch {
-      await finish({ status: 'error', error: 'AI returned invalid JSON', raw: jsonStr.slice(0, 800) });
-      res.json({ jobId });
-      return;
-    }
+      lastRaw = jsonStr;
+      let parsed = null;
+      try { parsed = JSON.parse(jsonStr); } catch { lastErr = 'AI returned invalid JSON'; }
 
-    if (mode === 'clarify') {
-      if (!Array.isArray(parsed.questions) && parsed.ready !== true) {
-        await finish({ status: 'error', error: 'AI clarify response missing questions/ready', raw: jsonStr.slice(0, 300) });
+      if (parsed) {
+        if (mode === 'clarify') {
+          if (!Array.isArray(parsed.questions) && parsed.ready !== true) {
+            lastErr = 'AI clarify response missing questions/ready';
+            parsed = null;
+          }
+        } else if (!parsed.plan?.title || !parsed.plan?.type) {
+          lastErr = 'AI plan response missing plan.title/type';
+          parsed = null;
+        } else if (parsed.plan.type !== 'generator') {
+          // Singleton default: anything that isn't an explicit generator is singleton.
+          parsed.plan.type = 'singleton';
+        }
+      }
+
+      if (parsed) {
+        await finish({ status: 'done', module: parsed });
         res.json({ jobId });
         return;
       }
-    } else {
-      if (!parsed.plan?.title || !parsed.plan?.type) {
-        await finish({ status: 'error', error: 'AI plan response missing plan.title/type', raw: jsonStr.slice(0, 300) });
-        res.json({ jobId });
-        return;
-      }
-      // Singleton default: anything that isn't an explicit generator is singleton.
-      if (parsed.plan.type !== 'generator') parsed.plan.type = 'singleton';
+
+      console.log(`[ai] job ${jobId} ${mode} attempt ${attempt} bad output (${lastErr}) — ${attempt === 1 ? 'reprompting' : 'giving up'}`);
+      attemptConvo = [
+        ...convo,
+        { role: 'assistant', content: jsonStr.slice(0, 2000) },
+        { role: 'user', content: 'Your previous reply was not valid. Respond again with ONLY the required JSON — no prose, no markdown. If you have advice or a recommendation, fold it into the JSON (a question with its recommended:true option, or the summary).' },
+      ];
     }
 
-    await finish({ status: 'done', module: parsed });
+    await finish({ status: 'error', error: lastErr || 'AI request failed', raw: lastRaw.slice(0, 800) });
     res.json({ jobId });
   } catch (err) {
     await finish({ status: 'error', error: err.message || 'AI request failed' });

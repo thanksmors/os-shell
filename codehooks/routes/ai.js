@@ -126,7 +126,7 @@ Output ONLY valid JSON: { "manifest": {...}, "main": "<main.js source>", "files"
 
 ## When to split into files
 
-If the app is large or has several distinct feature areas (one file would exceed ~200 lines of JS), split each feature area into its own file. This is REQUIRED, not optional, for anything beyond a basic single-purpose tool — a fat "main" defeats the purpose and will time out. When you split, "main" MUST stay a THIN orchestrator (target under ~120 lines): it does `_load` (state), a layout skeleton in `_render` that calls the imported feature render functions, `_getTitle`, and delegation — it MUST NOT contain feature implementation logic. For each extra file add to "files":
+If the app is large or has several distinct feature areas (one file would exceed ~200 lines of JS), split each feature area into its own file. This is REQUIRED, not optional, for anything beyond a basic single-purpose tool — a fat "main" defeats the purpose and will time out. When you split, "main" MUST stay a THIN orchestrator (target under ~120 lines): it does _load (state), a layout skeleton in _render that calls the imported feature render functions, _getTitle, and delegation — it MUST NOT contain feature implementation logic. For each extra file add to "files":
   { "name": "feature-<area>.js", "exports": ["fnA","fnB"], "spec": "one line: what it does + what each export does" }
 - "main" imports each by relative name and calls it: import { renderTasks, bindTasks } from './feature-tasks.js';
 - Feature functions take the module INSTANCE as their first arg ("host"): they read/write host._state, set host._wrapper.innerHTML, call host._render(), use host.api. e.g. export function renderTasks(host){ ... }

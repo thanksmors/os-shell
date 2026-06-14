@@ -1,8 +1,15 @@
 # Make the Build App generator more capable — assessment, roadmap, and a lint+repair slice
 
-> Living roadmap. Pass 1 (the lint + auto-repair slice) is being implemented now.
-> Later passes (helper-surface teaching, few-shots, selective injection, drift
-> governance) are scoped in Part 2 and can be picked up independently.
+> **CURRENT STATE (2026-06-14) — read first.**
+> - Live backend build: **`2026-06-14-fidelity-v1`** (check `GET /ai/ping?apikey=…`, key in `shell/config.js`).
+> - Shipped: Pass 1 (lint+repair), Pass 2 (capabilities), Phase A (single-file + D1/D2 lint),
+>   Ship A/Phase C (component library + cssUrl-always 404 fix), Ship B (plan fidelity). Plus per-app onboarding.
+> - **Last `ai_stat` snapshot (diff next eval against this):** success=40, invalid_json=5,
+>   lint_caught=1, lint_repaired=1, lint_failed=0, truncation=0, **timeout=not captured** (read it next time).
+> - **Pending:** user is re-running the 8-prompt eval (`docs/builder-eval-set.md`) against
+>   components-v1+fidelity-v1. Next: log their results + deltas, decide if Ship C is needed.
+>
+> Living roadmap; passes can be picked up independently.
 
 ## Context
 

@@ -6,7 +6,29 @@
   "icon": "💬",
   "defaultSize": { "w": 700, "h": 520 },
   "singleton": true,
+  "hasSettings": true,
   "resizable": true,
   "minSize": { "w": 480, "h": 360 },
-  "dataCollections": ["chat", "chat-messages", "chat-read"]
+  "dataCollections": ["chat", "chat-messages", "chat-read"],
+  "onboarding": [
+    {
+      "icon": "💬",
+      "title": "Chat",
+      "body": "Team messaging for your workspace — organized into channels.",
+      "features": [
+        { "icon": "#️⃣", "name": "Channels", "desc": "Topic-based conversations" },
+        { "icon": "🔴", "name": "Unread", "desc": "Badges track what's new" },
+        { "icon": "⚡", "name": "Live", "desc": "Messages sync in real time" }
+      ]
+    },
+    {
+      "icon": "🧭",
+      "title": "Tips",
+      "tips": [
+        "Pick a channel on the left; + adds a new one.",
+        "Everyone in the workspace shares these channels.",
+        "Replay this intro anytime from ⚙️ settings."
+      ]
+    }
+  ]
 }

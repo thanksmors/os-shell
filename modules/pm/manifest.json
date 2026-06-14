@@ -7,12 +7,36 @@
   "defaultSize": { "w": 900, "h": 560 },
   "singleton": false,
   "generator": true,
-  "hasSettings": false,
+  "hasSettings": true,
   "resizable": true,
   "minSize": { "w": 620, "h": 400 },
   "sync": true,
   "dataCollections": ["pm-data"],
   "contextMenu": [
     { "label": "New Project Hub", "config": { "name": "Projects", "icon": "🎯" } }
+  ],
+  "onboarding": [
+    {
+      "icon": "🎯",
+      "title": "Project Hub",
+      "body": "Organize work by project. Group projects into folders in the sidebar, then track everything for each one in its own tabs.",
+      "features": [
+        { "icon": "📝", "name": "Brief", "desc": "Problem, scope, and success metrics" },
+        { "icon": "🎌", "name": "Milestones", "desc": "Key dates and deliverables" },
+        { "icon": "🔥", "name": "Issues", "desc": "Blockers and risks" },
+        { "icon": "✅", "name": "Actions", "desc": "Action items and decisions" }
+      ]
+    },
+    {
+      "icon": "🗂️",
+      "title": "Getting around",
+      "body": "Pick a project in the sidebar, then switch tabs to fill in its details.",
+      "tips": [
+        "Use the sidebar to add folders and projects.",
+        "Each project has Brief, Roles, Milestones, Issues, Action Items, Decisions, and Links.",
+        "Right-click this app's desktop icon to rename or remove it.",
+        "Replay this intro anytime from the ⚙️ settings button."
+      ]
+    }
   ]
 }

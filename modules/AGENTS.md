@@ -50,6 +50,7 @@ modules/your-id/
 | `acceptsDroppedInstances` | boolean | `false` | Makes this instance a drop container on the desktop. Set on the folder module only. |
 | `requiredCollections` | object[] | `[]` | Named collection slots needing user resolution on first launch. Shape: `{ slot, default, hint }`. `AppModuleBase._setupCollections()` shows a dialog. No current module uses it. |
 | `contextMenu` | object[] | `[]` | Entries in the desktop right-click menu. Shape: `{ label, config }`. `label` is plain text with **no leading emoji** ("New Board", not "🗂️ New Board") — the icon comes from `config.icon`/`manifest.icon`. Generator modules must have at least one or they are completely unreachable. |
+| `onboarding` | object[] | `[]` | First-run intro pages, shown once inside the window. Each page: `{ title, body?, icon?, features?:[{icon,name,desc}], tips?:[…] }`. Opt-in — omit for no intro. **Declaring `onboarding` requires `hasSettings:true` + a Replay control** (see App onboarding below). |
 
 ---
 
@@ -146,6 +147,13 @@ Module CSS must respond to Settings > Appearance:
 2. **Primary action colors use `var(--os-accent, #3b82f6)`** — set on `:root` by Settings; custom properties inherit through shadow boundaries.
 3. **No `font-family` declarations** — the family chosen in Settings inherits from `html`.
 
+**Component library (`shell/css/components.css`).** A token-driven, dark-aware set of `c-*`
+classes (`c-app`, `c-btn`/`c-btn-primary`, `c-input`, `c-card`, `c-list`/`c-item`, `c-toggle`,
+`c-badge`, `c-chip`, `c-field`, …) plus tokens (`--c-surface/--c-text/--c-muted/--c-border/--c-accent`)
+is adopted into every shadow root. Prefer these for controls — you get consistent, dark-correct
+UI with little/no per-module CSS. They're `c-`-prefixed so they never clash with your own
+classes. The AI generator is taught to build with them (see `codehooks/AGENTS.md`).
+
 `.module-root` (shell.css) provides the rem base size. Note: shell CSS arrives in
 shadow roots via `adoptedStyleSheets`, which cascade AFTER the module's own
 `<style>` tag — to override a `.module-root` property, use a double-class
@@ -193,6 +201,30 @@ When adding a new collection: declare it in `manifest.dataCollections` and add a
 |---|---|---|
 | `os:instances-changed` | on `window` | After any create/remove/move/reorder of instances |
 | `os:toggle-settings` | on module element | ⚙️ titlebar button clicked. Handle: `this.addEventListener('os:toggle-settings', () => this._toggleSettings())` |
+
+---
+
+### App onboarding (`shell/app-onboarding.js`)
+
+A module can declare a first-run intro via `manifest.onboarding` (page shape in the field
+table). It renders as a window-scoped overlay (reuses the hub's `.os-onboarding-*`/`.os-ob-*`
+styles, which `adoptTailwind` puts in every shadow root) and is shown **once on first load**,
+keyed on `os:onboarding-seen:<appId>` (per appId, not instanceId — a generator's intro shows
+once across all its boards). The checkbox is "show next time" (default off).
+
+- **Auto-show:** `AppModuleBase` calls `maybeShowAppOnboarding(this)` at the end of mount, so
+  AppModuleBase modules get it for free. **Standalone modules** (`HTMLElement` + `setupShell`,
+  e.g. builder/chat/files) must call `maybeShowAppOnboarding(this)` themselves at the end of
+  `connectedCallback`.
+- **Contract: onboarding ⇒ settings.** An app that declares `onboarding` MUST set
+  `hasSettings:true` and expose a **↻ Replay intro** control in its settings panel. If the app
+  has its own settings panel (e.g. roadmap/load), add `replayButtonHTML()` to it and call
+  `wireReplay(this, this._wrapper)` after render. If it has **no** settings panel, give it the
+  shared minimal one: `this.addEventListener('os:toggle-settings', () => toggleMinimalSettings(this))`
+  (a Replay-only overlay) — this is why settings is effectively required wherever onboarding exists.
+- Helpers: `maybeShowAppOnboarding(host)`, `showAppOnboarding(host)`, `replayButtonHTML()`,
+  `wireReplay(host, root)`, `toggleMinimalSettings(host)`. `host` needs `_wrapper` + an appId
+  (AppModuleBase `_moduleId()` or the `app-<id>` tag).
 
 ---
 
@@ -446,6 +478,7 @@ Do **not** call `_load()` or `_render()` manually in a `connectedCallback` overr
 - [ ] Set `"generator": true` + add `contextMenu` entries if multi-instance
 - [ ] Set `"singleton": true` if only one window at a time
 - [ ] Set `"hasSettings": true` + listen for `os:toggle-settings` if there's a settings panel
+- [ ] For an intro: add `"onboarding": [...]` + `"hasSettings": true` + a ↻ Replay control (own panel via `replayButtonHTML()`+`wireReplay`, or `toggleMinimalSettings(this)`); standalone modules also call `maybeShowAppOnboarding(this)` — see App onboarding
 - [ ] Set `"dataCollections": ["your-collection"]` for every localStorage collection written
 - [ ] Set `"sync": true` for cross-device auto-sync
 - [ ] Edit `index.js` — rename class, update `customElements.define` tag

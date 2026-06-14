@@ -7,6 +7,30 @@
   "dataCollections": ["generated-modules", "build-jobs"],
   "defaultSize": { "w": 560, "h": 560 },
   "singleton": true,
+  "hasSettings": true,
   "resizable": true,
-  "minSize": { "w": 400, "h": 400 }
+  "minSize": { "w": 400, "h": 400 },
+  "onboarding": [
+    {
+      "icon": "🤖",
+      "title": "Build App",
+      "body": "Describe an app in plain language and the AI builds it — installed right onto your desktop.",
+      "features": [
+        { "icon": "💬", "name": "Describe", "desc": "Say what you want" },
+        { "icon": "📋", "name": "Plan", "desc": "Approve a short plan" },
+        { "icon": "🔨", "name": "Build", "desc": "It generates & installs" }
+      ]
+    },
+    {
+      "icon": "✨",
+      "title": "Refine it",
+      "body": "Apps grow with you.",
+      "tips": [
+        "Use ✏️ Revise to add a feature to an installed app.",
+        "Open Spec ▾ to edit the spec, then 🪄 Consolidate to rebuild coherently.",
+        "Your data is kept across revises and consolidates.",
+        "Replay this intro anytime from ⚙️ settings."
+      ]
+    }
+  ]
 }

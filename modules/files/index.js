@@ -1,5 +1,6 @@
 import { setupShell, observeTheme } from '/shell/shell-setup.js';
 import { getData, setData, deleteData } from '/shell/api.js';
+import { toggleMinimalSettings, maybeShowAppOnboarding } from '/shell/app-onboarding.js';
 
 const META_COL = 'files-meta';
 const DATA_COL = 'files-data';
@@ -36,6 +37,7 @@ class AppFiles extends HTMLElement {
     this._previewFile = null;
     this._previewContent = null;
     this._previewLoading = false;
+    this.addEventListener('os:toggle-settings', () => toggleMinimalSettings(this));
   }
 
   async connectedCallback() {
@@ -48,6 +50,7 @@ class AppFiles extends HTMLElement {
     await this._load();
     this._render();
     this.api?.setReady?.();
+    maybeShowAppOnboarding(this);
   }
 
   disconnectedCallback() {

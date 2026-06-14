@@ -1,5 +1,6 @@
 import { AppModuleBase } from '/shell/module-base.js';
 import { getData, setData } from '/shell/api.js';
+import { replayButtonHTML, wireReplay } from '/shell/app-onboarding.js';
 
 const MONTH_W = 64;
 const ROW_H = 48;
@@ -185,6 +186,10 @@ class AppRoadmap extends AppModuleBase {
           ${[3,6,12,24,36,60].map(n => `<button class="span-btn${viewMonths === n ? ' active' : ''}" data-months="${n}">${n >= 24 ? (n/12)+'y' : n+'mo'}</button>`).join('')}
         </div>
       </div>
+      <div class="settings-row">
+        <label>Help</label>
+        ${replayButtonHTML()}
+      </div>
     </div>` : '';
 
     const modalHtml = this._modal ? this._renderModal() : '';
@@ -307,6 +312,7 @@ class AppRoadmap extends AppModuleBase {
 
   _bindEvents() {
     const w = this._wrapper;
+    wireReplay(this, w);
 
     const tCol = w.querySelector('.timeline-col');
     const nScroll = w.querySelector('#names-scroll');

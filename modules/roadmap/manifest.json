@@ -14,5 +14,27 @@
   "dataCollections": ["roadmaps"],
   "contextMenu": [
     { "label": "New Roadmap", "config": { "name": "Roadmap", "icon": "🗺️" } }
+  ],
+  "onboarding": [
+    {
+      "icon": "🗺️",
+      "title": "Roadmap",
+      "body": "See your projects as phase bars on a quarterly timeline — at a glance, across everything.",
+      "features": [
+        { "icon": "📍", "name": "Phases", "desc": "Phase bars per project row" },
+        { "icon": "↔️", "name": "Drag", "desc": "Move and resize bars" },
+        { "icon": "🔗", "name": "Links", "desc": "Projects feed the Load app" }
+      ]
+    },
+    {
+      "icon": "🧭",
+      "title": "Tips",
+      "tips": [
+        "Drag a bar to move it; drag its edge to resize.",
+        "Use ◀ ▶ to change quarter; Today recenters.",
+        "Set the view span in ⚙️ settings.",
+        "Replay this intro anytime from ⚙️ settings."
+      ]
+    }
   ]
 }

@@ -6,7 +6,7 @@ import { lintModule } from '../lib/lint-module.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-14-reliability-a-v1';
+const AI_BUILD = '2026-06-14-components-v1';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -81,7 +81,7 @@ Calling _render() on an 'input' event rebuilds innerHTML and destroys the field'
 
 JSON output:
 {
-  "js": "import { AppModuleBase } from '/shell/module-base.js';\\nimport { getData, setData } from '/shell/api.js';\\n\\nclass AppCounter extends AppModuleBase {\\n  async _load() {\\n    this._state = await getData('counters', this._appId) || { name: this.api?.config?.name || 'Counter', count: 0 };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"body\\"><div class=\\"count\\">\${this._state.count}</div><div class=\\"btns\\"><button class=\\"btn dec\\">−</button><button class=\\"btn rst\\">Reset</button><button class=\\"btn inc\\">+</button></div></div>\`;\\n    this._wrapper.querySelector('.dec').addEventListener('click', () => this._change(-1));\\n    this._wrapper.querySelector('.inc').addEventListener('click', () => this._change(1));\\n    this._wrapper.querySelector('.rst').addEventListener('click', () => this._change(0, true));\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  async _change(delta, reset = false) {\\n    if (reset) this._state.count = 0; else this._state.count += delta;\\n    await setData('counters', this._appId, this._state);\\n    this._render();\\n  }\\n}\\n\\nif (!customElements.get('app-counter')) customElements.define('app-counter', AppCounter);"
+  "js": "import { AppModuleBase } from '/shell/module-base.js';\\nimport { getData, setData } from '/shell/api.js';\\n\\nclass AppCounter extends AppModuleBase {\\n  async _load() {\\n    this._state = await getData('counters', this._appId) || { name: this.api?.config?.name || 'Counter', count: 0 };\\n  }\\n\\n  _render() {\\n    this._wrapper.innerHTML = \`<div class=\\"c-app\\" style=\\"align-items:center;gap:16px\\"><div style=\\"font-size:2.6rem;font-weight:700\\">\${this._state.count}</div><div class=\\"c-row\\"><button class=\\"c-btn dec\\">−</button><button class=\\"c-btn rst\\">Reset</button><button class=\\"c-btn c-btn-primary inc\\">+</button></div></div>\`;\\n    this._wrapper.querySelector('.dec').addEventListener('click', () => this._change(-1));\\n    this._wrapper.querySelector('.inc').addEventListener('click', () => this._change(1));\\n    this._wrapper.querySelector('.rst').addEventListener('click', () => this._change(0, true));\\n  }\\n\\n  _getTitle() { return this._state.name; }\\n\\n  async _change(delta, reset = false) {\\n    if (reset) this._state.count = 0; else this._state.count += delta;\\n    await setData('counters', this._appId, this._state);\\n    this._render();\\n  }\\n}\\n\\nif (!customElements.get('app-counter')) customElements.define('app-counter', AppCounter);"
 }
 
 ## EXAMPLE — thin main.js that delegates to feature files (plan listed feature-deck.js, feature-board.js)
@@ -111,6 +111,18 @@ Opt-in. A simple tool needs NONE of these; adding unused capability code wastes 
 - Toast: this.api.notify('Saved', 'success'); ('info' | 'success' | 'error').
 - Live cross-device sync (GENERATOR ONLY, when the data is shared/collaborative): set manifest.sync:true (architect) AND override _collection() to return your exact dataCollections name — the same string passed to getData/setData: _collection() { return 'my-collection'; }. AppModuleBase then reloads + re-renders automatically when another device edits the same instance. Sync keys on this._appId (which generators already use as the data key); singletons do NOT get auto-sync.
 
+## Component library — prefer these classes; the shell already provides them
+
+The shell injects a styled, dark-mode-aware component layer into every app (c-prefixed, do NOT
+redefine them). Render your UI with these and you need little or no custom CSS:
+- Layout: \`c-app\` (root padding+gap), \`c-header\`, \`c-title\`, \`c-subtitle\`, \`c-section\`, \`c-section-title\`, \`c-row\`, \`c-row-between\`, \`c-spacer\`.
+- Buttons: \`c-btn\`, \`c-btn-primary\`, \`c-btn-ghost\`, \`c-btn-danger\`, \`c-icon-btn\`.
+- Inputs: \`c-input\`, \`c-select\`, \`c-textarea\`, \`c-field\` (wrapper), \`c-label\`.
+- Surfaces: \`c-card\`, \`c-list\`, \`c-item\`, \`c-badge\`, \`c-chip\` (\`.active\`), \`c-toggle\` (\`.on\`), \`c-empty\` + \`c-empty-icon\`.
+- Tokens (use in any small custom CSS): \`var(--c-surface|--c-elevated|--c-text|--c-muted|--c-border|--c-accent)\`, \`var(--os-accent)\`.
+Wrap your content in \`<div class="c-app">…\`. Use \`c-*\` classes for all controls. Add bespoke
+CSS only for genuinely app-specific layout (grids, boards, canvases) — controls are covered.
+
 ## Rules
 
 1. Output ONLY valid JSON — no markdown, no code fences, no extra text
@@ -135,18 +147,15 @@ Opt-in. A simple tool needs NONE of these; adding unused capability code wastes 
 // Styling runs as a second, cheaper call so the build call only emits {manifest,
 // js} — CSS is often a big share of output, so splitting it out cuts truncation
 // and speeds the JS call. The model sees the generated js and styles its classes.
-const STYLE_PROMPT = `You are a CSS author for "ODVI Spaces" app modules (Web Components with Shadow DOM). You receive a module's manifest and js. Write the CSS that styles the markup the js renders into this._wrapper (the ".wrapper" root).
+const STYLE_PROMPT = `You are a CSS author for "ODVI Spaces" app modules (Web Components with Shadow DOM). You receive a module's manifest and js. The shell ALREADY provides a full styled, dark-mode component layer (the c-* classes the js uses: c-app, c-btn, c-input, c-card, c-list, c-item, c-toggle, c-badge, c-chip, c-field, etc.) — you must NOT restyle those. Write ONLY the small amount of CSS for app-SPECIFIC layout the components don't cover (e.g. grids, board columns, a canvas, a timeline).
 
-Output ONLY valid JSON of the form { "css": "..." } — a single-line string with \\n for newlines. No markdown, no code fences, no extra text.
+Output ONLY valid JSON of the form { "css": "..." } — a single-line string with \\n for newlines. No markdown, no code fences, no extra text. If the component classes fully cover the UI, output { "css": "" }.
 
 Rules:
-1. Inspect the js and style the exact class names it renders. Every selector must be scoped under .wrapper.
-2. Dark mode: add .wrapper.dark selectors for every background/color rule.
-3. The root should fill the window: .wrapper { min-height:100%; height:auto; } with a light background, plus a .wrapper.dark background.
-4. Font sizes must use rem units (the shell scales html font-size) — never px for text.
-5. Primary action colors must use var(--os-accent, #3b82f6) — the user picks the accent.
-6. NEVER declare font-family — it inherits the user's chosen font from the shell.
-7. Be economical: style only what the js renders, no dead rules.`;
+1. Do NOT redefine any c-* class or the .wrapper root — the shell owns those. Style only NON-c- classes the js renders.
+2. Every selector scoped under .wrapper. Use tokens (var(--c-surface|--c-text|--c-muted|--c-border|--c-accent)) so dark mode just works; add .wrapper.dark only for anything not using a token.
+3. Font sizes in rem — never px for text. Primary accents use var(--os-accent, #3b82f6). NEVER declare font-family.
+4. Be economical: layout only, no dead rules — most apps need very little here.`;
 
 // Per-feature-file generation for large (multi-file) apps. Generated in parallel
 // with main.js from the shared FILE PLAN (state shape + this file's exports/spec),
@@ -161,7 +170,7 @@ Rules:
 3. Import ONLY from '/shell/...' (e.g. import { getData, setData } from '/shell/api.js'). NEVER import sibling feature files or main — everything shared flows through host.
 4. Honor your exact export names + spec from the plan; main.js calls them passing the host. Use the same host._state fields the plan describes.
 5. No customElements.define here — only main.js defines the element.
-6. Font sizes in rem (CSS is generated separately — just use clear class names). Be economical: implement exactly the spec, nothing extra.`;
+6. Render UI with the shell's c-* component classes (c-app, c-btn, c-input, c-card, c-list, c-item, c-toggle, c-badge, c-field…) like main.js does — they're pre-styled + dark-aware. CSS is generated separately; be economical: implement exactly the spec, nothing extra.`;
 
 // Repair = a targeted re-prompt when lintModule (lib/lint-module.js) flags a
 // generated file. The model gets the file + the exact violations and must fix

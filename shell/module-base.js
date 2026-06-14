@@ -59,6 +59,9 @@ export class AppModuleBase extends HTMLElement {
         if (this.api) this.api.setTitle(this._getTitle());
       });
     }
+
+    // 8. First-run onboarding — shows once if the manifest declares `onboarding`.
+    import('/shell/app-onboarding.js').then(m => m.maybeShowAppOnboarding(this)).catch(() => {});
   }
 
   disconnectedCallback() {

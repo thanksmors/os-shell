@@ -1,5 +1,6 @@
 import { setupShell, observeTheme } from '/shell/shell-setup.js';
 import { getData, setData, deleteData, forceGetData, subscribe } from '/shell/api.js';
+import { toggleMinimalSettings, maybeShowAppOnboarding } from '/shell/app-onboarding.js';
 
 const CHAT_COL     = 'chat';
 const MESSAGES_COL = 'chat-messages';
@@ -23,6 +24,7 @@ class AppChat extends HTMLElement {
     this._addingChannel   = false;
     this._themeCleanup    = null;
     this._wrapper         = null;
+    this.addEventListener('os:toggle-settings', () => toggleMinimalSettings(this));
   }
 
   async connectedCallback() {
@@ -38,6 +40,7 @@ class AppChat extends HTMLElement {
     this._render();
     this.api?.setReady?.();
     this._setupSubscriptions();
+    maybeShowAppOnboarding(this);
   }
 
   disconnectedCallback() {

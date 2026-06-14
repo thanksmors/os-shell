@@ -1,5 +1,6 @@
 import { AppModuleBase } from '/shell/module-base.js';
 import { getData, setData } from '/shell/api.js';
+import { toggleMinimalSettings } from '/shell/app-onboarding.js';
 
 const STATUSES = ['open', 'in-progress', 'closed'];
 const PRIORITIES = ['low', 'med', 'high'];
@@ -33,6 +34,8 @@ class AppPm extends AppModuleBase {
     this._activeTab = 'brief';
     this._addingItem = false;
     this._saveTimer = null;
+    // Settings panel: minimal (Replay intro). PM has no other settings today.
+    this.addEventListener('os:toggle-settings', () => toggleMinimalSettings(this));
   }
 
   _collection() { return 'pm-data'; }

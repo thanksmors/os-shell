@@ -1,0 +1,106 @@
+/* ── Component library + design tokens ───────────────────────────────────────
+   Adopted into every module shadow root via adoptTailwind (shadow-tailwind.js),
+   so any app — hand-written or AI-generated — can render styled UI with zero
+   per-app CSS. Classes are c-prefixed so they never collide with a module's own
+   classes (adopted sheets cascade AFTER a module's <style>). Dark mode is
+   automatic: tokens flip on .wrapper.dark (toggled by _applyTheme/adoptTailwind).
+   Font sizes use rem (Appearance scales html font-size); primary uses --os-accent. */
+
+.wrapper {
+  --c-surface: #ffffff;
+  --c-elevated: #f7f8fa;
+  --c-text: #111827;
+  --c-muted: #6b7280;
+  --c-border: rgba(0,0,0,0.10);
+  --c-border-strong: rgba(0,0,0,0.18);
+  --c-radius: 10px;
+  --c-gap: 10px;
+  --c-accent: var(--os-accent, #3b82f6);
+}
+.wrapper.dark {
+  --c-surface: #1e2433;
+  --c-elevated: rgba(255,255,255,0.05);
+  --c-text: #e5e7eb;
+  --c-muted: #9ca3af;
+  --c-border: rgba(255,255,255,0.12);
+  --c-border-strong: rgba(255,255,255,0.22);
+}
+
+/* Layout helpers */
+.c-app { display: flex; flex-direction: column; gap: var(--c-gap); padding: 14px; color: var(--c-text); }
+.c-header { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--c-border); margin-bottom: 4px; }
+.c-title { font-size: 1.05rem; font-weight: 700; color: var(--c-text); margin: 0; }
+.c-subtitle { font-size: 0.8rem; color: var(--c-muted); margin: 0; }
+.c-section { display: flex; flex-direction: column; gap: 8px; }
+.c-section-title { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--c-muted); }
+.c-row { display: flex; align-items: center; gap: var(--c-gap); }
+.c-row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--c-gap); }
+.c-spacer { flex: 1; }
+
+/* Buttons */
+.c-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 12px; border-radius: 8px; border: 1px solid var(--c-border-strong);
+  background: var(--c-elevated); color: var(--c-text);
+  font-size: 0.875rem; font-weight: 500; cursor: pointer; white-space: nowrap;
+  transition: background 130ms, border-color 130ms, transform 90ms, filter 130ms;
+}
+.c-btn:hover { border-color: var(--c-accent); }
+.c-btn:active { transform: scale(0.97); }
+.c-btn:disabled { opacity: 0.5; cursor: default; }
+.c-btn-primary { background: var(--c-accent); border-color: transparent; color: #fff; font-weight: 600; }
+.c-btn-primary:hover { filter: brightness(1.08); border-color: transparent; }
+.c-btn-ghost { background: transparent; border-color: transparent; color: var(--c-muted); }
+.c-btn-ghost:hover { background: var(--c-elevated); color: var(--c-text); }
+.c-btn-danger { color: #dc2626; border-color: #fca5a5; background: transparent; }
+.wrapper.dark .c-btn-danger { color: #f87171; border-color: rgba(248,113,113,0.4); }
+.c-icon-btn { padding: 6px; width: 32px; height: 32px; }
+
+/* Inputs */
+.c-input, .c-select, .c-textarea {
+  width: 100%; box-sizing: border-box; padding: 8px 11px;
+  border: 1px solid var(--c-border-strong); border-radius: 8px;
+  background: var(--c-surface); color: var(--c-text);
+  font-size: 0.875rem; font-family: inherit; outline: none;
+  transition: border-color 130ms, box-shadow 130ms;
+}
+.c-input:focus, .c-select:focus, .c-textarea:focus {
+  border-color: var(--c-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 22%, transparent);
+}
+.c-textarea { resize: vertical; min-height: 64px; line-height: 1.5; }
+.c-field { display: flex; flex-direction: column; gap: 4px; }
+.c-label { font-size: 0.78rem; font-weight: 600; color: var(--c-muted); }
+
+/* Surfaces */
+.c-card {
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: var(--c-radius); padding: 14px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.c-list { display: flex; flex-direction: column; gap: 4px; }
+.c-item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 11px;
+  border-radius: 8px; background: var(--c-elevated); color: var(--c-text);
+  transition: background 120ms;
+}
+.c-item:hover { background: color-mix(in srgb, var(--c-accent) 8%, var(--c-elevated)); }
+
+/* Bits */
+.c-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px;
+  font-size: 0.72rem; font-weight: 600; background: var(--c-elevated); color: var(--c-muted); }
+.c-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 16px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-text); font-size: 0.8rem; cursor: pointer; }
+.c-chip.active { background: var(--c-accent); border-color: transparent; color: #fff; }
+
+/* Toggle switch */
+.c-toggle { position: relative; width: 40px; height: 22px; border-radius: 11px; border: none;
+  background: var(--c-border-strong); cursor: pointer; flex-shrink: 0; transition: background 150ms; }
+.c-toggle.on { background: var(--c-accent); }
+.c-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+  border-radius: 50%; background: #fff; transition: transform 150ms; }
+.c-toggle.on::after { transform: translateX(18px); }
+
+/* Empty state */
+.c-empty { display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 32px 16px; text-align: center; color: var(--c-muted); }
+.c-empty-icon { font-size: 2rem; opacity: 0.7; }

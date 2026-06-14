@@ -1,5 +1,6 @@
 import { setupShell, observeTheme, assembleModuleBlobs, moduleFiles } from '/shell/shell-setup.js';
 import { getData, setData, deleteData, aiRequest } from '/shell/api.js';
+import { toggleMinimalSettings, maybeShowAppOnboarding } from '/shell/app-onboarding.js';
 
 const MODULES_COLLECTION = 'generated-modules';
 const JOBS_COLLECTION = 'build-jobs';
@@ -37,6 +38,7 @@ class AppBuilder extends HTMLElement {
     this._loadingStart = 0;
     this._building = false;
     this._resetDraft();
+    this.addEventListener('os:toggle-settings', () => toggleMinimalSettings(this));
   }
 
   _resetDraft() {
@@ -88,6 +90,7 @@ class AppBuilder extends HTMLElement {
     if (migrated) await this._saveJobs();
     this._render();
     this._processQueue();
+    maybeShowAppOnboarding(this);
   }
 
   disconnectedCallback() {
@@ -589,8 +592,11 @@ class AppBuilder extends HTMLElement {
     const { files, entryFile } = moduleFiles(mod);
     const tag = `${manifest.tag}--v${++TAG_SEQ}`;
     const entry = assembleModuleBlobs({ files, entryFile, fromTag: manifest.tag, toTag: tag });
-    const cssUrl = mod.css ? URL.createObjectURL(new Blob([mod.css], { type: 'text/css' })) : null;
-    this.api?.store?.registerApp({ ...manifest, tag, entry, ...(cssUrl && { cssUrl }) });
+    // Always provide a cssUrl (even if empty) so AppModuleBase never falls back to a
+    // /modules/<id>/styles.css path that 404s for generated apps. The component library
+    // (shell/css/components.css, adopted into the shadow) styles it regardless.
+    const cssUrl = URL.createObjectURL(new Blob([mod.css || ''], { type: 'text/css' }));
+    this.api?.store?.registerApp({ ...manifest, tag, entry, cssUrl });
   }
 
   // Close any open windows of an app after (re)install so the next open mounts

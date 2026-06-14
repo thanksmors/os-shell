@@ -213,6 +213,26 @@ See `modules/AGENTS.md` → "Generated modules" for how to create the CSS blob U
 manifest/cssUrl/appId resolution. Stored code keeps the canonical `app-{id}` tag;
 only the runtime blob is suffixed.
 
+**First-run onboarding hook:** `connectedCallback` ends by calling
+`maybeShowAppOnboarding(this)` (`shell/app-onboarding.js`), so any AppModuleBase module
+with a `manifest.onboarding` array shows its intro once. Standalone modules call it
+themselves. See `shell/app-onboarding.js` below and the App-onboarding contract in
+`modules/AGENTS.md`.
+
+---
+
+### `app-onboarding.js`
+
+Per-app first-run intro + replay. `manifest.onboarding` (array of pages) → a window-scoped
+overlay rendered into `host._wrapper` using the hub's `.os-onboarding-*`/`.os-ob-*` styles
+(in-shadow via `adoptTailwind`). Shown once per appId via `os:onboarding-seen:<appId>`
+(per appId, not instanceId). Exports: `maybeShowAppOnboarding(host)` (auto-show; called by
+`AppModuleBase` + by standalone modules), `showAppOnboarding(host)` (force), `replayButtonHTML()`
++ `wireReplay(host, root)` (a ↻ Replay control for an app's settings panel), and
+`toggleMinimalSettings(host)` (a Replay-only settings overlay for apps without their own panel).
+Contract: an app with `onboarding` must set `hasSettings:true` and surface Replay — see
+`modules/AGENTS.md` → "App onboarding".
+
 ---
 
 ### `shell-setup.js` — shared component scaffolding (composition)
@@ -245,8 +265,8 @@ lifecycles differ (tabs/queues/SSE/no persisted state) and re-parenting them wou
 ### `shadow-tailwind.js`
 
 `adoptTailwind(shadowRoot, wrapperEl)`:
-1. Fetches `css/utils.css` + `css/shell.css` + `css/auth.css` and merges into one
-   `CSSStyleSheet` adopted into the shadow root (shared/cached across all modules).
+1. Fetches `css/utils.css` + `css/components.css` + `css/shell.css` + `css/auth.css` and
+   merges into one `CSSStyleSheet` adopted into the shadow root (shared/cached across all modules).
 2. Observes `document.documentElement` and mirrors the `.dark` class to `wrapperEl`.
 
 Called by every module in `connectedCallback`. This is what makes Tailwind utilities
@@ -261,8 +281,13 @@ No build step. All files are hand-authored.
 | File | Purpose |
 |---|---|
 | `utils.css` | Tailwind-compatible utility classes (layout, spacing, color, etc.) — written manually |
+| `components.css` | **Component library + design tokens** (`c-*` classes: `c-app/c-btn/c-input/c-card/c-list/c-item/c-toggle/c-badge/c-chip/c-field…`, tokens `--c-surface/--c-text/--c-muted/--c-border/--c-accent`). Token-driven, dark-aware via `.wrapper.dark`. Adopted into every shadow → any app (esp. AI-generated) gets styled UI with no per-app CSS. `c-`-prefixed so it never overrides a module's own classes. |
 | `shell.css` | OS chrome styles: windows, titlebar, taskbar, launcher, context menu, toasts, desktop icons |
 | `auth.css` | Login screen and workspace selector styles |
+
+Generated apps always get a `cssUrl` blob (even empty) — `_registerModule`/`_loadGeneratedModules`
+never leave it unset, so `AppModuleBase` never falls back to a 404ing `/modules/<id>/styles.css`.
+The component library carries the styling regardless.
 
 Adding a new utility: write it directly in `utils.css`. The `build/` directory at
 repo root holds a Tailwind config that is **never used** — do not activate it unless

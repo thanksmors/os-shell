@@ -6,7 +6,29 @@
   "icon": "🗃️",
   "defaultSize": { "w": 760, "h": 520 },
   "singleton": true,
+  "hasSettings": true,
   "resizable": true,
   "minSize": { "w": 560, "h": 400 },
-  "dataCollections": ["files-meta", "files-data"]
+  "dataCollections": ["files-meta", "files-data"],
+  "onboarding": [
+    {
+      "icon": "🗃️",
+      "title": "Drive",
+      "body": "Shared file storage for your workspace — organize, upload, and preview.",
+      "features": [
+        { "icon": "📁", "name": "Folders", "desc": "Organize your files" },
+        { "icon": "⬆️", "name": "Upload", "desc": "Drag files in to add them" },
+        { "icon": "👁️", "name": "Preview", "desc": "Images, PDF, docs, and more" }
+      ]
+    },
+    {
+      "icon": "🧭",
+      "title": "Tips",
+      "tips": [
+        "Drag files onto the window to upload them.",
+        "Click a file to preview it in the side panel.",
+        "Replay this intro anytime from ⚙️ settings."
+      ]
+    }
+  ]
 }

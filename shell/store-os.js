@@ -180,10 +180,10 @@ export function registerOsStore() {
           // Base tag on a fresh page load (registry is empty); the builder mints
           // versioned tags only for in-session re-installs.
           const entry = assembleModuleBlobs({ files, entryFile });
-          const cssUrl = mod.css
-            ? URL.createObjectURL(new Blob([mod.css], { type: 'text/css' }))
-            : null;
-          this.registerApp({ ...mod.manifest, entry, ...(cssUrl && { cssUrl }) });
+          // Always set cssUrl (even empty) so AppModuleBase never 404s on a
+          // /modules/<id>/styles.css fallback for a generated app.
+          const cssUrl = URL.createObjectURL(new Blob([mod.css || ''], { type: 'text/css' }));
+          this.registerApp({ ...mod.manifest, entry, cssUrl });
         }
       } catch(e) {
         console.warn('Could not load generated modules', e);

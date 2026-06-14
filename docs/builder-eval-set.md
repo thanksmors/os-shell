@@ -41,6 +41,14 @@ the output, and diff the durable counters.
 | Date | Change | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | trunc Δ | notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 2026-06-14 | post Pass-1+2 (`capabilities-v1`) | ⚠️ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | 0 | see run notes below |
+| 2026-06-14 | post Phase-A (`reliability-a-v1`) | ✓ugly | ✓ | ✓simple | ⚠️ | ✓ | ✗ | ⚠️ | ✓→revise✗ | 0 | run 2 below |
+
+**Run 2 — 2026-06-14, build `2026-06-14-reliability-a-v1` (Phase A)**
+Counters: success 29→40 (+11), invalid_json 4→5 (+1), lint_caught 1→1 (+0), lint_repaired 1→1 (+0). (timeout still not captured.)
+Headline: **Phase A worked** — ~5/8 install-and-run (vs ~1/8 in run 1); host-delegation crash class gone from new builds; `lint_caught` flat because builds went single-file (by design). New frontier = **styling + revise + plan-type**.
+- tip: works but unstyled (CSS 404). scratchpad: works. shopping: works but plain singleton (wanted generator?). contact: works, but revise-for-search crashed (`this._state.searchQuery` undefined).
+- pomodoro: built, buggy; revise destroyed styling. kanban: built (generator — reachable via right-click New…, no desktop icon by design). habit/pacman: build failed (likely timeout).
+- Root causes → **Phase C (components-v1)**: generated apps ship empty CSS → `/modules/<id>/styles.css` 404 → unstyled; revise adds state without defaults; plan mis-typed singleton; no scope-split.
 
 **Run 1 — 2026-06-14, build `2026-06-14-capabilities-v1`**
 Counters: success 21→29 (+8), truncation 0, invalid_json 4→4 (0), lint_caught 0→1, lint_repaired 0→1, lint_failed 0. (timeout not captured; kanban timed out.)

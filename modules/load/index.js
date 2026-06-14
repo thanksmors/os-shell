@@ -1,5 +1,6 @@
 import { AppModuleBase } from '/shell/module-base.js';
 import { getData, setData } from '/shell/api.js';
+import { replayButtonHTML, wireReplay } from '/shell/app-onboarding.js';
 
 const MONTH_W = 64;
 const ROW_H = 72;
@@ -313,6 +314,10 @@ class AppLoad extends AppModuleBase {
       <div class="settings-actions">
         <button class="btn-sync-people" data-action="sync"${!peopleInstanceId ? ' disabled' : ''}>Sync People →</button>
       </div>
+      <div class="settings-row">
+        <label>Help</label>
+        ${replayButtonHTML()}
+      </div>
     </div>` : '';
 
     // Modal
@@ -461,6 +466,7 @@ class AppLoad extends AppModuleBase {
 
   _bindEvents() {
     const w = this._wrapper;
+    wireReplay(this, w);
 
     // Sync scroll between names and timeline
     const tCol = w.querySelector('.timeline-col');

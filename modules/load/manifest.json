@@ -14,5 +14,27 @@
   "dataCollections": ["load-plans"],
   "contextMenu": [
     { "label": "New Load Plan", "config": { "name": "Load Plan", "icon": "📊" } }
+  ],
+  "onboarding": [
+    {
+      "icon": "📊",
+      "title": "Load",
+      "body": "Balance your team's workload across projects on one timeline.",
+      "features": [
+        { "icon": "👥", "name": "People", "desc": "Sync a roster from a People chart" },
+        { "icon": "📐", "name": "Bars", "desc": "Task bars you drag, move, and resize" },
+        { "icon": "🌡️", "name": "Load", "desc": "Per-month capacity at a glance" }
+      ]
+    },
+    {
+      "icon": "🧭",
+      "title": "Tips",
+      "tips": [
+        "Link a People chart and a Roadmap in ⚙️ settings, then Sync.",
+        "Toggle Bars / Load from the toolbar.",
+        "Drag a task bar to reassign or move it; drag its edge to resize.",
+        "Replay this intro anytime from ⚙️ settings."
+      ]
+    }
   ]
 }

@@ -253,6 +253,16 @@ Bump `AI_BUILD` in ai.js (e.g. `'2026-06-14-lint-v1'`) so `/ai/ping` confirms th
   - DOX: `codehooks/AGENTS.md` (D1/D2, single-file bias, re-render rule, no-emoji), `modules/AGENTS.md`.
   - **Remaining to ship:** deploy → re-run the 8-prompt eval set → log a new row. **Gate Phase B
     on that re-run.**
-- **Phase B — PENDING (after Phase A eval re-run):** plan fidelity — generator detection
-  (shopping list), scope-split reliability (pac-man), capability-survives-Revise (pomodoro).
+- **Phase A eval (run 2) — DONE:** ~5/8 install-and-run (vs ~1/8); crash class gone. New
+  frontier: styling + revise + plan-type. Logged in `docs/builder-eval-set.md`.
+- **Phase C — DONE (Ship A, not yet eval'd):** style system / component library.
+  - `shell/css/components.css` (c-* tokens + components), adopted via `shadow-tailwind.js`.
+  - Generated apps always get a cssUrl blob (no more `/modules/<id>/styles.css` 404):
+    `modules/builder/index.js` + `shell/store-os.js`.
+  - Generator taught to render with `c-*` (SYSTEM/FEATURE prompts) + `STYLE_PROMPT` narrowed
+    to layout-only; counter example updated; `AI_BUILD = components-v1`.
+  - Verified: headless screenshot of c-* sample renders styled in light + dark.
+- **Phase B / Ship B — PENDING (after Ship-A eval):** plan fidelity — generator detection
+  (shopping/kanban), scope-split (pac-man), revise robustness (extend `_load` defaults for new
+  state; carry capabilities through revise).
 - Drift governance (item 5) partially seeded in `modules/AGENTS.md` + `codehooks/AGENTS.md`.

@@ -263,11 +263,14 @@ assessment, roadmap, and remaining passes are tracked in
 `docs/builder-generator-roadmap.md`; prompt changes are regression-checked with the
 manual eval set in `docs/builder-eval-set.md` (no headless build harness exists).
 
-**Singleton is the default.** The backend (`codehooks/routes/ai.js`) enforces
-`plan.type` after generation: anything not explicitly planned as `generator` is
-forced to `singleton: true, generator: false` with `contextMenu` removed.
-The `plan` prompt only allows `generator` when the user explicitly asked for
-multiple named instances.
+**Instance type is signal-driven.** `enforcePlanType` (`codehooks/routes/ai.js`) still
+locks the manifest to the plan's `type` after generation — `generator` ⇒
+`generator:true, singleton:false` and a non-empty `contextMenu` (else the build is
+rejected); anything else ⇒ `singleton:true` with `contextMenu` removed. The `PLAN_PROMPT`
+chooses **generator** for one-per-thing / collaborative apps (plural-noun, "one per X",
+shared/multi-user wording — a shopping list, a kanban board) and **singleton** only for a
+single personal/global tool (calculator, clock, one dashboard). Generators are reached via
+the desktop right-click "New …" menu (no desktop icon until an instance exists).
 
 Backend modes: `POST /w/:ws/ai-generate` takes `{ mode: clarify|plan|build|revise|consolidate,
 messages, plan, existing }` (frontend wrapper: `aiRequest(mode, payload)` in

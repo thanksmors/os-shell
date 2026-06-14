@@ -6,7 +6,7 @@ import { lintModule } from '../lib/lint-module.js';
 const MINIMAX_URL = 'https://api.minimax.io/v1/chat/completions';
 
 // Bump this string every time ai.js changes so /ai/ping proves which build is live.
-const AI_BUILD = '2026-06-14-components-v1';
+const AI_BUILD = '2026-06-14-fidelity-v1';
 
 const SYSTEM_PROMPT = `You are an expert web developer for a browser-based OS shell called "ODVI Spaces".
 Your task is to generate complete, working app modules for this shell.
@@ -238,11 +238,12 @@ Given the conversation (user request + any clarification answers), output ONLY v
   "dataModel":"one-line description of the persisted state shape"
 }}
 
-CRITICAL RULE for "type": it MUST be "singleton" unless the user EXPLICITLY asked for multiple separately-named instances (e.g. "I want to create several boards", "one per project"). Vague or absent instance-model preference = "singleton". If you choose "generator", the summary MUST quote the user's exact words that demanded multiple instances.
+RULE for "type": choose "generator" (multiple named instances — each gets its own desktop right-click "New …" entry and icon) when the app is naturally one-per-thing or collaborative. Signals that mean generator: plural / collection nouns ("lists", "boards", "trackers", "a shopping list", "a kanban board"), "one per X" / "a separate … for each", or shared / multi-user wording ("our team's", "shared … we all edit", "family"). Choose "singleton" (one shared window) only for a single personal/global tool with no such signal — a calculator, a clock, one dashboard, a timer. When in doubt between the two for a list/board/tracker-style app, pick "generator". If "generator", note in the summary why; generators MUST include a contextMenu (handled by the architect).
 
 SCOPE — "features" is the CORE v1 built now; "deferred" is held for later. For a COMPLEX app (a game, a multi-view app, anything with several subsystems) the core must be the SMALLEST interactive version — aim for **at most ~4 core features** — and you MUST defer whole MAJOR SUBSYSTEMS, not just nice-to-haves. A build with one oversized feature fails entirely, so when unsure, defer it.
 - Example — "Pac-Man": core "features" = [maze renders, player moves with arrow keys, dots are eaten/cleared, basic wall collision]. DEFER as separate roadmap items: ghosts + ghost AI, power pellets, scoring, lives, levels/maze-reset, high-score leaderboard, sound, game-over/start screens.
 - Each "deferred" item is added later in ONE click via Revise. A genuinely simple single-purpose tool (counter, clock, notes) uses "deferred":[] and builds fully.
+- Known-complex archetypes — **games (Pac-Man, Snake, Tetris), rich editors, spreadsheets, calendars, drawing apps** — ALWAYS scope to a tiny playable/usable core with a LARGE "deferred" list. Never attempt the whole thing in one build (it truncates/times out and fails entirely). A complex archetype with an empty or near-empty "deferred" is a mistake — split it.
 - State in "summary" what's core vs deferred. Erring much smaller is correct — extras are trivial to add via Revise, but an over-large first build does not generate at all.
 
 If the user asks to revise an existing app, keep its appId and title unless they asked to change them, and list only what changes under "features".
@@ -255,6 +256,8 @@ const REVISE_SUFFIX = `
 
 You are REVISING an existing installed module. You will receive its current manifest, main, and any feature files, plus an approved change plan.
 - Keep the SAME appId and tag (user data is keyed by them).
+- **New state must be defaulted.** If the change adds any field to the state shape (e.g. a "searchQuery", a "filter", a new array), the "state" line MUST list it AND the regenerated _load() MUST extend its defaults so the field is never undefined — \`this._state = await getData(coll, key) || { …existing, searchQuery: "" }\` (and backfill: \`if (this._state.searchQuery === undefined) this._state.searchQuery = ""\` for already-saved data). A revise that reads a new field without defaulting it crashes existing installs.
+- **Keep prior capabilities.** Preserve everything the app already had, plus carry through any capability the change requests — e.g. "revise to add a settings panel" must result in \`hasSettings:true\` + the panel; don't drop it.
 - Output the updated FILE PLAN (the { manifest, state, mainSpec, files } shape above) reflecting the change — keep the existing file split where it still fits. The code for each file is regenerated from your plan, so describe specs/exports accurately; do NOT write code here.`;
 
 const CONSOLIDATE_SUFFIX = `

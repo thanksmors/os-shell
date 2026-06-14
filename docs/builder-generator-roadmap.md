@@ -262,7 +262,9 @@ Bump `AI_BUILD` in ai.js (e.g. `'2026-06-14-lint-v1'`) so `/ai/ping` confirms th
   - Generator taught to render with `c-*` (SYSTEM/FEATURE prompts) + `STYLE_PROMPT` narrowed
     to layout-only; counter example updated; `AI_BUILD = components-v1`.
   - Verified: headless screenshot of c-* sample renders styled in light + dark.
-- **Phase B / Ship B — PENDING (after Ship-A eval):** plan fidelity — generator detection
-  (shopping/kanban), scope-split (pac-man), revise robustness (extend `_load` defaults for new
-  state; carry capabilities through revise).
+- **Ship B (plan fidelity) — DONE (`fidelity-v1`, not yet eval'd):** `PLAN_PROMPT` generator
+  detection (one-per-thing/collaborative wording → generator; shopping/kanban) + complex-archetype
+  scope-split enforcement (pac-man); `REVISE_SUFFIX` defaults new state in `_load` (fixes the
+  `searchQuery`-undefined crash) + keeps prior capabilities through a revise. DOX updated
+  (modules/AGENTS.md instance-type, codehooks/AGENTS.md plan-fidelity).
 - Drift governance (item 5) partially seeded in `modules/AGENTS.md` + `codehooks/AGENTS.md`.

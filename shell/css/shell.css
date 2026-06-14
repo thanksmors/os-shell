@@ -720,19 +720,6 @@
   padding-top: 12px;
 }
 .dark .os-ob-settings-body { border-top-color: rgba(255,255,255,0.07); }
-/* Pro-tips block replaces the trivia line on the Settings page */
-.os-ob-protips {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 14px 0 0;
-  text-align: left;
-}
-.os-ob-protips .os-ob-tip {
-  font-size: 0.8rem;
-  color: #6b7280;
-}
-.dark .os-ob-protips .os-ob-tip { color: #9ca3af; }
 
 .os-onboarding-footer {
   display: flex;

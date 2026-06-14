@@ -290,7 +290,8 @@ preserved) and the roadmap shrinks as the new plan's `deferred` updates.
 **Consolidate (de-Frankenstein):** incremental Revise is purely additive — it
 anchors to the existing file split and bolts each feature on, so after several adds
 the app is coherent locally but incoherent globally (drifting controls/layout). The
-**🪄 Consolidate** button on installed jobs (`_consolidate`) rebuilds the whole app
+**🪄 Consolidate** button (`_consolidate`) lives **inside the Spec ▾ panel, beside
+💾 Save spec** (not on the installed-job action row) — it rebuilds the whole app
 as ONE coherent design from its spec — the accumulated `job.plan`. It enqueues a
 `consolidate`-flag job (no plan/approve round); `_processQueue` treats `revise` and
 `consolidate` identically as **in-place** rebuilds (send existing code, keep

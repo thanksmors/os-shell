@@ -531,6 +531,19 @@
           'The Pillars of Creation are about 7 light-years tall.',
           'Voyager 1 — launched in 1977 — is now over 23 billion km from Earth.',
         ],
+        protipIdx: 0,
+        protips: [
+          'Right-click the desktop for quick actions and shortcuts.',
+          'Drag desktop icons to reorder them.',
+          'Right-click a desktop item to rename, edit, or delete it.',
+          'Create lists, boards, and more from the desktop right-click menu.',
+          'Resize a window by dragging its corner; move it by its title bar.',
+          'Use Build App to generate a custom tool from a plain-language prompt.',
+          'Pick your accent color and dark mode under Appearance.',
+          'Switch workspace or sign out from the Workspace tab.',
+          'Open any ODVI app from the first page of this menu.',
+          'Make a Folder, then drag desktop icons into it to stay organized.',
+        ],
         feats: [
           { icon: '📂', name: 'Projects Hub', desc: 'Milestones, issues, action items, decisions, and docs per project.' },
           { icon: '🗺️', name: 'Roadmap', desc: 'Milestone timelines across all projects at once.' },
@@ -540,6 +553,7 @@
           { icon: '💬', name: 'Chat', desc: 'Team messaging with channels and unread badges.' },
         ],
       }"
+      x-init="setInterval(() => { protipIdx = (protipIdx + 1) % protips.length; triviaIdx = (triviaIdx + 1) % trivia.length; }, 6000)"
       x-transition:enter="transition duration-250 ease-out"
       x-transition:enter-start="opacity-0 scale-95"
       x-transition:enter-end="opacity-100 scale-100"
@@ -614,10 +628,7 @@
         <div class="os-ob-settings-body" x-ref="setBody"></div>
       </div>
       <p class="os-ob-trivia" x-show="slide === 1"><span class="os-ob-trivia-tag">Space Trivia</span> <span x-text="trivia[triviaIdx]"></span></p>
-      <p class="os-ob-protips" x-show="slide === 2">
-        <span class="os-ob-tip">Right-click the desktop for quick actions &amp; shortcuts</span>
-        <span class="os-ob-tip">Drag desktop icons to reorder them</span>
-      </p>
+      <p class="os-ob-trivia" x-show="slide === 2"><span class="os-ob-trivia-tag">Pro Tip</span> <span x-text="protips[protipIdx]"></span></p>
       <div class="os-onboarding-footer">
         <label class="os-ob-check" :style="{ visibility: slide === 2 ? 'visible' : 'hidden' }">
           <input type="checkbox" x-model="showAlways"> Show on startup

@@ -223,7 +223,6 @@ class AppBuilder extends HTMLElement {
       done:      `<button class="job-btn primary" data-action="install" data-job="${job.jobId}">⬇ Install</button>
                   <button class="job-btn" data-action="toggle-code" data-job="${job.jobId}">Code ▾</button>`,
       installed: `<button class="job-btn" data-action="revise" data-job="${job.jobId}">✏️ Revise</button>
-                  ${job.plan ? `<button class="job-btn" data-action="consolidate" data-job="${job.jobId}" title="Rebuild the whole app as one coherent design from its spec (data kept)">🪄 Consolidate</button>` : ''}
                   ${job.plan ? `<button class="job-btn" data-action="toggle-spec" data-job="${job.jobId}">Spec ▾</button>` : ''}
                   ${this._modules[job.appId]?.prev ? `<button class="job-btn" data-action="revert" data-job="${job.jobId}" title="Restore the previous version">↩ Revert</button>` : ''}
                   <button class="job-btn" data-action="toggle-code" data-job="${job.jobId}">Code ▾</button>
@@ -257,6 +256,7 @@ class AppBuilder extends HTMLElement {
       <textarea class="spec-edit" data-job="${job.jobId}" rows="14" spellcheck="false">${this._esc(JSON.stringify(job.plan, null, 2))}</textarea>
       <div class="spec-actions">
         <button class="job-btn primary" data-action="save-spec" data-job="${job.jobId}">💾 Save spec</button>
+        <button class="job-btn" data-action="consolidate" data-job="${job.jobId}" title="Rebuild the whole app as one coherent design from this spec (data kept)">🪄 Consolidate</button>
         <span class="spec-err" data-specerr="${job.jobId}"></span>
       </div>
     </div>`;
